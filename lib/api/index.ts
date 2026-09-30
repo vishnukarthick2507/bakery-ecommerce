@@ -17,6 +17,7 @@ import type {
   User,
   WeightRange,
 } from '@/lib/types'
+import { isBackendProduct, mapBackendProduct } from './map-backend-product'
 import { readDb, writeDb } from './mock-db'
 
 /**
@@ -48,11 +49,41 @@ export function basePrice(product: Product) {
   return Math.min(...product.variants.map((v) => v.price))
 }
 
-export async function getProducts(filters: ProductFilters = {}): Promise<Product[]> {
-  await delay()
+async function fetchBackendProducts(): Promise<Product[]> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL
+  if (!baseUrl) {
+    throw new ApiError('Product API is not configured.')
+  }
+
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl}/api/products`, { cache: 'no-store' })
+  } catch {
+    throw new ApiError('Unable to reach the product API.')
+  }
+
+  if (!response.ok) {
+    throw new ApiError('Failed to load products.')
+  }
+
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    throw new ApiError('Failed to load products.')
+  }
+
+  if (!Array.isArray(payload)) {
+    throw new ApiError('Failed to load products.')
+  }
+
+  return payload.filter(isBackendProduct).map(mapBackendProduct)
+}
+
+function applyProductFilters(products: Product[], filters: ProductFilters): Product[] {
   const search = filters.search?.trim().toLowerCase()
 
-  const result = mockProducts.filter((p) => {
+  const result = products.filter((p) => {
     if (search) {
       const haystack = `${p.name} ${p.description} ${p.category}`.toLowerCase()
       if (!haystack.includes(search)) return false
@@ -86,6 +117,11 @@ export async function getProducts(filters: ProductFilters = {}): Promise<Product
     default:
       return result.sort((a, b) => b.reviewCount - a.reviewCount)
   }
+}
+
+export async function getProducts(filters: ProductFilters = {}): Promise<Product[]> {
+  const products = await fetchBackendProducts()
+  return applyProductFilters(products, filters)
 }
 
 export async function getProductsByTag(tag: Product['tags'][number]) {

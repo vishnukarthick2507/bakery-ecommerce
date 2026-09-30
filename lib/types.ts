@@ -11,6 +11,8 @@ export type CategorySlug =
   | 'cookies'
   | 'cupcakes'
   | 'savouries'
+  | 'brownies'
+  | 'cheesecakes'
 
 export interface Category {
   slug: CategorySlug
