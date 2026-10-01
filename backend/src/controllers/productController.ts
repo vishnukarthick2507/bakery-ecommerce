@@ -1,85 +1,339 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 import { z } from "zod";
+
 import { Product } from "../models/Product.js";
 
-const createProductSchema = z.object({
-  name: z.string().trim().min(1, "name is required"),
-  slug: z.string().trim().min(1, "slug is required"),
-  description: z.string().trim().min(1, "description is required"),
-  price: z.number().gt(0, "price must be greater than 0"),
-  category: z.string().trim().min(1, "category is required"),
+const productSchema = z.object({
+  name: z.string().trim().min(1),
+
+  slug: z.string().trim().min(1),
+
+  description: z.string().trim().min(1),
+
+  price: z.number().positive(),
+
+  category: z.string().trim().min(1),
+
   images: z.array(z.string()).optional(),
-  stock: z.number().min(0, "stock must be 0 or greater").optional(),
-  availability: z.enum(["AVAILABLE", "OUT_OF_STOCK", "DISABLED"]).optional(),
-  preparationTime: z.number().min(0, "preparationTime must be 0 or greater"),
+
+  stock: z.number().int().min(0).optional(),
+
+  availability: z
+    .enum(["AVAILABLE", "OUT_OF_STOCK", "DISABLED"])
+    .optional(),
+
+  preparationTime: z.number().min(0),
+
   active: z.boolean().optional(),
 });
 
-const isValidObjectId = (id: string): boolean =>
-  mongoose.Types.ObjectId.isValid(id) && new mongoose.Types.ObjectId(id).toString() === id;
+const updateProductSchema = productSchema
+  .partial()
+  .refine(
+    (data) => Object.keys(data).length > 0,
+    {
+      message: "At least one field is required",
+    },
+  );
 
-export const getProducts = async (_req: Request, res: Response): Promise<void> => {
+/*
+|--------------------------------------------------------------------------
+| GET ALL PRODUCTS
+|--------------------------------------------------------------------------
+| GET /api/products
+|--------------------------------------------------------------------------
+*/
+
+export const getProducts = async (
+  _req: Request,
+  res: Response,
+): Promise<void> => {
   try {
-    const products = await Product.find({ active: true }).sort({ createdAt: -1 });
-    res.json(products);
+    const products = await Product.find({
+      active: true,
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json(products);
   } catch (error) {
-    console.error("Failed to fetch products:", error);
-    res.status(500).json({ message: "Failed to fetch products" });
+    console.error(
+      "Get products failed:",
+      error,
+    );
+
+    res.status(500).json({
+      message: "Unable to fetch products",
+    });
   }
 };
 
-export const getProductById = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
+/*
+|--------------------------------------------------------------------------
+| GET PRODUCT BY ID
+|--------------------------------------------------------------------------
+| GET /api/products/:id
+|--------------------------------------------------------------------------
+*/
 
-    if (!id || !isValidObjectId(id)) {
-      res.status(400).json({ message: "Invalid product id" });
+export const getProductById = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const productId = String(
+      req.params.id ?? "",
+    ).trim();
+
+    if (!mongoose.isValidObjectId(productId)) {
+      res.status(400).json({
+        message: "Invalid product ID",
+      });
+
       return;
     }
 
-    const product = await Product.findById(id);
+    const product = await Product.findOne({
+      _id: productId,
+      active: true,
+    }).lean();
 
     if (!product) {
-      res.status(404).json({ message: "Product not found" });
+      res.status(404).json({
+        message: "Product not found",
+      });
+
       return;
     }
 
-    res.json(product);
+    res.status(200).json(product);
   } catch (error) {
-    console.error("Failed to fetch product:", error);
-    res.status(500).json({ message: "Failed to fetch product" });
+    console.error(
+      "Get product failed:",
+      error,
+    );
+
+    res.status(500).json({
+      message: "Unable to fetch product",
+    });
   }
 };
 
-export const createProduct = async (req: Request, res: Response): Promise<void> => {
+/*
+|--------------------------------------------------------------------------
+| CREATE PRODUCT
+|--------------------------------------------------------------------------
+| POST /api/products
+|--------------------------------------------------------------------------
+*/
+
+export const createProduct = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
-    const parsed = createProductSchema.safeParse(req.body);
+    const parsed = productSchema.safeParse(
+      req.body,
+    );
 
     if (!parsed.success) {
       res.status(400).json({
         message: "Invalid product data",
-        errors: parsed.error.flatten().fieldErrors,
+        errors: parsed.error.flatten(),
       });
+
       return;
     }
 
-    const product = await Product.create(parsed.data);
-    res.status(201).json(product);
+    const {
+      images,
+      ...productFields
+    } = parsed.data;
+
+    const productData =
+      images === undefined
+        ? productFields
+        : {
+            ...productFields,
+            images,
+          };
+
+    const product =
+      await Product.create(productData);
+
+    res.status(201).json({
+      message:
+        "Product created successfully",
+      product,
+    });
   } catch (error) {
-    if (
-      error instanceof mongoose.Error.ValidationError ||
-      (error instanceof Error && "code" in error && (error as { code: number }).code === 11000)
-    ) {
-      const message =
-        error instanceof mongoose.Error.ValidationError
-          ? error.message
-          : "A product with this slug already exists";
-      res.status(400).json({ message });
+    console.error(
+      "Create product failed:",
+      error,
+    );
+
+    res.status(500).json({
+      message: "Unable to create product",
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE PRODUCT
+|--------------------------------------------------------------------------
+| PATCH /api/products/:id
+|--------------------------------------------------------------------------
+| Used by admin to change:
+| - name
+| - description
+| - price
+| - category
+| - images
+| - stock
+| - availability
+| - preparation time
+|--------------------------------------------------------------------------
+*/
+
+export const updateProduct = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const productId = String(
+      req.params.id ?? "",
+    ).trim();
+
+    if (!mongoose.isValidObjectId(productId)) {
+      res.status(400).json({
+        message: "Invalid product ID",
+      });
+
       return;
     }
 
-    console.error("Failed to create product:", error);
-    res.status(500).json({ message: "Failed to create product" });
+    const parsed =
+      updateProductSchema.safeParse(
+        req.body,
+      );
+
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid product data",
+        errors: parsed.error.flatten(),
+      });
+
+      return;
+    }
+
+    const product =
+      await Product.findByIdAndUpdate(
+        productId,
+        {
+          $set: parsed.data,
+        },
+        {
+          returnDocument: "after",
+          runValidators: true,
+        },
+      ).lean();
+
+    if (!product) {
+      res.status(404).json({
+        message: "Product not found",
+      });
+
+      return;
+    }
+
+    res.status(200).json({
+      message:
+        "Product updated successfully",
+      product,
+    });
+  } catch (error) {
+    console.error(
+      "Update product failed:",
+      error,
+    );
+
+    res.status(500).json({
+      message: "Unable to update product",
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| DISABLE PRODUCT
+|--------------------------------------------------------------------------
+| DELETE /api/products/:id
+|--------------------------------------------------------------------------
+|
+| We do NOT permanently delete the product.
+|
+| Instead:
+| active = false
+| availability = DISABLED
+|
+| This keeps old order records safe.
+|--------------------------------------------------------------------------
+*/
+
+export const deleteProduct = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const productId = String(
+      req.params.id ?? "",
+    ).trim();
+
+    if (!mongoose.isValidObjectId(productId)) {
+      res.status(400).json({
+        message: "Invalid product ID",
+      });
+
+      return;
+    }
+
+    const product =
+      await Product.findByIdAndUpdate(
+        productId,
+        {
+          $set: {
+            active: false,
+            availability: "DISABLED",
+          },
+        },
+        {
+          returnDocument: "after",
+        },
+      ).lean();
+
+    if (!product) {
+      res.status(404).json({
+        message: "Product not found",
+      });
+
+      return;
+    }
+
+    res.status(200).json({
+      message:
+        "Product disabled successfully",
+      product,
+    });
+  } catch (error) {
+    console.error(
+      "Delete product failed:",
+      error,
+    );
+
+    res.status(500).json({
+      message: "Unable to disable product",
+    });
   }
 };
