@@ -170,19 +170,31 @@ export interface PricedLine {
   lineTotal: number
 }
 
-export function priceCart(items: CartItem[]) {
+export function priceCart(items: CartItem[], products: Product[] = mockProducts) {
   const lines: PricedLine[] = []
+
   for (const item of items) {
-    const product = getProductSnapshot(item.productId)
+    const product = products.find((p) => p.id === item.productId)
     const variant = product?.variants.find((v) => v.id === item.variantId)
+
     if (!product || !variant) continue
-    lines.push({ item, product, variant, lineTotal: variant.price * item.quantity })
+
+    lines.push({
+      item,
+      product,
+      variant,
+      lineTotal: variant.price * item.quantity,
+    })
   }
+
   const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0)
-  const savings = lines.reduce((sum, l) => sum + (l.variant.mrp - l.variant.price) * l.item.quantity, 0)
+  const savings = lines.reduce(
+    (sum, l) => sum + (l.variant.mrp - l.variant.price) * l.item.quantity,
+    0,
+  )
+
   return { lines, subtotal, savings }
 }
-
 export function computeTotals(
   subtotal: number,
   fulfilment: 'pickup' | 'delivery',
