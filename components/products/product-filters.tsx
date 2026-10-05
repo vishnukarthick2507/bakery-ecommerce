@@ -4,10 +4,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { categories } from '@/lib/mock-data'
 import { formatPrice } from '@/lib/format'
-import type { AvailabilityStatus, CategorySlug, WeightRange } from '@/lib/types'
+import { categoryOptions } from '@/lib/category-options'
+import type { AvailabilityStatus, CategorySlug } from '@/lib/types'
 
 export const PRICE_MIN = 0
 export const PRICE_MAX = 2000
@@ -15,42 +14,24 @@ export const PRICE_MAX = 2000
 export interface FilterState {
   categories: CategorySlug[]
   price: [number, number]
-  weights: WeightRange[]
   availability: AvailabilityStatus[]
-  minRating: number
-  vegOnly: boolean
 }
 
 export const defaultFilterState: FilterState = {
   categories: [],
   price: [PRICE_MIN, PRICE_MAX],
-  weights: [],
   availability: [],
-  minRating: 0,
-  vegOnly: false,
 }
-
-const weightOptions: Array<{ value: WeightRange; label: string }> = [
-  { value: 'under-250', label: 'Under 250 g' },
-  { value: '250-500', label: '250 g – 500 g' },
-  { value: '500-1000', label: '500 g – 1 kg' },
-  { value: 'over-1000', label: 'Above 1 kg' },
-]
 
 const availabilityOptions: Array<{ value: AvailabilityStatus; label: string }> = [
   { value: 'AVAILABLE_NOW', label: 'Available now' },
-  { value: 'READY_IN_TIME', label: 'Ready in a few hours' },
-  { value: 'PRE_ORDER', label: 'Pre-order' },
   { value: 'SOLD_OUT', label: 'Sold out' },
 ]
 
 export function countActiveFilters(f: FilterState) {
   return (
     f.categories.length +
-    f.weights.length +
     f.availability.length +
-    (f.minRating ? 1 : 0) +
-    (f.vegOnly ? 1 : 0) +
     (f.price[0] !== PRICE_MIN || f.price[1] !== PRICE_MAX ? 1 : 0)
   )
 }
@@ -106,21 +87,10 @@ export function ProductFiltersPanel({
 
   return (
     <div className="flex flex-col gap-6">
-      <Field orientation="horizontal" className="rounded-lg border bg-card p-3">
-        <Checkbox
-          id={`${idPrefix}-veg`}
-          checked={value.vegOnly}
-          onCheckedChange={(checked) => set('vegOnly', checked === true)}
-        />
-        <FieldLabel htmlFor={`${idPrefix}-veg`} className="font-medium">
-          Veg / eggless only
-        </FieldLabel>
-      </Field>
-
       <CheckboxList
         idPrefix={`${idPrefix}-cat`}
         legend="Category"
-        options={categories.map((c) => ({ value: c.slug, label: c.name }))}
+        options={categoryOptions}
         selected={value.categories}
         onChange={(v) => set('categories', v)}
       />
@@ -150,44 +120,12 @@ export function ProductFiltersPanel({
       <Separator />
 
       <CheckboxList
-        idPrefix={`${idPrefix}-wt`}
-        legend="Weight"
-        options={weightOptions}
-        selected={value.weights}
-        onChange={(v) => set('weights', v)}
-      />
-
-      <Separator />
-
-      <CheckboxList
         idPrefix={`${idPrefix}-av`}
         legend="Availability"
         options={availabilityOptions}
         selected={value.availability}
         onChange={(v) => set('availability', v)}
       />
-
-      <Separator />
-
-      <FieldSet>
-        <FieldLegend variant="label">Customer rating</FieldLegend>
-        <ToggleGroup
-          variant="outline"
-          value={[String(value.minRating)]}
-          onValueChange={(v) => set('minRating', Number(v[0] ?? 0))}
-          className="w-full"
-        >
-          <ToggleGroupItem value="0" className="flex-1">
-            Any
-          </ToggleGroupItem>
-          <ToggleGroupItem value="4" className="flex-1">
-            4★ +
-          </ToggleGroupItem>
-          <ToggleGroupItem value="4.5" className="flex-1">
-            4.5★ +
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </FieldSet>
     </div>
   )
 }

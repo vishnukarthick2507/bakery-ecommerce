@@ -3,14 +3,14 @@ import { PageHeader } from '@/components/page-header'
 
 export const metadata: Metadata = {
   title: 'About Us',
-  description: 'Learn more about Bluebell Bakehouse.',
+  description: 'Learn more about S.V. Sweets & Bakers.',
 }
 
 export default function AboutPage() {
   return (
     <>
       <PageHeader
-        title="About Bluebell Bakehouse"
+        title="About S.V. Sweets & Bakers"
         description="Freshly baked with care, every day."
         breadcrumbs={[
           { href: '/', label: 'Home' },
@@ -26,9 +26,10 @@ export default function AboutPage() {
             </h2>
 
             <p className="mt-4 leading-7 text-muted-foreground">
-              Bluebell Bakehouse is a neighbourhood bakery creating
-              fresh cakes, breads, pastries, brownies and celebration
-              cakes with carefully selected ingredients.
+              S.V. Sweets & Bakers is a neighbourhood bakery in
+              Chromepet, Chennai, creating fresh cakes, breads,
+              pastries, brownies and celebration cakes with carefully
+              selected ingredients.
             </p>
 
             <p className="mt-4 leading-7 text-muted-foreground">

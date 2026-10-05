@@ -31,12 +31,6 @@ export function formatDateTime(iso: string) {
   })
 }
 
-export function formatReadyTime(minutes: number) {
-  if (minutes < 60) return `Ready in approx. ${minutes} minutes`
-  const hours = Math.round(minutes / 60)
-  return `Ready in approx. ${hours} ${hours === 1 ? 'hour' : 'hours'}`
-}
-
 export function toISODate(date: Date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')

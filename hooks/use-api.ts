@@ -3,10 +3,7 @@
 import useSWR from 'swr'
 import {
   getAvailableNow,
-  getCurrentUser,
-  getMyOrders,
   getOffers,
-  getOrder,
   getProducts,
   getProductsByTag,
   getTestimonials,
@@ -33,18 +30,4 @@ export function useOffers() {
 
 export function useTestimonials() {
   return useSWR('testimonials', getTestimonials)
-}
-
-export function useSession() {
-  return useSWR('session', getCurrentUser)
-}
-
-export function useMyOrders(enabled: boolean) {
-  return useSWR(enabled ? 'my-orders' : null, getMyOrders)
-}
-
-export function useOrder(orderId: string | null) {
-  return useSWR(orderId ? ['order', orderId] : null, () => getOrder(orderId!), {
-    refreshInterval: 30000,
-  })
 }

@@ -15,6 +15,20 @@ import type { CartItem, Product } from '@/lib/types'
 
 const CART_KEY = 'sv-sweets-cart-v1'
 const MAX_QTY = 20
+const MONGO_OBJECT_ID = /^[a-f0-9]{24}$/i
+
+function isStaleFreeCartItem(item: CartItem): boolean {
+  return (
+    !!item &&
+    typeof item.productId === 'string' &&
+    MONGO_OBJECT_ID.test(item.productId) &&
+    typeof item.variantId === 'string' &&
+    item.variantId.length > 0 &&
+    Number.isInteger(item.quantity) &&
+    item.quantity > 0 &&
+    item.quantity <= MAX_QTY
+  )
+}
 
 interface CartContextValue {
   items: CartItem[]
@@ -63,7 +77,9 @@ export function CartProvider({
         const parsed: unknown = JSON.parse(raw)
 
         if (Array.isArray(parsed)) {
-          setItems(parsed as CartItem[])
+          // Drop stale mock-era entries (e.g. p1/p2) that are not real
+          // MongoDB product IDs; they can never be priced or checked out.
+          setItems((parsed as CartItem[]).filter(isStaleFreeCartItem))
         }
       }
     } catch {

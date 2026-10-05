@@ -11,14 +11,14 @@ import { formatPrice } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Product } from '@/lib/types'
 import { AvailabilityBadge } from './availability-badge'
-import { Price, Rating, VegMark } from './product-meta'
+import { Price, Rating } from './product-meta'
 
 export function isImmediatelyOrderable(product: Product) {
-  return product.availability === 'AVAILABLE_NOW' || product.availability === 'READY_IN_TIME'
+  return product.availability === 'AVAILABLE_NOW'
 }
 
 export function whatsappProductMessage(product: Product, variantLabel?: string) {
-  return `Hi Bluebell Bakehouse! I'd like to order "${product.name}"${
+  return `Hi S.V. Sweets & Bakers! I'd like to order "${product.name}"${
     variantLabel ? ` (${variantLabel})` : ''
   }. Is it possible to get it for a later date?`
 }
@@ -45,12 +45,13 @@ export function ProductCard({ product, priority }: { product: Product; priority?
         />
         <div className="absolute inset-x-2 top-2 flex items-start justify-between gap-2">
           <AvailabilityBadge product={product} className="h-auto max-w-[80%] py-1 whitespace-normal text-left" />
-          <VegMark isVeg={product.isVeg} />
         </div>
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-3 sm:p-4">
-        <Rating value={product.rating} count={product.reviewCount} className="text-xs sm:text-sm" />
+        {product.reviewCount > 0 && (
+          <Rating value={product.rating} count={product.reviewCount} className="text-xs sm:text-sm" />
+        )}
         <h3 className="font-sans text-sm leading-snug font-semibold sm:text-base">
           <Link href={href} className="outline-none after:absolute after:inset-0 focus-visible:underline">
             {product.name}

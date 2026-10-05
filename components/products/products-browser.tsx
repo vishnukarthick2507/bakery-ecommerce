@@ -1,7 +1,7 @@
 'use client'
 
 import { useDeferredValue, useState } from 'react'
-import { SearchIcon, SearchXIcon, SlidersHorizontalIcon, XIcon } from 'lucide-react'
+import { SearchIcon, SearchXIcon, SlidersHorizontalIcon, TriangleAlertIcon, XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
@@ -20,8 +20,7 @@ import {
 } from './product-filters'
 
 const sortItems: Array<{ value: SortOption; label: string }> = [
-  { value: 'popular', label: 'Most popular' },
-  { value: 'rating', label: 'Top rated' },
+  { value: 'popular', label: 'Featured' },
   { value: 'price-asc', label: 'Price: low to high' },
   { value: 'price-desc', label: 'Price: high to low' },
 ]
@@ -48,16 +47,13 @@ export function ProductsBrowser({
   const deferredSearch = useDeferredValue(search)
   const activeCount = countActiveFilters(filters)
 
-  const { data, isLoading, isValidating } = useProducts({
+  const { data, error, isLoading, isValidating, mutate } = useProducts({
     search: deferredSearch,
     sort,
     categories: filters.categories,
     minPrice: filters.price[0] === PRICE_MIN ? undefined : filters.price[0],
     maxPrice: filters.price[1] === PRICE_MAX ? undefined : filters.price[1],
-    weights: filters.weights,
     availability: filters.availability,
-    minRating: filters.minRating || undefined,
-    vegOnly: filters.vegOnly || undefined,
   })
 
   const resetAll = () => {
@@ -130,11 +126,30 @@ export function ProductsBrowser({
         </div>
 
         <p className="text-sm text-muted-foreground" aria-live="polite">
-          {isLoading ? 'Loading products…' : `${data?.length ?? 0} ${data?.length === 1 ? 'product' : 'products'}`}
+          {isLoading
+            ? 'Loading products…'
+            : error
+              ? 'Unable to load products'
+              : `${data?.length ?? 0} ${data?.length === 1 ? 'product' : 'products'}`}
         </p>
 
         {isLoading ? (
           <ProductGridSkeleton count={6} className="lg:grid-cols-3" />
+        ) : error ? (
+          <Empty className="border border-dashed bg-card">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <TriangleAlertIcon />
+              </EmptyMedia>
+              <EmptyTitle>Couldn&apos;t load products</EmptyTitle>
+              <EmptyDescription>
+                We couldn&apos;t reach the store server. Please try again in a moment.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button onClick={() => mutate()}>Try again</Button>
+            </EmptyContent>
+          </Empty>
         ) : data && data.length > 0 ? (
           <div className={isValidating ? 'opacity-70 transition-opacity' : 'transition-opacity'}>
             <ProductGrid products={data} className="lg:grid-cols-3" />

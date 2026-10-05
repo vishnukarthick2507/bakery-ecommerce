@@ -27,8 +27,11 @@ const categoryMap: Record<string, CategorySlug> = {
   savouries: 'savouries',
 }
 
-function mapCategory(category: string): CategorySlug {
-  return categoryMap[category.trim().toLowerCase()] ?? 'cakes'
+function mapCategory(category: string): Product['category'] {
+  const normalized = category.trim().toLowerCase()
+  // Unknown backend categories are preserved as-is instead of being
+  // silently rewritten to another category.
+  return categoryMap[normalized] ?? category.trim()
 }
 
 function mapAvailability(availability: string | undefined, stock: number): AvailabilityStatus {
@@ -82,6 +85,5 @@ export function mapBackendProduct(raw: BackendProduct): Product {
     ingredients: [],
     allergens: [],
     shelfLife: '',
-    reviews: [],
   }
 }

@@ -37,22 +37,6 @@ export function StarRow({ value }: { value: number }) {
   )
 }
 
-export function VegMark({ isVeg, className }: { isVeg: boolean; className?: string }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex size-4 shrink-0 items-center justify-center rounded-sm border-2 bg-background',
-        isVeg ? 'border-success' : 'border-destructive',
-        className,
-      )}
-      title={isVeg ? 'Eggless / Vegetarian' : 'Contains egg or meat'}
-    >
-      <span className={cn('size-1.5 rounded-full', isVeg ? 'bg-success' : 'bg-destructive')} />
-      <span className="sr-only">{isVeg ? 'Vegetarian, eggless' : 'Non-vegetarian or contains egg'}</span>
-    </span>
-  )
-}
-
 export function Price({
   price,
   mrp,

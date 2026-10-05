@@ -46,13 +46,18 @@ const updateProductSchema = productSchema
 */
 
 export const getProducts = async (
-  _req: Request,
+  req: Request,
   res: Response,
 ): Promise<void> => {
   try {
-    const products = await Product.find({
-      active: true,
-    })
+    // Admin product management needs to see disabled
+    // products too; the storefront uses the default.
+    const includeInactive =
+      req.query.includeInactive === "true";
+
+    const products = await Product.find(
+      includeInactive ? {} : { active: true },
+    )
       .sort({ createdAt: -1 })
       .lean();
 

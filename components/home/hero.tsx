@@ -16,7 +16,7 @@ export function Hero() {
       <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 md:grid-cols-2 md:py-16 lg:gap-14 lg:py-20">
         <div className="flex flex-col gap-6">
           <p className="w-fit rounded-full bg-background px-3 py-1 text-sm font-medium text-primary shadow-sm">
-            Neighbourhood bakery · Indiranagar
+            Neighbourhood bakery · Chromepet, Chennai
           </p>
           <h1 id="hero-title" className="text-4xl leading-tight font-bold text-navy sm:text-5xl lg:text-6xl">
             Freshly Baked Happiness
@@ -47,7 +47,7 @@ export function Hero() {
         <div className="relative aspect-[4/3] overflow-hidden rounded-3xl shadow-lg md:aspect-square lg:aspect-[4/3.4]">
           <Image
             src="/images/hero.png"
-            alt="A display of freshly baked cakes, croissants and breads at Bluebell Bakehouse"
+            alt="A display of freshly baked cakes, croissants and breads at S.V. Sweets & Bakers"
             fill
             priority
             sizes="(min-width: 768px) 50vw, 100vw"

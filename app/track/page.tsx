@@ -1,6 +1,5 @@
 'use client'
 
-import type { Metadata } from 'next'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -247,29 +246,31 @@ export default function TrackPage() {
                 Order Status
               </h2>
 
-              <div className="mt-6 grid gap-4 sm:grid-cols-4">
+              <div className="mt-6 grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
                 {(
   [
     'PLACED',
     'CONFIRMED',
     'PREPARING',
     'READY',
+    'OUT_FOR_DELIVERY',
+    'DELIVERED',
   ] as Order['orderStatus'][]
-).map((status) => {
-                  const statuses = [
-                    'PLACED',
-                    'CONFIRMED',
-                    'PREPARING',
-                    'READY',
-                  ]
-
+).map((status, statusIndex) => {
                   const currentIndex =
-                    statuses.indexOf(
-                      order.orderStatus,
-                    )
-
-                  const statusIndex =
-                    statuses.indexOf(status)
+                    order.orderStatus ===
+                    'PAYMENT_CONFIRMED'
+                      ? 0
+                      : [
+                          'PLACED',
+                          'CONFIRMED',
+                          'PREPARING',
+                          'READY',
+                          'OUT_FOR_DELIVERY',
+                          'DELIVERED',
+                        ].indexOf(
+                          order.orderStatus,
+                        )
 
                   const completed =
                     currentIndex >= statusIndex
@@ -300,22 +301,6 @@ export default function TrackPage() {
                   )
                 })}
               </div>
-
-              {order.orderStatus ===
-                'OUT_FOR_DELIVERY' && (
-                <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
-                  🚚 Your order is out for
-                  delivery.
-                </div>
-              )}
-
-              {order.orderStatus ===
-                'DELIVERED' && (
-                <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
-                  ✅ Your order has been
-                  delivered.
-                </div>
-              )}
 
               {order.orderStatus ===
                 'CANCELLED' && (

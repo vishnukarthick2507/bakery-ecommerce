@@ -1,4 +1,4 @@
-import { ClockIcon, MailIcon, MapPinIcon, MessageCircleIcon, PhoneIcon } from 'lucide-react'
+import { ClockIcon, MapPinIcon, MessageCircleIcon, PhoneIcon } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -28,14 +28,10 @@ export function ContactBlock() {
               <PhoneIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
               {siteConfig.phoneDisplay}
             </a>
-            <a href={`mailto:${siteConfig.email}`} className="flex gap-3 hover:text-primary">
-              <MailIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-              {siteConfig.email}
-            </a>
           </address>
 
           <a
-            href={whatsappLink('Hi Bluebell Bakehouse! I have a question.')}
+            href={whatsappLink(`Hi ${siteConfig.name}! I have a question.`)}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(buttonVariants({ variant: 'whatsapp', size: 'xl' }), 'w-full')}

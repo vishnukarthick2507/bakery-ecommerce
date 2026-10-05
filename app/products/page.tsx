@@ -1,19 +1,17 @@
 import type { Metadata } from 'next'
 import { ProductsBrowser } from '@/components/products/products-browser'
 import { PageHeader } from '@/components/page-header'
-import { categories } from '@/lib/mock-data'
+import { categoryOptions } from '@/lib/category-options'
 import type { AvailabilityStatus, CategorySlug, SortOption } from '@/lib/types'
 
 export const metadata: Metadata = {
   title: 'Shop',
   description:
-    'Browse fresh cakes, pastries, breads, cookies and savouries. Filter by category, price, weight and availability.',
+    'Browse fresh cakes, pastries, breads, cookies and savouries. Filter by category, price and availability.',
 }
 
 const availabilityValues: AvailabilityStatus[] = [
   'AVAILABLE_NOW',
-  'READY_IN_TIME',
-  'PRE_ORDER',
   'SOLD_OUT',
 ]
 
@@ -21,7 +19,6 @@ const sortValues: SortOption[] = [
   'popular',
   'price-asc',
   'price-desc',
-  'rating',
 ]
 
 export default async function ProductsPage({
@@ -34,9 +31,9 @@ export default async function ProductsPage({
   const pick = (key: string) =>
     typeof params[key] === 'string' ? params[key] : undefined
 
-  const category = categories.find(
-    (c) => c.slug === pick('category'),
-  )?.slug as CategorySlug | undefined
+  const category = categoryOptions.find(
+    (c) => c.value === pick('category'),
+  )?.value as CategorySlug | undefined
 
   const availability = availabilityValues.find(
     (a) => a === pick('availability'),
@@ -49,7 +46,7 @@ export default async function ProductsPage({
   const q = pick('q')
 
   const heading = category
-    ? categories.find((c) => c.slug === category)!.name
+    ? categoryOptions.find((c) => c.value === category)!.label
     : 'All products'
 
   return (

@@ -6,7 +6,6 @@ import { Separator } from '@/components/ui/separator'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { formatPrice } from '@/lib/format'
-import { siteConfig } from '@/lib/site-config'
 import { cn } from '@/lib/utils'
 import { useCart } from './cart-provider'
 import { CartEmpty } from './cart-empty'
@@ -16,7 +15,6 @@ export function CartSheet() {
   const { isOpen, setOpen, pricing, count } = useCart()
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const close = () => setOpen(false)
-  const remainingForFreeDelivery = siteConfig.freeDeliveryAbove - pricing.subtotal
 
   return (
     <Sheet open={isOpen} onOpenChange={setOpen}>
@@ -49,13 +47,9 @@ export function CartSheet() {
               ))}
             </ul>
             <SheetFooter className="gap-3 border-t bg-cream px-5 py-4">
-              {remainingForFreeDelivery > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Add {formatPrice(remainingForFreeDelivery)} more for free delivery.
-                </p>
-              ) : (
-                <p className="text-xs font-medium text-success">You&apos;ve unlocked free delivery.</p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Delivery is currently free on all orders.
+              </p>
               {pricing.savings > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">You save</span>

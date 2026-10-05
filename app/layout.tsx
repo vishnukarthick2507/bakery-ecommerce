@@ -16,13 +16,16 @@ const playfair = Playfair_Display({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
+  ),
   title: {
     default: `${siteConfig.name} — ${siteConfig.tagline}`,
     template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.description,
   generator: 'v0.app',
-  keywords: ['bakery', 'custom cakes', 'sourdough', 'croissants', 'cake delivery', 'Bengaluru bakery'],
+  keywords: ['bakery', 'custom cakes', 'sourdough', 'croissants', 'cake delivery', 'Chromepet bakery', 'Chennai bakery'],
   openGraph: {
     title: `${siteConfig.name} — ${siteConfig.tagline}`,
     description: siteConfig.description,

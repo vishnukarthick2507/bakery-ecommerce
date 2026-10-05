@@ -17,7 +17,7 @@ import { formatPrice } from '@/lib/format'
 import type { Product } from '@/lib/types'
 
 import { AvailabilityBadge } from './availability-badge'
-import { Price, Rating, VegMark } from './product-meta'
+import { Price, Rating } from './product-meta'
 
 interface ProductDetailClientProps {
   product: Product
@@ -32,8 +32,7 @@ export function ProductDetailClient({
   const variant = product.variants[0]
 
   const canOrder =
-    product.availability === 'AVAILABLE_NOW' ||
-    product.availability === 'READY_IN_TIME'
+    product.availability === 'AVAILABLE_NOW'
 
   const decreaseQuantity = () => {
     setQuantity((current) => Math.max(1, current - 1))
@@ -80,17 +79,18 @@ export function ProductDetailClient({
 
             <div className="absolute left-4 top-4 flex items-start gap-2">
               <AvailabilityBadge product={product} />
-              <VegMark isVeg={product.isVeg} />
             </div>
           </div>
         </Card>
 
         <div className="flex flex-col justify-center gap-5">
-          <Rating
-            value={product.rating}
-            count={product.reviewCount}
-            className="text-sm"
-          />
+          {product.reviewCount > 0 && (
+            <Rating
+              value={product.rating}
+              count={product.reviewCount}
+              className="text-sm"
+            />
+          )}
 
           <div>
             <h1 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -148,15 +148,17 @@ export function ProductDetailClient({
               </div>
             )}
 
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">
-                Shelf life
-              </span>
+            {product.shelfLife && (
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">
+                  Shelf life
+                </span>
 
-              <span className="font-medium">
-                {product.shelfLife}
-              </span>
-            </div>
+                <span className="font-medium">
+                  {product.shelfLife}
+                </span>
+              </div>
+            )}
           </div>
 
           {product.ingredients.length > 0 && (

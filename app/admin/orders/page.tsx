@@ -38,15 +38,46 @@ type Order = {
   createdAt: string
 }
 
-const statuses: OrderStatus[] = [
+// Controlled progression — mirrors the transition
+// rules enforced by the backend.
+const nextStatusAction: Partial<
+  Record<
+    OrderStatus,
+    { status: OrderStatus; label: string }
+  >
+> = {
+  PLACED: {
+    status: 'CONFIRMED',
+    label: 'Confirm Order',
+  },
+  PAYMENT_CONFIRMED: {
+    status: 'CONFIRMED',
+    label: 'Confirm Order',
+  },
+  CONFIRMED: {
+    status: 'PREPARING',
+    label: 'Start Preparing',
+  },
+  PREPARING: {
+    status: 'READY',
+    label: 'Mark Ready',
+  },
+  READY: {
+    status: 'OUT_FOR_DELIVERY',
+    label: 'Out for Delivery',
+  },
+  OUT_FOR_DELIVERY: {
+    status: 'DELIVERED',
+    label: 'Mark Delivered',
+  },
+}
+
+const cancellableStatuses: OrderStatus[] = [
   'PLACED',
   'PAYMENT_CONFIRMED',
   'CONFIRMED',
   'PREPARING',
   'READY',
-  'OUT_FOR_DELIVERY',
-  'DELIVERED',
-  'CANCELLED',
 ]
 
 function formatStatus(status: OrderStatus) {
@@ -334,42 +365,74 @@ export default function AdminOrdersPage() {
                   </div>
 
                   <div className="w-full sm:w-72">
-                    <label
-                      htmlFor={`status-${order._id}`}
-                      className="text-sm font-medium"
-                    >
-                      Change Status
-                    </label>
+                    {(() => {
+                      const action =
+                        nextStatusAction[order.orderStatus]
 
-                    <select
-                      id={`status-${order._id}`}
-                      value={order.orderStatus}
-                      disabled={
+                      const canCancel =
+                        cancellableStatuses.includes(
+                          order.orderStatus,
+                        )
+
+                      const isUpdating =
                         updatingOrder === order.orderNumber
-                      }
-                      onChange={(event) =>
-                        updateStatus(
-                          order.orderNumber,
-                          event.target.value as OrderStatus,
+
+                      if (!action && !canCancel) {
+                        return (
+                          <p className="text-sm text-muted-foreground">
+                            No further actions available.
+                          </p>
                         )
                       }
-                      className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2 disabled:opacity-60"
-                    >
-                      {statuses.map((status) => (
-                        <option
-                          key={status}
-                          value={status}
-                        >
-                          {formatStatus(status)}
-                        </option>
-                      ))}
-                    </select>
 
-                    {updatingOrder === order.orderNumber && (
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Updating order...
-                      </p>
-                    )}
+                      return (
+                        <div className="flex flex-col gap-2">
+                          {action && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() =>
+                                updateStatus(
+                                  order.orderNumber,
+                                  action.status,
+                                )
+                              }
+                              className="w-full rounded-lg bg-primary px-4 py-3 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                            >
+                              {action.label}
+                            </button>
+                          )}
+
+                          {canCancel && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Cancel order ${order.orderNumber}?`,
+                                  )
+                                ) {
+                                  updateStatus(
+                                    order.orderNumber,
+                                    'CANCELLED',
+                                  )
+                                }
+                              }}
+                              className="w-full rounded-lg border border-destructive/40 px-4 py-2.5 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60"
+                            >
+                              Cancel Order
+                            </button>
+                          )}
+
+                          {isUpdating && (
+                            <p className="text-sm text-muted-foreground">
+                              Updating order...
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
 
                 </div>

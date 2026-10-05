@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { MailIcon, MapPinIcon, PhoneIcon } from 'lucide-react'
-import { categories } from '@/lib/mock-data'
-import { navLinks, siteConfig } from '@/lib/site-config'
+import { MapPinIcon, MessageCircleIcon, PhoneIcon } from 'lucide-react'
+import { categoryTiles } from '@/lib/category-options'
+import { navLinks, siteConfig, whatsappLink } from '@/lib/site-config'
 
 export function SiteFooter() {
   return (
@@ -28,7 +28,7 @@ export function SiteFooter() {
         <div className="flex flex-col gap-3">
           <h2 className="font-sans text-sm font-semibold tracking-wide uppercase">Shop</h2>
           <ul className="flex flex-col gap-2 text-sm text-primary-foreground/80">
-            {categories.map((c) => (
+            {categoryTiles.map((c) => (
               <li key={c.slug}>
                 <Link href={`/products?category=${c.slug}`} className="hover:text-primary-foreground hover:underline">
                   {c.name}
@@ -49,9 +49,14 @@ export function SiteFooter() {
               <PhoneIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               {siteConfig.phoneDisplay}
             </a>
-            <a href={`mailto:${siteConfig.email}`} className="flex gap-2 hover:text-primary-foreground">
-              <MailIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              {siteConfig.email}
+            <a
+              href={whatsappLink(`Hi ${siteConfig.name}! I have a question.`)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex gap-2 hover:text-primary-foreground"
+            >
+              <MessageCircleIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              WhatsApp {siteConfig.phoneDisplay}
             </a>
           </address>
         </div>

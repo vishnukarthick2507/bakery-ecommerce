@@ -32,7 +32,7 @@ export function MobileBottomBar() {
           {showCount && <span className="font-semibold">{formatPrice(pricing.subtotal)}</span>}
         </Button>
         <a
-          href={whatsappLink('Hi Bluebell Bakehouse! I have a question about an order.')}
+          href={whatsappLink('Hi S.V. Sweets & Bakers! I have a question about an order.')}
           target="_blank"
           rel="noopener noreferrer"
           className={cn(buttonVariants({ variant: 'whatsapp', size: 'xl' }))}

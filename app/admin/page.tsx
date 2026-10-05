@@ -91,11 +91,16 @@ export default function AdminPage() {
       order.orderStatus === 'DELIVERED',
   ).length
 
-  const totalRevenue = orders.reduce(
-    (sum, order) =>
-      sum + order.totalAmount,
-    0,
-  )
+  const totalRevenue = orders
+    .filter(
+      (order) =>
+        order.orderStatus !== 'CANCELLED',
+    )
+    .reduce(
+      (sum, order) =>
+        sum + order.totalAmount,
+      0,
+    )
 
   return (
     <main className="min-h-screen bg-muted/20">
@@ -196,33 +201,23 @@ export default function AdminPage() {
             </p>
           </Link>
 
-          <div className="rounded-2xl border bg-background p-6 opacity-70">
+          <Link
+            href="/admin/products"
+            className="rounded-2xl border bg-background p-6 transition hover:-translate-y-0.5 hover:shadow-md"
+          >
             <h2 className="text-xl font-semibold">
               Products
             </h2>
 
             <p className="mt-2 text-sm text-muted-foreground">
-              Manage bakery products and prices.
+              Manage bakery products, prices,
+              stock and availability.
             </p>
 
-            <p className="mt-4 text-sm text-muted-foreground">
-              Coming next
+            <p className="mt-4 text-sm font-medium text-primary">
+              Manage Products →
             </p>
-          </div>
-
-          <div className="rounded-2xl border bg-background p-6 opacity-70">
-            <h2 className="text-xl font-semibold">
-              Inventory
-            </h2>
-
-            <p className="mt-2 text-sm text-muted-foreground">
-              Manage stock and availability.
-            </p>
-
-            <p className="mt-4 text-sm text-muted-foreground">
-              Coming soon
-            </p>
-          </div>
+          </Link>
 
           <div className="rounded-2xl border bg-background p-6 opacity-70">
             <h2 className="text-xl font-semibold">

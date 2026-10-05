@@ -3,11 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
-import { CakeSliceIcon, MenuIcon, ShoppingBagIcon, UserIcon } from 'lucide-react'
+import { CakeSliceIcon, MenuIcon, ShoppingBagIcon } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useCart } from '@/components/cart/cart-provider'
-import { useSession } from '@/hooks/use-api'
 import { navLinks, siteConfig } from '@/lib/site-config'
 import { cn } from '@/lib/utils'
 
@@ -27,7 +26,6 @@ export function Logo({ className }: { className?: string }) {
 export function SiteHeader() {
   const pathname = usePathname()
   const { count, setOpen, hydrated } = useCart()
-  const { data: user } = useSession()
   const [menuOpen, setMenuOpen] = useState(false)
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
@@ -66,20 +64,6 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
-          <Link
-            href={user ? '/profile' : '/login'}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'lg' }), 'hidden sm:inline-flex')}
-          >
-            <UserIcon data-icon="inline-start" />
-            {user ? user.name.split(' ')[0] : 'Login'}
-          </Link>
-          <Link
-            href={user ? '/profile' : '/login'}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'icon-lg' }), 'sm:hidden')}
-            aria-label={user ? 'Your profile' : 'Log in'}
-          >
-            <UserIcon />
-          </Link>
           <Button
             variant="outline"
             size="lg"
@@ -127,15 +111,6 @@ export function SiteHeader() {
                   </Link>
                 </li>
               ))}
-              <li>
-                <Link
-                  href={user ? '/profile' : '/login'}
-                  onClick={() => setMenuOpen(false)}
-                  className="block rounded-lg px-3 py-3 text-base font-medium hover:bg-secondary"
-                >
-                  {user ? 'My account' : 'Login / Register'}
-                </Link>
-              </li>
             </ul>
           </nav>
         </SheetContent>

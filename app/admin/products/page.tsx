@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
+import { categoryLabels } from '@/lib/category-options'
+
 type Availability =
   | 'AVAILABLE'
   | 'OUT_OF_STOCK'
@@ -39,18 +41,7 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:5000'
 
-const categories = [
-  'Cakes',
-  'Brownies',
-  'Cheesecakes',
-  'Pastries',
-  'Breads',
-  'Cookies',
-  'Cupcakes',
-  'Savouries',
-  'Sweets',
-  'Ice Cream',
-]
+const categories = categoryLabels
 
 const emptyForm: ProductForm = {
   name: '',
@@ -106,7 +97,7 @@ export default function AdminProductsPage() {
       setError('')
 
       const response = await fetch(
-        `${API_URL}/api/products`,
+        `${API_URL}/api/products?includeInactive=true`,
         {
           cache: 'no-store',
         },
@@ -250,7 +241,11 @@ export default function AdminProductsPage() {
         preparationTime,
         availability:
           form.availability,
-        active: true,
+        // Never reactivate implicitly: `active` is only
+        // sent when creating a new product.
+        ...(editingProduct
+          ? {}
+          : { active: true }),
         ...(form.image.trim()
           ? {
               images: [
@@ -407,6 +402,67 @@ export default function AdminProductsPage() {
         err instanceof Error
           ? err.message
           : 'Unable to update availability',
+      )
+    } finally {
+      setUpdatingProduct(null)
+    }
+  }
+
+  async function setProductActive(
+    productId: string,
+    active: boolean,
+  ) {
+    try {
+      setUpdatingProduct(productId)
+      setError('')
+
+      const response = await fetch(
+        `${API_URL}/api/products/${productId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify(
+            active
+              ? {
+                  active: true,
+                  availability:
+                    'AVAILABLE',
+                }
+              : {
+                  active: false,
+                  availability:
+                    'DISABLED',
+                },
+          ),
+        },
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            (active
+              ? 'Unable to enable product'
+              : 'Unable to disable product'),
+        )
+      }
+
+      setProducts((current) =>
+        current.map((product) =>
+          product._id === productId
+            ? data.product
+            : product,
+        ),
+      )
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to update product',
       )
     } finally {
       setUpdatingProduct(null)
@@ -583,8 +639,15 @@ export default function AdminProductsPage() {
                   }
                   className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
                 >
-                  {categories.map(
-                    (category) => (
+                  {(categories.includes(
+                    form.category,
+                  )
+                    ? categories
+                    : [
+                        form.category,
+                        ...categories,
+                      ]
+                  ).map((category) => (
                       <option
                         key={category}
                         value={category}
@@ -787,18 +850,22 @@ export default function AdminProductsPage() {
 
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          product.availability ===
-                          'AVAILABLE'
-                            ? 'bg-green-100 text-green-700'
+                          !product.active
+                            ? 'bg-muted text-muted-foreground'
                             : product.availability ===
-                                'OUT_OF_STOCK'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-red-100 text-red-700'
+                                'AVAILABLE'
+                              ? 'bg-green-100 text-green-700'
+                              : product.availability ===
+                                  'OUT_OF_STOCK'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-red-100 text-red-700'
                         }`}
                       >
-                        {formatAvailability(
-                          product.availability,
-                        )}
+                        {!product.active
+                          ? 'Disabled'
+                          : formatAvailability(
+                              product.availability,
+                            )}
                       </span>
                     </div>
                   </div>
@@ -976,6 +1043,43 @@ export default function AdminProductsPage() {
                   >
                     Edit Product
                   </button>
+
+                  {/* Disable / Enable */}
+                  {product.active ? (
+                    <button
+                      type="button"
+                      disabled={
+                        updatingProduct ===
+                        product._id
+                      }
+                      onClick={() =>
+                        setProductActive(
+                          product._id,
+                          false,
+                        )
+                      }
+                      className="mt-3 w-full rounded-lg border border-destructive/40 px-4 py-3 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60"
+                    >
+                      Disable Product
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={
+                        updatingProduct ===
+                        product._id
+                      }
+                      onClick={() =>
+                        setProductActive(
+                          product._id,
+                          true,
+                        )
+                      }
+                      className="mt-3 w-full rounded-lg border border-green-600/40 px-4 py-3 font-medium text-green-700 hover:bg-green-50 disabled:opacity-60"
+                    >
+                      Enable Product
+                    </button>
+                  )}
 
                   {updatingProduct ===
                     product._id && (

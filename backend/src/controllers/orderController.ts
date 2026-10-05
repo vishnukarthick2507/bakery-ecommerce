@@ -74,6 +74,55 @@ const updateOrderStatusSchema = z.object({
   ]),
 });
 
+type OrderStatusValue = z.infer<
+  typeof updateOrderStatusSchema
+>["status"];
+
+/*
+|--------------------------------------------------------------------------
+| ALLOWED STATUS TRANSITIONS
+|--------------------------------------------------------------------------
+| PLACED -> CONFIRMED -> PREPARING -> READY
+|        -> OUT_FOR_DELIVERY -> DELIVERED
+|
+| Cancellation is only allowed from active,
+| pre-delivery states. DELIVERED and CANCELLED
+| are terminal.
+|--------------------------------------------------------------------------
+*/
+
+const allowedStatusTransitions: Record<
+  OrderStatusValue,
+  OrderStatusValue[]
+> = {
+  PLACED: [
+    "PAYMENT_CONFIRMED",
+    "CONFIRMED",
+    "CANCELLED",
+  ],
+  PAYMENT_CONFIRMED: [
+    "CONFIRMED",
+    "CANCELLED",
+  ],
+  CONFIRMED: [
+    "PREPARING",
+    "CANCELLED",
+  ],
+  PREPARING: [
+    "READY",
+    "CANCELLED",
+  ],
+  READY: [
+    "OUT_FOR_DELIVERY",
+    "CANCELLED",
+  ],
+  OUT_FOR_DELIVERY: [
+    "DELIVERED",
+  ],
+  DELIVERED: [],
+  CANCELLED: [],
+};
+
 /*
 |--------------------------------------------------------------------------
 | GENERATE ORDER NUMBER
@@ -560,6 +609,44 @@ export const updateOrderStatus =
         return;
       }
 
+      const nextStatus =
+        parsed.data.status;
+
+      // Load the order to enforce transition rules
+      const existingOrder =
+        await Order.findOne({
+          orderNumber,
+        }).lean();
+
+      if (!existingOrder) {
+        res.status(404).json({
+          message:
+            "Order not found",
+        });
+
+        return;
+      }
+
+      const currentStatus =
+        existingOrder.orderStatus as OrderStatusValue;
+
+      const allowed =
+        allowedStatusTransitions[
+          currentStatus
+        ] ?? [];
+
+      if (
+        !allowed.includes(nextStatus)
+      ) {
+        res.status(400).json({
+          message: `Cannot change order status from ${currentStatus} to ${nextStatus}`,
+          allowedTransitions:
+            allowed,
+        });
+
+        return;
+      }
+
       // Update MongoDB
       const order =
         await Order.findOneAndUpdate(
@@ -569,7 +656,7 @@ export const updateOrderStatus =
           {
             $set: {
               orderStatus:
-                parsed.data.status,
+                nextStatus,
             },
           },
           {
