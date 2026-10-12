@@ -7,6 +7,7 @@ import { connectDB } from "./config/db.js";
 import productRoutes from "./routes/productRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import customCakeRoutes from "./routes/customCakeRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 
 dotenv.config();
 
@@ -35,6 +36,7 @@ app.use(
   "/api/custom-cake-requests",
   customCakeRoutes,
 );
+app.use("/api/auth", authRoutes);
 
 const startServer = async (): Promise<void> => {
   await connectDB();

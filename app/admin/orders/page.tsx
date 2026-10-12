@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { withAdminAuth } from '@/components/admin/admin-auth'
 
 type OrderStatus =
   | 'PLACED'
@@ -87,7 +88,7 @@ function formatStatus(status: OrderStatus) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
-export default function AdminOrdersPage() {
+function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -98,11 +99,11 @@ export default function AdminOrdersPage() {
       setLoading(true)
       setError('')
 
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
-      const response = await fetch(`${apiUrl}/api/orders`, {
+      const response = await fetch('/api/orders', {
         cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
+        },
       })
 
       const data = await response.json()
@@ -135,15 +136,13 @@ export default function AdminOrdersPage() {
       setUpdatingOrder(orderNumber)
       setError('')
 
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
       const response = await fetch(
-        `${apiUrl}/api/orders/${encodeURIComponent(orderNumber)}/status`,
+        `/api/orders/${encodeURIComponent(orderNumber)}/status`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify({ status }),
         },
@@ -444,3 +443,5 @@ export default function AdminOrdersPage() {
     </main>
   )
 }
+
+export default withAdminAuth(AdminOrdersPage)

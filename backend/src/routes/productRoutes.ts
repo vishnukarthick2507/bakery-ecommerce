@@ -7,6 +7,7 @@ import {
   getProducts,
   updateProduct,
 } from "../controllers/productController.js";
+import { authenticateAdmin } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -22,13 +23,13 @@ router.get("/", getProducts);
 // Get one product
 router.get("/:id", getProductById);
 
-// Create product
-router.post("/", createProduct);
+// Create product (admin only)
+router.post("/", authenticateAdmin, createProduct);
 
-// Update product
-router.patch("/:id", updateProduct);
+// Update product (admin only)
+router.patch("/:id", authenticateAdmin, updateProduct);
 
-// Disable product
-router.delete("/:id", deleteProduct);
+// Disable product (admin only)
+router.delete("/:id", authenticateAdmin, deleteProduct);
 
 export default router;

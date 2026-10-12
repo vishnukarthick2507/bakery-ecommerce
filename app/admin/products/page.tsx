@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
 import { categoryLabels } from '@/lib/category-options'
+import { withAdminAuth } from '@/components/admin/admin-auth'
 
 type Availability =
   | 'AVAILABLE'
@@ -37,9 +38,7 @@ type ProductForm = {
   image: string
 }
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:5000'
+const API_URL = ''
 
 const categories = categoryLabels
 
@@ -74,7 +73,7 @@ function createSlug(name: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-export default function AdminProductsPage() {
+function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -97,9 +96,12 @@ export default function AdminProductsPage() {
       setError('')
 
       const response = await fetch(
-        `${API_URL}/api/products?includeInactive=true`,
+        '/api/products?includeInactive=true',
         {
           cache: 'no-store',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
+          },
         },
       )
 
@@ -259,8 +261,8 @@ export default function AdminProductsPage() {
 
       const response = await fetch(
         editingProduct
-          ? `${API_URL}/api/products/${editingProduct._id}`
-          : `${API_URL}/api/products`,
+          ? `/api/products/${editingProduct._id}`
+          : '/api/products',
         {
           method: editingProduct
             ? 'PATCH'
@@ -268,6 +270,7 @@ export default function AdminProductsPage() {
           headers: {
             'Content-Type':
               'application/json',
+            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify(payload),
         },
@@ -319,12 +322,13 @@ export default function AdminProductsPage() {
       setError('')
 
       const response = await fetch(
-        `${API_URL}/api/products/${productId}`,
+        `/api/products/${productId}`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type':
               'application/json',
+            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify({
             stock,
@@ -368,12 +372,13 @@ export default function AdminProductsPage() {
       setError('')
 
       const response = await fetch(
-        `${API_URL}/api/products/${productId}`,
+        `/api/products/${productId}`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type':
               'application/json',
+            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify({
             availability,
@@ -423,6 +428,7 @@ export default function AdminProductsPage() {
           headers: {
             'Content-Type':
               'application/json',
+            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify(
             active
@@ -1095,3 +1101,5 @@ export default function AdminProductsPage() {
     </main>
   )
 }
+
+export default withAdminAuth(AdminProductsPage)

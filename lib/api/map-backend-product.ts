@@ -25,6 +25,15 @@ const categoryMap: Record<string, CategorySlug> = {
   cookies: 'cookies',
   cupcakes: 'cupcakes',
   savouries: 'savouries',
+  // Handle capitalized variants from backend
+  Cakes: 'cakes',
+  Brownies: 'brownies',
+  Cheesecakes: 'cheesecakes',
+  Pastries: 'pastries',
+  Breads: 'breads',
+  Cookies: 'cookies',
+  Cupcakes: 'cupcakes',
+  Savouries: 'savouries',
 }
 
 function mapCategory(category: string): Product['category'] {

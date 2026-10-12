@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { withAdminAuth } from '@/components/admin/admin-auth'
 
 type OrderStatus =
   | 'PLACED'
@@ -32,22 +33,27 @@ const statusLabel = (status: OrderStatus) =>
       letter.toUpperCase(),
     )
 
-export default function AdminPage() {
+function AdminPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const handleLogout = () => {
+    localStorage.removeItem('admin-token')
+    localStorage.removeItem('admin-user')
+    window.location.href = '/admin/login'
+  }
+
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        const apiUrl =
-          process.env.NEXT_PUBLIC_API_URL ||
-          'http://localhost:5000'
-
         const response = await fetch(
-          `${apiUrl}/api/orders`,
+          '/api/orders',
           {
             cache: 'no-store',
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
+            },
           },
         )
 
@@ -123,12 +129,20 @@ export default function AdminPage() {
             </p>
           </div>
 
-          <Link
-            href="/"
-            className="rounded-lg border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
-          >
-            View Store
-          </Link>
+          <div className="flex gap-3">
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Logout
+            </button>
+            <Link
+              href="/"
+              className="rounded-lg border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              View Store
+            </Link>
+          </div>
         </div>
 
         {/* Stats */}
@@ -216,6 +230,23 @@ export default function AdminPage() {
 
             <p className="mt-4 text-sm font-medium text-primary">
               Manage Products →
+            </p>
+          </Link>
+
+          <Link
+            href="/admin/custom-cakes"
+            className="rounded-2xl border bg-background p-6 transition hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <h2 className="text-xl font-semibold">
+              Custom Cakes
+            </h2>
+
+            <p className="mt-2 text-sm text-muted-foreground">
+              View and manage custom cake requests.
+            </p>
+
+            <p className="mt-4 text-sm font-medium text-primary">
+              Manage Requests →
             </p>
           </Link>
 
@@ -372,3 +403,5 @@ export default function AdminPage() {
     </main>
   )
 }
+
+export default withAdminAuth(AdminPage)
