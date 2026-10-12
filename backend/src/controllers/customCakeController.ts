@@ -46,53 +46,10 @@ const updateStatusSchema = z.object({
   status: z.enum(["PENDING", "CONTACTED", "CLOSED"]),
 });
 
-const customCakeRequestSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-
-  phone: z
-    .string()
-    .trim()
-    .min(8)
-    .max(20)
-    .regex(
-      /^[+0-9\s-]+$/,
-      "Phone number can only contain digits, spaces, + and -",
-    ),
-
-  flavour: z.string().trim().min(2).max(100),
-
-  weight: z.string().trim().min(1).max(50),
-
-  theme: z.string().trim().min(2).max(200),
-
-  messageOnCake: z
-    .string()
-    .trim()
-    .max(200)
-    .optional()
-    .transform((value) => value ?? ""),
-
-  instructions: z
-    .string()
-    .trim()
-    .max(1000)
-    .optional()
-    .transform((value) => value ?? ""),
-
-  referenceImageUrl: z
-    .union([z.url().max(500), z.literal("")])
-    .optional()
-    .transform((value) => value ?? ""),
-});
-
 function generateReferenceNumber(): string {
-  const timestamp = Date.now()
-    .toString()
-    .slice(-6);
+  const timestamp = Date.now().toString().slice(-6);
 
-  const random = Math.floor(
-    100 + Math.random() * 900,
-  );
+  const random = Math.floor(100 + Math.random() * 900);
 
   return `CC-${timestamp}-${random}`;
 }
@@ -110,45 +67,34 @@ export const createCustomCakeRequest = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const parsed =
-      customCakeRequestSchema.safeParse(
-        req.body,
-      );
+    const parsed = customCakeRequestSchema.safeParse(req.body);
 
     if (!parsed.success) {
       res.status(400).json({
-        message:
-          "Please check the form and try again",
+        message: "Please check the form and try again",
         errors: parsed.error.flatten(),
       });
 
       return;
     }
 
-    const request =
-      await CustomCakeRequest.create({
-        ...parsed.data,
-        referenceNumber:
-          generateReferenceNumber(),
-      });
+    const request = await CustomCakeRequest.create({
+      ...parsed.data,
+      referenceNumber: generateReferenceNumber(),
+    });
 
     res.status(201).json({
-      message:
-        "Custom cake request received",
+      message: "Custom cake request received",
 
       request: {
         id: request._id,
-        referenceNumber:
-          request.referenceNumber,
+        referenceNumber: request.referenceNumber,
         status: request.status,
         createdAt: request.createdAt,
       },
     });
   } catch (error) {
-    console.error(
-      "Create custom cake request failed:",
-      error,
-    );
+    console.error("Create custom cake request failed:", error);
 
     res.status(500).json({
       message:
@@ -158,11 +104,11 @@ export const createCustomCakeRequest = async (
 };
 
 /*
-||--------------------------------------------------------------------------
-|| GET ALL CUSTOM CAKE REQUESTS
-||--------------------------------------------------------------------------
-|| GET /api/custom-cake-requests
-||--------------------------------------------------------------------------
+|--------------------------------------------------------------------------
+| GET ALL CUSTOM CAKE REQUESTS
+|--------------------------------------------------------------------------
+| GET /api/custom-cake-requests
+|--------------------------------------------------------------------------
 */
 
 export const getAllCustomCakeRequests = async (
@@ -177,6 +123,7 @@ export const getAllCustomCakeRequests = async (
     res.status(200).json({ requests });
   } catch (error) {
     console.error("Get custom cake requests failed:", error);
+
     res.status(500).json({
       message: "Unable to fetch requests",
     });
@@ -184,11 +131,11 @@ export const getAllCustomCakeRequests = async (
 };
 
 /*
-||--------------------------------------------------------------------------
-|| UPDATE CUSTOM CAKE REQUEST STATUS
-||--------------------------------------------------------------------------
-|| PATCH /api/custom-cake-requests/:id/status
-||--------------------------------------------------------------------------
+|--------------------------------------------------------------------------
+| UPDATE CUSTOM CAKE REQUEST STATUS
+|--------------------------------------------------------------------------
+| PATCH /api/custom-cake-requests/:id/status
+|--------------------------------------------------------------------------
 */
 
 export const updateCustomCakeRequestStatus = async (
@@ -205,19 +152,24 @@ export const updateCustomCakeRequestStatus = async (
         message: "Invalid status",
         errors: parsed.error.flatten(),
       });
+
       return;
     }
 
     const request = await CustomCakeRequest.findByIdAndUpdate(
       id,
       { $set: { status: parsed.data.status } },
-      { returnDocument: "after", runValidators: true },
+      {
+        returnDocument: "after",
+        runValidators: true,
+      },
     ).lean();
 
     if (!request) {
       res.status(404).json({
         message: "Request not found",
       });
+
       return;
     }
 
@@ -227,6 +179,7 @@ export const updateCustomCakeRequestStatus = async (
     });
   } catch (error) {
     console.error("Update custom cake request status failed:", error);
+
     res.status(500).json({
       message: "Unable to update status",
     });

@@ -7,7 +7,7 @@ import { connectDB } from "./config/db.js";
 import productRoutes from "./routes/productRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import customCakeRoutes from "./routes/customCakeRoutes.js";
-import authRoutes from "./routes/authRoutes.js";
+import { adminLogin, verifyToken } from "./controllers/authController.js";
 
 dotenv.config();
 
@@ -15,13 +15,13 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(helmet());
+
 app.use(
   cors({
-    origin:
-      process.env.CORS_ORIGIN ||
-      "http://localhost:3000",
+    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
   }),
 );
+
 app.use(express.json());
 
 app.get("/", (_req, res) => {
@@ -32,11 +32,11 @@ app.get("/", (_req, res) => {
 
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
-app.use(
-  "/api/custom-cake-requests",
-  customCakeRoutes,
-);
-app.use("/api/auth", authRoutes);
+app.use("/api/custom-cake-requests", customCakeRoutes);
+
+// Admin authentication
+app.post("/api/auth/login", adminLogin);
+app.get("/api/auth/verify", verifyToken);
 
 const startServer = async (): Promise<void> => {
   await connectDB();
