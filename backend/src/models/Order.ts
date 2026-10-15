@@ -37,6 +37,8 @@ export interface IOrder extends Document {
   scheduledTime: string;
   paymentMethod: PaymentMethod;
   paymentStatus: "PENDING" | "PAID" | "FAILED";
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
   orderStatus: OrderStatus;
   items: IOrderItem[];
   subtotal: number;
@@ -146,6 +148,16 @@ const orderSchema = new Schema<IOrder>(
       type: String,
       enum: ["PENDING", "PAID", "FAILED"],
       default: "PENDING",
+    },
+
+    razorpayOrderId: {
+      type: String,
+      trim: true,
+    },
+
+    razorpayPaymentId: {
+      type: String,
+      trim: true,
     },
 
     orderStatus: {

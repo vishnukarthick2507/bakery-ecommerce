@@ -7,6 +7,7 @@ import { connectDB } from "./config/db.js";
 import productRoutes from "./routes/productRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import customCakeRoutes from "./routes/customCakeRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 import { adminLogin, verifyToken } from "./controllers/authController.js";
 
 dotenv.config();
@@ -22,6 +23,13 @@ app.use(
   }),
 );
 
+// Razorpay webhook signature must be verified against the exact
+// raw bytes, so this route is parsed as raw before express.json().
+app.use(
+  "/api/payments/webhook",
+  express.raw({ type: "application/json" }),
+);
+
 app.use(express.json());
 
 app.get("/", (_req, res) => {
@@ -33,6 +41,7 @@ app.get("/", (_req, res) => {
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/custom-cake-requests", customCakeRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Admin authentication
 app.post("/api/auth/login", adminLogin);

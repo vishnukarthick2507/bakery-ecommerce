@@ -31,6 +31,8 @@ type Order = {
   scheduledTime: string
   paymentMethod: 'COD' | 'ONLINE'
   paymentStatus: 'PENDING' | 'PAID' | 'FAILED'
+  razorpayOrderId?: string
+  razorpayPaymentId?: string
   orderStatus: OrderStatus
   items: OrderItem[]
   subtotal: number
@@ -309,12 +311,24 @@ function AdminOrdersPage() {
                     <p className="mt-1 font-semibold">
                       {order.paymentMethod === 'COD'
                         ? 'Cash on Delivery'
-                        : 'Online'}
+                        : 'Online (Razorpay)'}
                     </p>
 
                     <p className="mt-1 text-sm text-muted-foreground">
                       {order.paymentStatus}
                     </p>
+
+                    {order.razorpayOrderId && (
+                      <p className="mt-1 text-xs text-muted-foreground break-all">
+                        RZP Order: {order.razorpayOrderId}
+                      </p>
+                    )}
+
+                    {order.razorpayPaymentId && (
+                      <p className="mt-1 text-xs text-muted-foreground break-all">
+                        RZP Payment: {order.razorpayPaymentId}
+                      </p>
+                    )}
                   </div>
 
                 </div>
