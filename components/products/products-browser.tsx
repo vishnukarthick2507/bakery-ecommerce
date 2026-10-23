@@ -20,7 +20,7 @@ import {
 } from './product-filters'
 
 const sortItems: Array<{ value: SortOption; label: string }> = [
-  { value: 'popular', label: 'Featured' },
+  { value: 'popular', label: 'Newest' },
   { value: 'price-asc', label: 'Price: low to high' },
   { value: 'price-desc', label: 'Price: high to low' },
 ]
@@ -30,11 +30,13 @@ export function ProductsBrowser({
   initialAvailability,
   initialSort,
   initialSearch,
+  categoryOptions,
 }: {
   initialCategory?: CategorySlug
   initialAvailability?: AvailabilityStatus
   initialSort?: SortOption
   initialSearch?: string
+  categoryOptions: Array<{ value: CategorySlug; label: string }>
 }) {
   const [search, setSearch] = useState(initialSearch ?? '')
   const [sort, setSort] = useState<SortOption>(initialSort ?? 'popular')
@@ -73,7 +75,7 @@ export function ProductsBrowser({
               </Button>
             )}
           </div>
-          <ProductFiltersPanel value={filters} onChange={setFilters} idPrefix="desk" />
+          <ProductFiltersPanel value={filters} onChange={setFilters} idPrefix="desk" categoryOptions={categoryOptions} />
         </div>
       </aside>
 
@@ -179,7 +181,7 @@ export function ProductsBrowser({
             <SheetTitle className="font-heading text-xl">Filters</SheetTitle>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-5 py-5">
-            <ProductFiltersPanel value={filters} onChange={setFilters} idPrefix="mob" />
+            <ProductFiltersPanel value={filters} onChange={setFilters} idPrefix="mob" categoryOptions={categoryOptions} />
           </div>
           <SheetFooter className="grid grid-cols-2 gap-2 border-t px-5 py-4">
             <Button variant="outline" size="xl" onClick={() => setFilters(defaultFilterState)}>

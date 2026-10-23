@@ -5,7 +5,6 @@ import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/componen
 import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
 import { formatPrice } from '@/lib/format'
-import { categoryOptions } from '@/lib/category-options'
 import type { AvailabilityStatus, CategorySlug } from '@/lib/types'
 
 export const PRICE_MIN = 0
@@ -78,10 +77,12 @@ export function ProductFiltersPanel({
   value,
   onChange,
   idPrefix = 'f',
+  categoryOptions,
 }: {
   value: FilterState
   onChange: (next: FilterState) => void
   idPrefix?: string
+  categoryOptions: Array<{ value: CategorySlug; label: string }>
 }) {
   const set = <K extends keyof FilterState>(key: K, v: FilterState[K]) => onChange({ ...value, [key]: v })
 

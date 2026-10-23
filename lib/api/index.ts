@@ -1,5 +1,5 @@
 import { offers, testimonials } from '@/lib/mock-data'
-import { categoryTiles } from '@/lib/category-options'
+import { categoryLabel, categorySlug } from '@/lib/category-options'
 import type {
   CartItem,
   CategorySlug,
@@ -29,7 +29,26 @@ function apiBaseUrl() {
 /* ---------- Catalogue ---------- */
 
 export async function getCategories() {
-  return categoryTiles
+  try {
+    const products = await fetchBackendProducts()
+    const productsByCategory = new Map<string, Product>()
+
+    for (const product of products) {
+      if (!productsByCategory.has(product.category)) {
+        productsByCategory.set(product.category, product)
+      }
+    }
+
+    return Array.from(productsByCategory, ([value, product]) => ({
+      slug: categorySlug(value),
+      value,
+      name: categoryLabel(value),
+      description: '',
+      image: product.image,
+    }))
+  } catch {
+    return []
+  }
 }
 
 export function basePrice(product: Product) {

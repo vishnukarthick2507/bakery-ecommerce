@@ -3,14 +3,14 @@ import { PageHeader } from '@/components/page-header'
 
 export const metadata: Metadata = {
   title: 'About Us',
-  description: 'Learn more about S.V. Sweets & Bakers.',
+  description: 'Learn more about The Cake Point.',
 }
 
 export default function AboutPage() {
   return (
     <>
       <PageHeader
-        title="About S.V. Sweets & Bakers"
+        title="About The Cake Point"
         description="Freshly baked with care, every day."
         breadcrumbs={[
           { href: '/', label: 'Home' },
@@ -26,7 +26,7 @@ export default function AboutPage() {
             </h2>
 
             <p className="mt-4 leading-7 text-muted-foreground">
-              S.V. Sweets & Bakers is a neighbourhood bakery in
+              The Cake Point is a neighbourhood bakery in
               Chromepet, Chennai, creating fresh cakes, breads,
               pastries, brownies and celebration cakes with carefully
               selected ingredients.

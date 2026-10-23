@@ -118,6 +118,10 @@ function AdminCustomCakesPage() {
 
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
+            <p className="text-sm font-medium text-primary">
+              The Cake Point Admin
+            </p>
+
             <Link
               href="/admin"
               className="text-sm text-muted-foreground hover:underline"

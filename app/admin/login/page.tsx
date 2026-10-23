@@ -56,7 +56,7 @@ export default function AdminLoginPage() {
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold">Admin Login</h1>
           <p className="mt-2 text-muted-foreground">
-            S.V. Sweets & Bakers
+            The Cake Point Admin
           </p>
         </div>
 

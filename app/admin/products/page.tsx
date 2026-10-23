@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
-import { categoryLabels } from '@/lib/category-options'
 import { withAdminAuth } from '@/components/admin/admin-auth'
 
 type Availability =
@@ -40,8 +39,6 @@ type ProductForm = {
 
 const API_URL = ''
 
-const categories = categoryLabels
-
 const emptyForm: ProductForm = {
   name: '',
   slug: '',
@@ -75,6 +72,7 @@ function createSlug(name: string) {
 
 function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -114,7 +112,12 @@ function AdminProductsPage() {
         )
       }
 
-      setProducts(data)
+      const fetchedProducts = data as Product[]
+      setProducts(fetchedProducts)
+      setCategories(
+        Array.from(new Set(fetchedProducts.map((product) => product.category)))
+          .sort((first, second) => first.localeCompare(second)),
+      )
     } catch (err) {
       setError(
         err instanceof Error
@@ -482,6 +485,10 @@ function AdminProductsPage() {
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
+            <p className="text-sm font-medium text-primary">
+              The Cake Point Admin
+            </p>
+
             <Link
               href="/admin"
               className="text-sm text-muted-foreground hover:underline"

@@ -37,7 +37,7 @@ export default function CartPage() {
           </h1>
 
           <p className="mt-3 text-muted-foreground">
-            Add some delicious items from S.V. Sweets & Bakers before
+            Add some delicious items from The Cake Point before
             checking out.
           </p>
 

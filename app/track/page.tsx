@@ -167,7 +167,7 @@ export default function TrackPage() {
 
           <p className="mt-2 text-muted-foreground">
             Check the latest status of your
-            S.V. Sweets & Bakers order.
+            The Cake Point order.
           </p>
         </div>
 
@@ -391,8 +391,7 @@ export default function TrackPage() {
                   {order.fulfillmentType ===
                     'PICKUP' && (
                     <p className="text-muted-foreground">
-                      Pick up from S.V. Sweets &
-                      Bakers.
+                      Pick up from The Cake Point.
                     </p>
                   )}
                 </div>

@@ -12,7 +12,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { useCart } from '@/components/cart/cart-provider'
+import { CART_MAX_QTY, useCart } from '@/components/cart/cart-provider'
 import { formatPrice } from '@/lib/format'
 import type { Product } from '@/lib/types'
 
@@ -30,6 +30,7 @@ export function ProductDetailClient({
   const [quantity, setQuantity] = useState(1)
 
   const variant = product.variants[0]
+  const maxQuantity = Math.min(CART_MAX_QTY, product.stock)
 
   const canOrder =
     product.availability === 'AVAILABLE_NOW'
@@ -39,7 +40,7 @@ export function ProductDetailClient({
   }
 
   const increaseQuantity = () => {
-    setQuantity((current) => Math.min(20, current + 1))
+    setQuantity((current) => Math.min(maxQuantity, current + 1))
   }
 
   const handleAddToCart = () => {
@@ -136,6 +137,16 @@ export function ProductDetailClient({
               </span>
             </div>
 
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">
+                In stock
+              </span>
+
+              <span className="font-medium">
+                {product.stock} available
+              </span>
+            </div>
+
             {product.readyInMinutes && (
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">
@@ -213,7 +224,7 @@ export function ProductDetailClient({
                     variant="ghost"
                     size="icon"
                     onClick={increaseQuantity}
-                    disabled={quantity >= 20}
+                    disabled={quantity >= maxQuantity}
                     aria-label="Increase quantity"
                   >
                     <PlusIcon className="size-4" />

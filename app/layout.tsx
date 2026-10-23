@@ -31,6 +31,12 @@ export const metadata: Metadata = {
     description: siteConfig.description,
     images: ['/images/hero.png'],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description: siteConfig.description,
+    images: ['/images/hero.png'],
+  },
   icons: {
     icon: [
       { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },

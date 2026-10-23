@@ -2,18 +2,11 @@ export type AvailabilityStatus =
   | 'AVAILABLE_NOW'
   | 'SOLD_OUT'
 
-export type CategorySlug =
-  | 'cakes'
-  | 'pastries'
-  | 'breads'
-  | 'cookies'
-  | 'cupcakes'
-  | 'savouries'
-  | 'brownies'
-  | 'cheesecakes'
+export type CategorySlug = string
 
 export interface Category {
   slug: CategorySlug
+  value: CategorySlug
   name: string
   description: string
   image: string
@@ -35,6 +28,7 @@ export interface Product {
   category: CategorySlug | (string & {})
   description: string
   image: string
+  stock: number
   variants: ProductVariant[]
   rating: number
   reviewCount: number

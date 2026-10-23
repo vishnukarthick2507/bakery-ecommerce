@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { ProductsBrowser } from '@/components/products/products-browser'
 import { PageHeader } from '@/components/page-header'
-import { categoryOptions } from '@/lib/category-options'
+import { getCategories } from '@/lib/api'
+import { categoryLabel } from '@/lib/category-options'
 import type { AvailabilityStatus, CategorySlug, SortOption } from '@/lib/types'
 
 export const metadata: Metadata = {
@@ -27,13 +28,18 @@ export default async function ProductsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const params = await searchParams
+  const categories = await getCategories()
+  const categoryOptions = categories.map((category) => ({
+    value: category.value,
+    label: category.name,
+  }))
 
   const pick = (key: string) =>
     typeof params[key] === 'string' ? params[key] : undefined
 
   const category = categoryOptions.find(
-    (c) => c.value === pick('category'),
-  )?.value as CategorySlug | undefined
+    (option) => categories.find((item) => item.value === option.value)?.slug === pick('category'),
+  )?.value
 
   const availability = availabilityValues.find(
     (a) => a === pick('availability'),
@@ -46,7 +52,7 @@ export default async function ProductsPage({
   const q = pick('q')
 
   const heading = category
-    ? categoryOptions.find((c) => c.value === category)!.label
+    ? categoryLabel(category)
     : 'All products'
 
   return (
@@ -67,6 +73,7 @@ export default async function ProductsPage({
           initialAvailability={availability}
           initialSort={sort}
           initialSearch={q}
+          categoryOptions={categoryOptions}
         />
       </div>
     </>

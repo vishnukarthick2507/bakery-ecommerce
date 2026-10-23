@@ -34,7 +34,7 @@ app.use(express.json());
 
 app.get("/", (_req, res) => {
   res.json({
-    message: "S.V. Sweets & Bakers API is running",
+    message: "The Cake Point API is running",
   });
 });
 
@@ -52,7 +52,7 @@ const startServer = async (): Promise<void> => {
 
   app.listen(PORT, () => {
     console.log(
-      `STARTED S.V. Sweets & Bakers API running on http://localhost:${PORT}`,
+      `STARTED The Cake Point API running on http://localhost:${PORT}`,
     );
   });
 };

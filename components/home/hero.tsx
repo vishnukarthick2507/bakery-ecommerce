@@ -47,7 +47,7 @@ export function Hero() {
         <div className="relative aspect-[4/3] overflow-hidden rounded-3xl shadow-lg md:aspect-square lg:aspect-[4/3.4]">
           <Image
             src="/images/hero.png"
-            alt="A display of freshly baked cakes, croissants and breads at S.V. Sweets & Bakers"
+            alt="A display of freshly baked cakes, croissants and breads at The Cake Point"
             fill
             priority
             sizes="(min-width: 768px) 50vw, 100vw"

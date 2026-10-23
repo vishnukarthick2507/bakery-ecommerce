@@ -4,7 +4,7 @@ import { ContactBlock } from '@/components/contact/contact-block'
 
 export const metadata: Metadata = {
   title: 'Contact Us',
-  description: 'Get in touch with S.V. Sweets & Bakers, Chromepet, Chennai.',
+  description: 'Get in touch with The Cake Point, Chromepet, Chennai.',
 }
 
 export default function ContactPage() {

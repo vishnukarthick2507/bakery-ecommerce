@@ -1,9 +1,11 @@
 import Link from 'next/link'
 import { MapPinIcon, MessageCircleIcon, PhoneIcon } from 'lucide-react'
-import { categoryTiles } from '@/lib/category-options'
+import { getCategories } from '@/lib/api'
 import { navLinks, siteConfig, whatsappLink } from '@/lib/site-config'
 
-export function SiteFooter() {
+export async function SiteFooter() {
+  const categories = await getCategories()
+
   return (
     <footer className="bg-navy text-primary-foreground">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
@@ -28,7 +30,7 @@ export function SiteFooter() {
         <div className="flex flex-col gap-3">
           <h2 className="font-sans text-sm font-semibold tracking-wide uppercase">Shop</h2>
           <ul className="flex flex-col gap-2 text-sm text-primary-foreground/80">
-            {categoryTiles.map((c) => (
+            {categories.map((c) => (
               <li key={c.slug}>
                 <Link href={`/products?category=${c.slug}`} className="hover:text-primary-foreground hover:underline">
                   {c.name}

@@ -116,6 +116,18 @@ export function CartProvider({
   const addItem = useCallback<
     CartContextValue['addItem']
   >((item, opts) => {
+    const product = products.find(
+      (candidate) => candidate.id === item.productId,
+    )
+    const maxQuantity = product
+      ? Math.min(MAX_QTY, product.stock)
+      : MAX_QTY
+
+    if (product && maxQuantity === 0) {
+      toast.error(`${product.name} is currently unavailable`)
+      return
+    }
+
     setItems((previousItems) => {
       const existingItem = previousItems.find(
         (existing) =>
@@ -128,10 +140,7 @@ export function CartProvider({
           existing === existingItem
             ? {
                 ...existing,
-                quantity: Math.min(
-                  MAX_QTY,
-                  existing.quantity + item.quantity,
-                ),
+                quantity: Math.min(maxQuantity, existing.quantity + item.quantity),
               }
             : existing,
         )
@@ -141,10 +150,7 @@ export function CartProvider({
         ...previousItems,
         {
           ...item,
-          quantity: Math.min(
-            MAX_QTY,
-            item.quantity,
-          ),
+          quantity: Math.min(maxQuantity, item.quantity),
         },
       ]
     })
@@ -162,7 +168,7 @@ export function CartProvider({
         },
       )
     }
-  }, [])
+  }, [products])
 
   // Update quantity
   const updateQuantity = useCallback(
@@ -171,8 +177,15 @@ export function CartProvider({
       variantId: string,
       quantity: number,
     ) => {
+      const product = products.find(
+        (candidate) => candidate.id === productId,
+      )
+      const maxQuantity = product
+        ? Math.min(MAX_QTY, product.stock)
+        : MAX_QTY
+
       setItems((previousItems) => {
-        if (quantity <= 0) {
+        if (quantity <= 0 || (product && maxQuantity === 0)) {
           return previousItems.filter(
             (item) =>
               !(
@@ -187,16 +200,13 @@ export function CartProvider({
           item.variantId === variantId
             ? {
                 ...item,
-                quantity: Math.min(
-                  MAX_QTY,
-                  quantity,
-                ),
+                quantity: Math.min(maxQuantity, quantity),
               }
             : item,
         )
       })
     },
-    [],
+    [products],
   )
 
   // Remove item

@@ -35,6 +35,11 @@ export function CartLine({ line, onNavigate }: { line: PricedLine; onNavigate?: 
         {product.availability !== 'AVAILABLE_NOW' && (
           <AvailabilityBadge product={product} className="h-auto whitespace-normal" />
         )}
+        {item.quantity > product.stock && (
+          <p className="text-xs text-destructive" role="status">
+            Only {product.stock} available. Reduce the quantity to continue.
+          </p>
+        )}
         <div className="mt-1 flex items-center justify-between">
           <div className="flex items-center rounded-lg border" role="group" aria-label={`Quantity for ${product.name}`}>
             <Button
@@ -51,7 +56,7 @@ export function CartLine({ line, onNavigate }: { line: PricedLine; onNavigate?: 
             <Button
               variant="ghost"
               size="icon"
-              disabled={item.quantity >= CART_MAX_QTY}
+              disabled={item.quantity >= Math.min(CART_MAX_QTY, product.stock)}
               onClick={() => updateQuantity(item.productId, item.variantId, item.quantity + 1)}
               aria-label="Increase quantity"
             >

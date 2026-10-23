@@ -151,18 +151,14 @@ export const createProduct = async (
       return;
     }
 
-    const {
-      images,
-      ...productFields
-    } = parsed.data;
-
-    const productData =
-      images === undefined
-        ? productFields
-        : {
-            ...productFields,
-            images,
-          };
+    const productData = {
+      ...parsed.data,
+      images: parsed.data.images ?? [],
+      stock: parsed.data.stock ?? 0,
+      availability:
+        parsed.data.availability ?? "AVAILABLE",
+      active: parsed.data.active ?? true,
+    };
 
     const product =
       await Product.create(productData);

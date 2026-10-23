@@ -14,6 +14,8 @@ type OrderStatus =
   | 'DELIVERED'
   | 'CANCELLED'
 
+type FulfillmentFilter = 'ALL' | 'DELIVERY' | 'PICKUP'
+
 type OrderItem = {
   productName: string
   quantity: number
@@ -95,6 +97,9 @@ function AdminOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [updatingOrder, setUpdatingOrder] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'ALL' | OrderStatus>('ALL')
+  const [fulfillmentFilter, setFulfillmentFilter] = useState<FulfillmentFilter>('ALL')
 
   async function fetchOrders() {
     try {
@@ -129,6 +134,20 @@ function AdminOrdersPage() {
   useEffect(() => {
     fetchOrders()
   }, [])
+
+  const filteredOrders = orders.filter((order) => {
+    const normalizedSearch = search.trim().toLowerCase()
+    const matchesSearch =
+      !normalizedSearch ||
+      [order.orderNumber, order.customerName, order.phone]
+        .some((value) => value.toLowerCase().includes(normalizedSearch))
+
+    return (
+      matchesSearch &&
+      (statusFilter === 'ALL' || order.orderStatus === statusFilter) &&
+      (fulfillmentFilter === 'ALL' || order.fulfillmentType === fulfillmentFilter)
+    )
+  })
 
   async function updateStatus(
     orderNumber: string,
@@ -185,6 +204,10 @@ function AdminOrdersPage() {
 
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
+            <p className="text-sm font-medium text-primary">
+              The Cake Point Admin
+            </p>
+
             <Link
               href="/admin"
               className="text-sm text-muted-foreground hover:underline"
@@ -211,6 +234,59 @@ function AdminOrdersPage() {
           </button>
         </div>
 
+        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+          <label className="grid gap-1.5 text-sm font-medium">
+            Search orders
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Order number, customer or phone"
+              className="h-11 rounded-lg border bg-background px-3 font-normal outline-none focus:ring-2"
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-medium">
+            Status
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as 'ALL' | OrderStatus)}
+              className="h-11 rounded-lg border bg-background px-3 font-normal outline-none focus:ring-2"
+            >
+              <option value="ALL">All statuses</option>
+              {(
+                [
+                  'PLACED',
+                  'PAYMENT_CONFIRMED',
+                  'CONFIRMED',
+                  'PREPARING',
+                  'READY',
+                  'OUT_FOR_DELIVERY',
+                  'DELIVERED',
+                  'CANCELLED',
+                ] as OrderStatus[]
+              ).map((status) => (
+                <option key={status} value={status}>
+                  {formatStatus(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-medium">
+            Fulfillment
+            <select
+              value={fulfillmentFilter}
+              onChange={(event) => setFulfillmentFilter(event.target.value as FulfillmentFilter)}
+              className="h-11 rounded-lg border bg-background px-3 font-normal outline-none focus:ring-2"
+            >
+              <option value="ALL">Delivery and pickup</option>
+              <option value="DELIVERY">Delivery</option>
+              <option value="PICKUP">Pickup</option>
+            </select>
+          </label>
+        </div>
+
         {error && (
           <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
             {error}
@@ -235,9 +311,18 @@ function AdminOrdersPage() {
           </div>
         )}
 
-        {!loading && orders.length > 0 && (
+        {!loading && !error && orders.length > 0 && filteredOrders.length === 0 && (
+          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
+            <h2 className="text-xl font-semibold">No matching orders</h2>
+            <p className="mt-2 text-muted-foreground">
+              Change or clear the search and filters to see other orders.
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && filteredOrders.length > 0 && (
           <div className="mt-8 space-y-6">
-            {orders.map((order) => (
+            {filteredOrders.map((order) => (
               <section
                 key={order._id}
                 className="rounded-2xl border bg-background p-6 shadow-sm sm:p-8"

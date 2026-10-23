@@ -76,6 +76,7 @@ export function mapBackendProduct(raw: BackendProduct): Product {
     category: mapCategory(raw.category),
     description: raw.description,
     image,
+    stock,
     variants: [
       {
         id: `${id}-default`,
