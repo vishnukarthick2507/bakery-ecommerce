@@ -27,7 +27,7 @@ export function SectionHeading({
             <span className="rounded-full bg-caramel/20 px-2.5 py-1">{eyebrow}</span>
           </p>
         )}
-        <h2 id={id} className="text-2xl font-bold text-navy sm:text-3xl lg:text-4xl">
+        <h2 id={id} className="text-2xl font-bold text-burgundy sm:text-3xl lg:text-4xl">
           {title}
         </h2>
         {description && <p className="text-pretty text-muted-foreground">{description}</p>}

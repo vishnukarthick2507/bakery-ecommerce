@@ -7,7 +7,7 @@ export async function SiteFooter() {
   const categories = await getCategories()
 
   return (
-    <footer className="bg-navy text-primary-foreground">
+    <footer className="bg-burgundy text-primary-foreground">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-3">
           <p className="font-heading text-2xl font-bold">{siteConfig.name}</p>

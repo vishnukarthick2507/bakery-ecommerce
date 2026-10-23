@@ -49,7 +49,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: 'light',
-  themeColor: '#1E4FA3',
+  themeColor: '#B12D3B',
   width: 'device-width',
   initialScale: 1,
 }
@@ -69,7 +69,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <main id="main" className="flex-1 pb-24 md:pb-0">
             {children}
           </main>
-          <div className="pb-20 md:pb-0 bg-navy">
+          <div className="pb-20 md:pb-0 bg-burgundy">
             <SiteFooter />
           </div>
           <MobileBottomBar />

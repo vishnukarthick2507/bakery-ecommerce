@@ -14,7 +14,7 @@ const steps = [
 
 export function CustomCakeSection() {
   return (
-    <section aria-labelledby="custom-cake-title" className="bg-navy text-primary-foreground">
+    <section aria-labelledby="custom-cake-title" className="bg-burgundy text-primary-foreground">
       <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 md:grid-cols-2 md:py-16 lg:gap-14">
         <div className="relative order-last aspect-[4/3] overflow-hidden rounded-3xl md:order-first">
           <Image

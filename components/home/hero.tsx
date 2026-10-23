@@ -18,7 +18,7 @@ export function Hero() {
           <p className="w-fit rounded-full bg-background px-3 py-1 text-sm font-medium text-primary shadow-sm">
             Neighbourhood bakery · Chromepet, Chennai
           </p>
-          <h1 id="hero-title" className="text-4xl leading-tight font-bold text-navy sm:text-5xl lg:text-6xl">
+          <h1 id="hero-title" className="text-4xl leading-tight font-bold text-burgundy sm:text-5xl lg:text-6xl">
             Freshly Baked Happiness
           </h1>
           <p className="max-w-lg text-lg leading-relaxed text-pretty text-muted-foreground">
