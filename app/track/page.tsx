@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { customerAuthHeaders } from '@/lib/customer-auth'
+import { customerAuthHeaders, getCustomerToken } from '@/lib/customer-auth'
 
 type OrderItem = {
   productId: string
@@ -78,11 +78,21 @@ export default function TrackPage() {
   const [order, setOrder] =
     useState<Order | null>(null)
 
+  const [guestPhone, setGuestPhone] =
+    useState('')
+
+  const [isAuthenticated, setIsAuthenticated] =
+    useState(false)
+
   const [loading, setLoading] =
     useState(false)
 
   const [error, setError] =
     useState('')
+
+  useEffect(() => {
+    setIsAuthenticated(Boolean(getCustomerToken()))
+  }, [])
 
   const fetchOrder = async (
     requestedOrderNumber: string,
@@ -107,15 +117,33 @@ export default function TrackPage() {
         process.env.NEXT_PUBLIC_API_URL ||
         'http://localhost:5000'
 
-      const response = await fetch(
-        `${apiUrl}/api/orders/${encodeURIComponent(
-          trimmed,
-        )}`,
-        {
+      const token = getCustomerToken()
+
+      let response = token
+        ? await fetch(
+            `${apiUrl}/api/orders/${encodeURIComponent(trimmed)}`,
+            {
+              cache: 'no-store',
+              headers: customerAuthHeaders(),
+            },
+          )
+        : null
+
+      if (!response || response.status === 401) {
+        if (!/^[6-9]\d{9}$/.test(guestPhone.trim())) {
+          throw new Error('Enter the 10-digit phone number used at checkout to track a guest order.')
+        }
+
+        response = await fetch(`${apiUrl}/api/orders/track`, {
+          method: 'POST',
           cache: 'no-store',
-          headers: customerAuthHeaders(),
-        },
-      )
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderNumber: trimmed,
+            phone: guestPhone.trim(),
+          }),
+        })
+      }
 
       const data = await response.json()
 
@@ -197,6 +225,19 @@ export default function TrackPage() {
               }
               type="text"
               placeholder="e.g. SV-44171646-7698"
+              className="flex-1 rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+            />
+
+            <input
+              value={guestPhone}
+              onChange={(event) => setGuestPhone(event.target.value)}
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              pattern="[6-9][0-9]{9}"
+              required={!isAuthenticated}
+              aria-label="Phone number used at checkout"
+              placeholder={isAuthenticated ? 'Guest order phone (optional)' : 'Checkout phone number'}
               className="flex-1 rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
             />
 

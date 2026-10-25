@@ -116,6 +116,10 @@ export function CartProvider({
   const addItem = useCallback<
     CartContextValue['addItem']
   >((item, opts) => {
+    if (!Number.isInteger(item.quantity) || item.quantity < 1) {
+      return
+    }
+
     const product = products.find(
       (candidate) => candidate.id === item.productId,
     )
@@ -185,7 +189,11 @@ export function CartProvider({
         : MAX_QTY
 
       setItems((previousItems) => {
-        if (quantity <= 0 || (product && maxQuantity === 0)) {
+        if (!Number.isInteger(quantity)) {
+          return previousItems
+        }
+
+        if (product && maxQuantity === 0) {
           return previousItems.filter(
             (item) =>
               !(
@@ -200,7 +208,7 @@ export function CartProvider({
           item.variantId === variantId
             ? {
                 ...item,
-                quantity: Math.min(maxQuantity, quantity),
+                quantity: Math.max(1, Math.min(maxQuantity, quantity)),
               }
             : item,
         )

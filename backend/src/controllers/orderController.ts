@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import crypto from "node:crypto";
 import mongoose from "mongoose";
 import { z } from "zod";
 
@@ -6,6 +7,13 @@ import { Order } from "../models/Order.js";
 import type { IOrderItem } from "../models/Order.js";
 import { Product } from "../models/Product.js";
 import type { AuthRequest } from "../middleware/auth.js";
+import {
+  InventoryUnavailableError,
+  reserveInventory,
+  restoreInventory,
+} from "../services/inventory.js";
+import { getRazorpayKeyId, getRazorpayKeySecret } from "../services/razorpay.js";
+import { ONLINE_RESERVATION_TTL_MS } from "../services/inventoryExpiry.js";
 
 type ProductRecord = {
   _id: mongoose.Types.ObjectId;
@@ -57,6 +65,29 @@ const createOrderSchema = z.object({
 
   items: z.array(orderItemSchema).min(1).max(20),
 });
+
+const guestTrackingSchema = z.object({
+  orderNumber: z.string().trim().min(1),
+  phone: z.string().regex(/^[6-9]\d{9}$/, "Enter the phone number used at checkout"),
+});
+
+class OrderRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+class OrderStatusError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -156,295 +187,226 @@ export const createOrder = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
+  const parsed = createOrderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      message: "Invalid order data",
+      errors: parsed.error.flatten(),
+    });
+    return;
+  }
+
+  const idempotencyKey = z.uuid().safeParse(req.get("Idempotency-Key"));
+  if (!idempotencyKey.success) {
+    res.status(400).json({ message: "A valid Idempotency-Key header is required" });
+    return;
+  }
+
+  const data = parsed.data;
+  if (
+    !req.customer &&
+    (!data.customerName || !data.email || !data.phone)
+  ) {
+    res.status(400).json({
+      message: "Guest checkout requires a name, valid email, and valid phone number",
+    });
+    return;
+  }
+
+  if (data.paymentMethod === "ONLINE" && (!getRazorpayKeyId() || !getRazorpayKeySecret())) {
+    res.status(503).json({
+      message: "Online payments are not configured yet. Please choose Cash on Delivery.",
+    });
+    return;
+  }
+
+  if (data.fulfillmentType === "DELIVERY" && !data.address) {
+    res.status(400).json({
+      message: "Delivery address is required for delivery orders",
+    });
+    return;
+  }
+
+  const customerSnapshot = req.customer
+    ? {
+        name: req.customer.name,
+        email: req.customer.email,
+        phone: req.customer.phone,
+      }
+    : {
+        name: data.customerName!,
+        email: data.email!,
+        phone: data.phone!,
+      };
+
+  const productIds = data.items.map((item) => item.productId);
+  if (productIds.some((id) => !mongoose.isValidObjectId(id))) {
+    res.status(400).json({ message: "Invalid product ID" });
+    return;
+  }
+
+  const quantityByProduct = new Map<string, number>();
+  for (const item of data.items) {
+    quantityByProduct.set(
+      item.productId,
+      (quantityByProduct.get(item.productId) ?? 0) + item.quantity,
+    );
+  }
+  if ([...quantityByProduct.values()].some((quantity) => quantity > 20)) {
+    res.status(400).json({ message: "A maximum of 20 units per product can be ordered" });
+    return;
+  }
+
+  const idempotencyHash = crypto.createHash("sha256").update(JSON.stringify({
+    userId: req.customer?.id ?? null,
+    customer: customerSnapshot,
+    fulfillmentType: data.fulfillmentType,
+    address: data.address ?? null,
+    scheduledDate: data.scheduledDate,
+    scheduledTime: data.scheduledTime,
+    paymentMethod: data.paymentMethod,
+    items: data.items.map(({ productId, variantId, quantity }) => ({ productId, variantId, quantity })),
+  })).digest("hex");
+
+  let order: Awaited<ReturnType<typeof Order.findById>> = null;
+  let replayed = false;
+  const session = await mongoose.startSession();
+
   try {
-    // Validate request body
-    const parsed =
-      createOrderSchema.safeParse(
-        req.body,
-      );
+    await session.withTransaction(async () => {
+      const existingOrder = await Order.findOne({ idempotencyKey: idempotencyKey.data })
+        .select("+idempotencyHash")
+        .session(session);
 
-    if (!parsed.success) {
-      res.status(400).json({
-        message: "Invalid order data",
-        errors:
-          parsed.error.flatten(),
-      });
-
-      return;
-    }
-
-    const data = parsed.data;
-
-    if (
-      !req.customer &&
-      (!data.customerName || !data.email || !data.phone)
-    ) {
-      res.status(400).json({
-        message: "Guest checkout requires a name, valid email, and valid phone number",
-      });
-      return;
-    }
-
-    const customerSnapshot = req.customer
-      ? {
-          name: req.customer.name,
-          email: req.customer.email,
-          phone: req.customer.phone,
+      if (existingOrder) {
+        const sameOwner = (existingOrder.userId?.toString() ?? null) === (req.customer?.id ?? null);
+        if (!sameOwner || existingOrder.idempotencyHash !== idempotencyHash) {
+          throw new OrderRequestError("Idempotency key was already used for a different order", 409);
         }
-      : {
-          name: data.customerName!,
-          email: data.email!,
-          phone: data.phone!,
-        };
+        order = existingOrder;
+        replayed = true;
+        return;
+      }
 
-    // Delivery orders must have an address
-    if (
-      data.fulfillmentType ===
-        "DELIVERY" &&
-      !data.address
-    ) {
-      res.status(400).json({
-        message:
-          "Delivery address is required for delivery orders",
-      });
-
-      return;
-    }
-
-    // Get product IDs
-    const productIds =
-      data.items.map(
-        (item) => item.productId,
-      );
-
-    // Validate MongoDB IDs
-    const invalidId =
-      productIds.find(
-        (id) =>
-          !mongoose.isValidObjectId(
-            id,
-          ),
-      );
-
-    if (invalidId) {
-      res.status(400).json({
-        message: `Invalid product ID: ${invalidId}`,
-      });
-
-      return;
-    }
-
-    // Fetch products from MongoDB
-    const products =
-      (await Product.find({
-        _id: {
-          $in: productIds,
-        },
+      const products = (await Product.find({
+        _id: { $in: productIds },
         active: true,
-      })
-        .lean()
-        .exec()) as unknown as ProductRecord[];
+      }).session(session).lean().exec()) as unknown as ProductRecord[];
 
-    // Create product lookup map
-    const productMap =
-      new Map<string, ProductRecord>(
-        products.map(
-          (
-            product: ProductRecord,
-          ) => [
-            product._id.toString(),
-            product,
-          ],
-        ),
-      );
+      const productMap = new Map(products.map((product) => [product._id.toString(), product]));
+      const orderItems: IOrderItem[] = data.items.map((item) => {
+        const product = productMap.get(item.productId);
+        if (!product) {
+          throw new OrderRequestError(`Product not found: ${item.productName}`, 400);
+        }
+        if (product.availability !== "AVAILABLE") {
+          throw new OrderRequestError(`${product.name} is currently unavailable`, 400);
+        }
 
-    const orderItems: IOrderItem[] =
-      [];
+        const requestedQuantity = quantityByProduct.get(item.productId) ?? item.quantity;
+        if (product.stock < requestedQuantity) {
+          throw new OrderRequestError(
+            `Only ${product.stock} unit(s) of ${product.name} are available`,
+            400,
+          );
+        }
 
-    const quantityByProduct = new Map<string, number>();
-    for (const item of data.items) {
-      quantityByProduct.set(
-        item.productId,
-        (quantityByProduct.get(item.productId) ?? 0) + item.quantity,
-      );
-    }
-
-    if ([...quantityByProduct.values()].some((quantity) => quantity > 20)) {
-      res.status(400).json({
-        message: "A maximum of 20 units per product can be ordered",
+        const itemTotal = product.price * item.quantity;
+        return {
+          productId: product._id,
+          productName: product.name,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          unitPrice: product.price,
+          itemTotal,
+          totalPrice: itemTotal,
+        };
       });
-      return;
+
+      await reserveInventory(session, orderItems);
+
+      const subtotal = orderItems.reduce((sum, item) => sum + item.itemTotal, 0);
+      const orderData = {
+        orderNumber: generateOrderNumber(),
+        idempotencyKey: idempotencyKey.data,
+        idempotencyHash,
+        inventoryStatus: "RESERVED" as const,
+        reconciliationStatus: "NONE" as const,
+        ...(data.paymentMethod === "ONLINE"
+          ? { reservationExpiresAt: new Date(Date.now() + ONLINE_RESERVATION_TTL_MS) }
+          : {}),
+        ...(req.customer ? { userId: req.customer.id } : {}),
+        customer: customerSnapshot,
+        customerName: customerSnapshot.name,
+        phone: customerSnapshot.phone,
+        fulfillmentType: data.fulfillmentType,
+        ...(data.fulfillmentType === "DELIVERY" && data.address
+          ? { address: data.address }
+          : {}),
+        scheduledDate: data.scheduledDate,
+        scheduledTime: data.scheduledTime,
+        paymentMethod: data.paymentMethod,
+        paymentStatus: "PENDING" as const,
+        orderStatus: "PLACED" as const,
+        items: orderItems,
+        subtotal,
+        deliveryFee: 0,
+        totalAmount: subtotal,
+      };
+
+      const [createdOrder] = await Order.create([orderData], { session });
+      order = createdOrder;
+    });
+
+    if (!order) {
+      throw new Error("Order transaction completed without an order");
     }
 
-    // Validate every item
-    for (const item of data.items) {
-      const product =
-        productMap.get(
-          item.productId,
-        );
-
-      if (!product) {
-        res.status(400).json({
-          message: `Product not found: ${item.productName}`,
-        });
-
-        return;
-      }
-
-      // Check availability
-      if (
-        product.availability !==
-        "AVAILABLE"
-      ) {
-        res.status(400).json({
-          message: `${product.name} is currently unavailable`,
-        });
-
-        return;
-      }
-
-      // Check stock
-      if (
-        product.stock <
-        (quantityByProduct.get(item.productId) ?? item.quantity)
-      ) {
-        res.status(400).json({
-          message: `Only ${product.stock} unit(s) of ${product.name} are available`,
-        });
-
-        return;
-      }
-
-      // Price comes from MongoDB
-      const unitPrice =
-        product.price;
-
-      const totalPrice =
-        unitPrice *
-        item.quantity;
-
-      orderItems.push({
-        productId:
-          product._id,
-
-        productName:
-          product.name,
-
-        variantId:
-          item.variantId,
-
-        quantity:
-          item.quantity,
-
-        unitPrice,
-
-        itemTotal: totalPrice,
-
-        totalPrice,
-      });
-    }
-
-    // Calculate subtotal
-    const subtotal =
-      orderItems.reduce(
-        (sum, item) =>
-          sum + item.totalPrice,
-        0,
-      );
-
-    // Delivery fee
-    const deliveryFee = 0;
-
-    // Final amount
-    const totalAmount =
-      subtotal +
-      deliveryFee;
-
-    // Prepare order
-    const orderData = {
-      orderNumber:
-        generateOrderNumber(),
-
-      ...(req.customer ? { userId: req.customer.id } : {}),
-
-      customer: {
-        ...customerSnapshot,
-      },
-
-      customerName:
-        customerSnapshot.name,
-
-      phone:
-        customerSnapshot.phone,
-
-      fulfillmentType:
-        data.fulfillmentType,
-
-      ...(data.fulfillmentType ===
-        "DELIVERY" &&
-      data.address
-        ? {
-            address:
-              data.address,
-          }
-        : {}),
-
-      scheduledDate:
-        data.scheduledDate,
-
-      scheduledTime:
-        data.scheduledTime,
-
-      paymentMethod:
-        data.paymentMethod,
-
-      paymentStatus:
-        "PENDING" as const,
-
-      orderStatus:
-        "PLACED" as const,
-
-      items:
-        orderItems,
-
-      subtotal,
-
-      deliveryFee,
-
-      totalAmount,
-    };
-
-    // Save to MongoDB
-    const order =
-      await Order.create(
-        orderData,
-      );
-
-    // Response
-    res.status(201).json({
-      message:
-        "Order created successfully",
-
+    res.status(replayed ? 200 : 201).json({
+      message: replayed ? "Order request already processed" : "Order created successfully",
       order: {
         id: order._id,
-
-        orderNumber:
-          order.orderNumber,
-
-        status:
-          order.orderStatus,
-
-        paymentStatus:
-          order.paymentStatus,
-
-        totalAmount:
-          order.totalAmount,
-
-        createdAt:
-          order.createdAt,
+        orderNumber: order.orderNumber,
+        status: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt,
       },
     });
   } catch (error) {
+    if (error instanceof OrderRequestError) {
+      res.status(error.status).json({ message: error.message });
+      return;
+    }
+    if (error instanceof InventoryUnavailableError) {
+      res.status(400).json({ message: "Product stock changed; review your cart and try again" });
+      return;
+    }
+
+    if (error && typeof error === "object" && "code" in error && error.code === 11000) {
+      try {
+        const existingOrder = await Order.findOne({ idempotencyKey: idempotencyKey.data })
+          .select("+idempotencyHash");
+        const sameOwner = (existingOrder?.userId?.toString() ?? null) === (req.customer?.id ?? null);
+        if (existingOrder && sameOwner && existingOrder.idempotencyHash === idempotencyHash) {
+          res.status(200).json({
+            message: "Order request already processed",
+            order: {
+              id: existingOrder._id,
+              orderNumber: existingOrder.orderNumber,
+              status: existingOrder.orderStatus,
+              paymentStatus: existingOrder.paymentStatus,
+              totalAmount: existingOrder.totalAmount,
+              createdAt: existingOrder.createdAt,
+            },
+          });
+          return;
+        }
+      } catch {
+        // Fall through to the generic order error.
+      }
+    }
+
     console.error(
       "Create order failed:",
       error,
@@ -454,6 +416,8 @@ export const createOrder = async (
       message:
         "Unable to create order",
     });
+  } finally {
+    await session.endSession();
   }
 };
 
@@ -501,6 +465,13 @@ export const getOrderByNumber =
         return;
       }
 
+      if (!order.userId) {
+        res.status(401).json({
+          message: "Guest order tracking requires the phone number used at checkout",
+        });
+        return;
+      }
+
       if (
         order.userId &&
         order.userId.toString() !== req.customer?.id
@@ -545,6 +516,9 @@ export const getOrderByNumber =
           orderStatus:
             order.orderStatus,
 
+          inventoryStatus:
+            order.inventoryStatus,
+
           items:
             order.items,
 
@@ -576,6 +550,57 @@ export const getOrderByNumber =
       });
     }
   };
+
+export const trackGuestOrder = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const parsed = guestTrackingSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      message: "Enter a valid order number and checkout phone number",
+    });
+    return;
+  }
+
+  try {
+    const order = await Order.findOne({
+      orderNumber: parsed.data.orderNumber.toUpperCase(),
+      phone: parsed.data.phone,
+      userId: { $exists: false },
+    }).lean();
+    if (!order) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    res.status(200).json({
+      order: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        customerName: order.customer?.name ?? order.customerName,
+        customer: order.customer,
+        phone: order.customer?.phone ?? order.phone,
+        fulfillmentType: order.fulfillmentType,
+        address: order.address,
+        scheduledDate: order.scheduledDate,
+        scheduledTime: order.scheduledTime,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.orderStatus,
+        items: order.items,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Guest order tracking failed:", error);
+    res.status(500).json({ message: "Unable to fetch order" });
+  }
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -715,67 +740,65 @@ export const updateOrderStatus =
 
       const nextStatus =
         parsed.data.status;
+      let order: Awaited<ReturnType<typeof Order.findById>> = null;
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          const currentOrder = await Order.findOne({ orderNumber }).session(session);
+          if (!currentOrder) {
+            throw new OrderStatusError("Order not found", 404);
+          }
 
-      // Load the order to enforce transition rules
-      const existingOrder =
-        await Order.findOne({
-          orderNumber,
-        }).lean();
+          const currentStatus = currentOrder.orderStatus as OrderStatusValue;
+          const allowed = allowedStatusTransitions[currentStatus] ?? [];
+          if (!allowed.includes(nextStatus)) {
+            throw new OrderStatusError(
+              `Cannot change order status from ${currentStatus} to ${nextStatus}`,
+              400,
+            );
+          }
 
-      if (!existingOrder) {
-        res.status(404).json({
-          message:
-            "Order not found",
+          if (
+            currentOrder.inventoryStatus === "RELEASED" &&
+            nextStatus !== "CANCELLED"
+          ) {
+            throw new OrderStatusError(
+              "Inventory was released; this order cannot progress",
+              409,
+            );
+          }
+
+          if (nextStatus === "CANCELLED" && currentOrder.inventoryStatus === "RESERVED") {
+            await restoreInventory(session, currentOrder.items);
+            currentOrder.inventoryStatus = "RELEASED";
+            currentOrder.reservationExpiresAt = undefined;
+          } else if (nextStatus === "DELIVERED" && currentOrder.inventoryStatus === "RESERVED") {
+            currentOrder.inventoryStatus = "COMMITTED";
+            currentOrder.reservationExpiresAt = undefined;
+          }
+
+          if (nextStatus === "CANCELLED" && currentOrder.paymentStatus === "PAID") {
+            currentOrder.reconciliationStatus = "REVIEW_REQUIRED";
+            currentOrder.reconciliationReason =
+              "Paid order was cancelled; confirm customer refund or another resolution manually.";
+          }
+
+          currentOrder.orderStatus = nextStatus;
+          await currentOrder.save({ session });
+          order = currentOrder;
         });
-
-        return;
+      } catch (error) {
+        if (error instanceof OrderStatusError) {
+          res.status(error.status).json({ message: error.message });
+          return;
+        }
+        throw error;
+      } finally {
+        await session.endSession();
       }
-
-      const currentStatus =
-        existingOrder.orderStatus as OrderStatusValue;
-
-      const allowed =
-        allowedStatusTransitions[
-          currentStatus
-        ] ?? [];
-
-      if (
-        !allowed.includes(nextStatus)
-      ) {
-        res.status(400).json({
-          message: `Cannot change order status from ${currentStatus} to ${nextStatus}`,
-          allowedTransitions:
-            allowed,
-        });
-
-        return;
-      }
-
-      // Update MongoDB
-      const order =
-        await Order.findOneAndUpdate(
-          {
-            orderNumber,
-          },
-          {
-            $set: {
-              orderStatus:
-                nextStatus,
-            },
-          },
-          {
-            new: true,
-            runValidators: true,
-          },
-        ).lean();
 
       if (!order) {
-        res.status(404).json({
-          message:
-            "Order not found",
-        });
-
-        return;
+        throw new Error("Order status transaction completed without an order");
       }
 
       res.status(200).json({
@@ -790,6 +813,15 @@ export const updateOrderStatus =
 
           orderStatus:
             order.orderStatus,
+
+          inventoryStatus:
+            order.inventoryStatus,
+
+          reconciliationStatus:
+            order.reconciliationStatus,
+
+          reconciliationReason:
+            order.reconciliationReason,
 
           paymentStatus:
             order.paymentStatus,

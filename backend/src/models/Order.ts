@@ -13,6 +13,7 @@ export type OrderStatus =
 export type PaymentMethod = "COD" | "ONLINE";
 
 export type FulfillmentType = "DELIVERY" | "PICKUP";
+export type InventoryStatus = "RESERVED" | "COMMITTED" | "RELEASED";
 
 export interface IOrderItem {
   productId: mongoose.Types.ObjectId;
@@ -27,6 +28,12 @@ export interface IOrderItem {
 export interface IOrder extends Document {
   orderNumber: string;
   userId?: mongoose.Types.ObjectId;
+  idempotencyKey: string;
+  idempotencyHash: string;
+  inventoryStatus?: InventoryStatus;
+  reservationExpiresAt?: Date;
+  reconciliationStatus?: "NONE" | "REVIEW_REQUIRED";
+  reconciliationReason?: string;
   customer?: {
     name: string;
     email: string;
@@ -45,7 +52,9 @@ export interface IOrder extends Document {
   paymentMethod: PaymentMethod;
   paymentStatus: "PENDING" | "PAID" | "FAILED";
   razorpayOrderId?: string;
+  razorpayOrderIds?: string[];
   razorpayPaymentId?: string;
+  razorpayPaymentIds?: string[];
   orderStatus: OrderStatus;
   items: IOrderItem[];
   subtotal: number;
@@ -108,6 +117,33 @@ const orderSchema = new Schema<IOrder>(
       type: Schema.Types.ObjectId,
       ref: "User",
       index: true,
+    },
+    idempotencyKey: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+    },
+    idempotencyHash: {
+      type: String,
+      select: false,
+    },
+    inventoryStatus: {
+      type: String,
+      enum: ["RESERVED", "COMMITTED", "RELEASED"],
+    },
+    reservationExpiresAt: {
+      type: Date,
+      index: true,
+    },
+    reconciliationStatus: {
+      type: String,
+      enum: ["NONE", "REVIEW_REQUIRED"],
+      default: "NONE",
+    },
+    reconciliationReason: {
+      type: String,
+      trim: true,
     },
     customer: {
       name: { type: String, trim: true },
@@ -177,9 +213,20 @@ const orderSchema = new Schema<IOrder>(
       trim: true,
     },
 
+    razorpayOrderIds: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+
     razorpayPaymentId: {
       type: String,
       trim: true,
+    },
+
+    razorpayPaymentIds: {
+      type: [String],
+      default: [],
     },
 
     orderStatus: {

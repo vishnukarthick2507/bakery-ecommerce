@@ -7,6 +7,7 @@ import {
   updateOrderStatus,
   getMyOrders,
   getMyOrderByNumber,
+  trackGuestOrder,
 } from "../controllers/orderController.js";
 import {
   authenticateAdmin,
@@ -21,6 +22,7 @@ router.post("/", optionalCustomerAuth, createOrder);
 
 router.get("/me", authenticateCustomer, getMyOrders);
 router.get("/me/:orderNumber", authenticateCustomer, getMyOrderByNumber);
+router.post("/track", trackGuestOrder);
 
 // Get all orders (admin only)
 router.get("/", authenticateAdmin, getAllOrders);

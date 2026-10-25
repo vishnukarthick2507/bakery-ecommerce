@@ -33,8 +33,13 @@ type Order = {
   scheduledTime: string
   paymentMethod: 'COD' | 'ONLINE'
   paymentStatus: 'PENDING' | 'PAID' | 'FAILED'
+  inventoryStatus?: 'RESERVED' | 'COMMITTED' | 'RELEASED'
+  reconciliationStatus?: 'NONE' | 'REVIEW_REQUIRED'
+  reconciliationReason?: string
   razorpayOrderId?: string
+  razorpayOrderIds?: string[]
   razorpayPaymentId?: string
+  razorpayPaymentIds?: string[]
   orderStatus: OrderStatus
   items: OrderItem[]
   subtotal: number
@@ -183,6 +188,9 @@ function AdminOrdersPage() {
             ? {
                 ...order,
                 orderStatus: data.order.orderStatus,
+                inventoryStatus: data.order.inventoryStatus,
+                reconciliationStatus: data.order.reconciliationStatus,
+                reconciliationReason: data.order.reconciliationReason,
               }
             : order,
         ),
@@ -356,7 +364,7 @@ function AdminOrdersPage() {
                 </div>
 
                 {/* Customer details */}
-                <div className="grid gap-6 border-b py-6 md:grid-cols-3">
+                <div className="grid gap-6 border-b py-6 md:grid-cols-4">
 
                   <div>
                     <p className="text-sm text-muted-foreground">
@@ -412,6 +420,29 @@ function AdminOrdersPage() {
                     {order.razorpayPaymentId && (
                       <p className="mt-1 text-xs text-muted-foreground break-all">
                         RZP Payment: {order.razorpayPaymentId}
+                      </p>
+                    )}
+
+                    {order.razorpayPaymentIds && order.razorpayPaymentIds.length > 1 && (
+                      <p className="mt-1 text-xs text-destructive break-all">
+                        Captured payment attempts: {order.razorpayPaymentIds.join(', ')}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Inventory
+                    </p>
+
+                    <p className="mt-1 font-semibold">
+                      {order.inventoryStatus
+                        ? order.inventoryStatus.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())
+                        : 'Not tracked (legacy order)'}
+                    </p>
+                    {order.reconciliationStatus === 'REVIEW_REQUIRED' && (
+                      <p role="status" className="mt-2 text-sm font-medium text-destructive">
+                        Manual review required{order.reconciliationReason ? `: ${order.reconciliationReason}` : ''}
                       </p>
                     )}
                   </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/components/cart/cart-provider'
 import { customerAuthHeaders } from '@/lib/customer-auth'
@@ -105,6 +105,7 @@ export default function CheckoutPage() {
   // reuse the same order instead of creating duplicates.
   const [pendingOnlineOrder, setPendingOnlineOrder] =
     useState<string | null>(null)
+  const orderIdempotencyKey = useRef<string | null>(null)
 
   useEffect(() => {
     const token = window.localStorage.getItem('customer-token')
@@ -330,12 +331,20 @@ export default function CheckoutPage() {
           : null
 
       if (!orderNumber) {
+        orderIdempotencyKey.current ??=
+          window.sessionStorage.getItem('checkout-order-idempotency-key') ||
+          window.crypto.randomUUID()
+        window.sessionStorage.setItem(
+          'checkout-order-idempotency-key',
+          orderIdempotencyKey.current,
+        )
         const response = await fetch(
           `${apiUrl}/api/orders`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Idempotency-Key': orderIdempotencyKey.current,
               ...customerAuthHeaders(),
             },
             body: JSON.stringify({
@@ -402,6 +411,8 @@ export default function CheckoutPage() {
         }
 
         orderNumber = data.order.orderNumber
+        window.sessionStorage.removeItem('checkout-order-idempotency-key')
+        orderIdempotencyKey.current = null
 
         if (payment === 'cod') {
           clear()

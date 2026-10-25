@@ -10,6 +10,8 @@ import customCakeRoutes from "./routes/customCakeRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import { getJwtSecret } from "./config/jwt.js";
+import { Order } from "./models/Order.js";
+import { startInventoryExpiryWorker } from "./services/inventoryExpiry.js";
 
 dotenv.config();
 
@@ -48,6 +50,8 @@ app.use("/api/auth", authRoutes);
 const startServer = async (): Promise<void> => {
   getJwtSecret();
   await connectDB();
+  await Order.init();
+  startInventoryExpiryWorker();
 
   app.listen(PORT, () => {
     console.log(

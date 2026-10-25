@@ -1,9 +1,16 @@
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
+import mongoose from "mongoose";
 import { z } from "zod";
 
 import { Order } from "../models/Order.js";
 import type { AuthRequest } from "../middleware/auth.js";
+import {
+  InventoryUnavailableError,
+  reserveInventory,
+  restoreInventory,
+} from "../services/inventory.js";
+import { ONLINE_RESERVATION_TTL_MS } from "../services/inventoryExpiry.js";
 import {
   getRazorpayClient,
   getRazorpayKeyId,
@@ -56,46 +63,122 @@ function verifySignature(
   );
 }
 
-async function markOrderPaid(
+export async function markOrderPaid(
   razorpayOrderId: string,
   razorpayPaymentId: string,
 ): Promise<void> {
-  const order = await Order.findOne({
-    razorpayOrderId,
-  });
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const order = await Order.findOne({
+        $or: [{ razorpayOrderId }, { razorpayOrderIds: razorpayOrderId }],
+      }).session(session);
+      if (!order) return;
 
-  if (!order || order.paymentStatus === "PAID") {
-    return;
+      const capturedPaymentIds = order.razorpayPaymentIds ?? [];
+      if (order.paymentStatus === "PAID") {
+        if (
+          order.razorpayPaymentId === razorpayPaymentId ||
+          capturedPaymentIds.includes(razorpayPaymentId)
+        ) {
+          return;
+        }
+
+        order.razorpayPaymentIds = [...capturedPaymentIds, razorpayPaymentId];
+        order.reconciliationStatus = "REVIEW_REQUIRED";
+        order.reconciliationReason =
+          "Multiple Razorpay payment IDs were captured for this order; verify the duplicate charge and arrange a refund manually.";
+        await order.save({ session });
+        return;
+      }
+
+      const supersededAttempt = Boolean(
+        order.razorpayOrderId && order.razorpayOrderId !== razorpayOrderId,
+      );
+
+      order.paymentStatus = "PAID";
+      order.razorpayPaymentId = razorpayPaymentId;
+      order.razorpayPaymentIds = [...new Set([...capturedPaymentIds, razorpayPaymentId])];
+
+      const inventoryUnavailable =
+        order.inventoryStatus === "RELEASED" ||
+        order.orderStatus === "CANCELLED" ||
+        !order.inventoryStatus;
+
+      if (inventoryUnavailable) {
+        order.reconciliationStatus = "REVIEW_REQUIRED";
+        order.reconciliationReason = supersededAttempt
+          ? "A superseded Razorpay attempt was captured after inventory was released; review stock and arrange fulfillment or refund manually."
+          : "Payment captured after inventory was released or could not be verified; review stock and arrange fulfillment or refund manually.";
+      } else if (supersededAttempt) {
+        order.reconciliationStatus = "REVIEW_REQUIRED";
+        order.reconciliationReason =
+          "A superseded Razorpay attempt was captured; verify duplicate payments and arrange a refund manually if needed.";
+      }
+
+      if (!inventoryUnavailable && order.inventoryStatus === "RESERVED") {
+        order.inventoryStatus = "COMMITTED";
+      }
+      if (order.orderStatus === "PLACED" && order.inventoryStatus === "COMMITTED") {
+        if (order.reconciliationStatus !== "REVIEW_REQUIRED") {
+          order.orderStatus = "PAYMENT_CONFIRMED";
+        }
+      }
+      order.reservationExpiresAt = undefined;
+      await order.save({ session });
+    });
+  } finally {
+    await session.endSession();
   }
-
-  const update: Record<string, unknown> = {
-    paymentStatus: "PAID",
-    razorpayPaymentId,
-  };
-
-  if (order.orderStatus === "PLACED") {
-    update.orderStatus = "PAYMENT_CONFIRMED";
-  }
-
-  await Order.updateOne(
-    {
-      _id: order._id,
-      paymentStatus: { $ne: "PAID" },
-    },
-    { $set: update },
-  );
 }
 
-async function markOrderPaymentFailed(
+export async function markOrderPaymentFailed(
   razorpayOrderId: string,
 ): Promise<void> {
-  await Order.updateOne(
-    {
-      razorpayOrderId,
-      paymentStatus: "PENDING",
-    },
-    { $set: { paymentStatus: "FAILED" } },
-  );
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const order = await Order.findOne({
+        $or: [{ razorpayOrderId }, { razorpayOrderIds: razorpayOrderId }],
+        paymentStatus: "PENDING",
+      }).session(session);
+      if (!order) return;
+      if (order.razorpayOrderId !== razorpayOrderId) return;
+
+      if (order.inventoryStatus === "RESERVED") {
+        await restoreInventory(session, order.items);
+        order.inventoryStatus = "RELEASED";
+      }
+      order.reservationExpiresAt = undefined;
+      order.paymentStatus = "FAILED";
+      await order.save({ session });
+    });
+  } finally {
+    await session.endSession();
+  }
+}
+
+async function markOrderPaymentFailedById(orderId: string): Promise<void> {
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const order = await Order.findOne({
+        _id: orderId,
+        paymentStatus: "PENDING",
+      }).session(session);
+      if (!order) return;
+
+      if (order.inventoryStatus === "RESERVED") {
+        await restoreInventory(session, order.items);
+        order.inventoryStatus = "RELEASED";
+      }
+      order.reservationExpiresAt = undefined;
+      order.paymentStatus = "FAILED";
+      await order.save({ session });
+    });
+  } finally {
+    await session.endSession();
+  }
 }
 
 /*
@@ -132,7 +215,7 @@ export const createPaymentOrder = async (
       return;
     }
 
-    const order = await Order.findOne({
+    let order = await Order.findOne({
       orderNumber: parsed.data.orderNumber
         .trim()
         .toUpperCase(),
@@ -172,6 +255,39 @@ export const createPaymentOrder = async (
       return;
     }
 
+    if (
+      order.inventoryStatus !== "RESERVED" &&
+      order.inventoryStatus !== "COMMITTED"
+    ) {
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          const retryOrder = await Order.findById(order!._id).session(session);
+          if (!retryOrder || retryOrder.paymentStatus === "PAID") {
+            throw new Error("Order payment state changed; refresh and try again");
+          }
+          if (retryOrder.inventoryStatus === "RELEASED") {
+            await reserveInventory(session, retryOrder.items);
+            retryOrder.inventoryStatus = "RESERVED";
+            retryOrder.reconciliationStatus = "NONE";
+            retryOrder.reconciliationReason = undefined;
+          }
+          retryOrder.paymentStatus = "PENDING";
+          retryOrder.reservationExpiresAt = new Date(Date.now() + ONLINE_RESERVATION_TTL_MS);
+          await retryOrder.save({ session });
+          order = retryOrder;
+        });
+      } catch (error) {
+        if (error instanceof InventoryUnavailableError) {
+          res.status(400).json({ message: "This order can no longer reserve its items" });
+          return;
+        }
+        throw error;
+      } finally {
+        await session.endSession();
+      }
+    }
+
     // Amount comes from MongoDB only — never from the browser.
     const amount = toPaise(order.totalAmount);
 
@@ -201,6 +317,8 @@ export const createPaymentOrder = async (
         razorpayError,
       );
 
+      await markOrderPaymentFailedById(order._id.toString());
+
       res.status(502).json({
         message:
           "Unable to start online payment right now. Please try again or choose Cash on Delivery.",
@@ -208,14 +326,30 @@ export const createPaymentOrder = async (
       return;
     }
 
-    order.razorpayOrderId = razorpayOrder.id;
+    const updatedOrder = await Order.findOneAndUpdate(
+      {
+        _id: order._id,
+        paymentStatus: "PENDING",
+        inventoryStatus: "RESERVED",
+        orderStatus: { $ne: "CANCELLED" },
+      },
+      {
+        $set: {
+          razorpayOrderId: razorpayOrder.id,
+          reservationExpiresAt: new Date(Date.now() + ONLINE_RESERVATION_TTL_MS),
+        },
+        $addToSet: {
+          razorpayOrderIds: razorpayOrder.id,
+        },
+      },
+      { returnDocument: "after", runValidators: true },
+    );
 
-    // Allow retry after a failed attempt.
-    if (order.paymentStatus === "FAILED") {
-      order.paymentStatus = "PENDING";
+    if (!updatedOrder) {
+      res.status(409).json({ message: "Order is no longer available for payment" });
+      return;
     }
-
-    await order.save();
+    order = updatedOrder;
 
     res.status(200).json({
       razorpayOrderId: razorpayOrder.id,
@@ -274,7 +408,10 @@ export const verifyPayment = async (
     } = parsed.data;
 
     const order = await Order.findOne({
-      razorpayOrderId: razorpay_order_id,
+      $or: [
+        { razorpayOrderId: razorpay_order_id },
+        { razorpayOrderIds: razorpay_order_id },
+      ],
     });
 
     if (!order) {
@@ -291,7 +428,10 @@ export const verifyPayment = async (
 
     // Duplicate verification with the same payment is a no-op success.
     if (order.paymentStatus === "PAID") {
-      if (order.razorpayPaymentId === razorpay_payment_id) {
+      if (
+        order.razorpayPaymentId === razorpay_payment_id ||
+        order.razorpayPaymentIds?.includes(razorpay_payment_id)
+      ) {
         res.status(200).json({
           message: "Payment already verified",
           order: {
@@ -303,10 +443,6 @@ export const verifyPayment = async (
         return;
       }
 
-      res.status(409).json({
-        message: "This order has already been paid",
-      });
-      return;
     }
 
     const isValidSignature = verifySignature(
@@ -327,57 +463,22 @@ export const verifyPayment = async (
       return;
     }
 
-    const update: Record<string, unknown> = {
-      paymentStatus: "PAID",
-      razorpayPaymentId: razorpay_payment_id,
-    };
-
-    if (order.orderStatus === "PLACED") {
-      update.orderStatus = "PAYMENT_CONFIRMED";
-    }
-
-    // Atomic guard: only one verification can mark the order PAID.
-    const updated = await Order.findOneAndUpdate(
-      {
-        _id: order._id,
-        paymentStatus: { $ne: "PAID" },
-      },
-      { $set: update },
-      { new: true },
-    ).lean();
-
-    if (!updated) {
-      const current = await Order.findById(
-        order._id,
-      ).lean();
-
-      if (
-        current?.paymentStatus === "PAID" &&
-        current.razorpayPaymentId === razorpay_payment_id
-      ) {
-        res.status(200).json({
-          message: "Payment already verified",
-          order: {
-            orderNumber: current.orderNumber,
-            paymentStatus: current.paymentStatus,
-            orderStatus: current.orderStatus,
-          },
-        });
-        return;
-      }
-
-      res.status(409).json({
-        message: "This order has already been paid",
-      });
+    await markOrderPaid(razorpay_order_id, razorpay_payment_id);
+    const updated = await Order.findById(order._id).lean();
+    if (!updated || updated.paymentStatus !== "PAID") {
+      res.status(409).json({ message: "Unable to confirm payment state" });
       return;
     }
 
     res.status(200).json({
-      message: "Payment verified successfully",
+      message: updated.reconciliationStatus === "REVIEW_REQUIRED"
+        ? "Payment was recorded; this order requires manual reconciliation"
+        : "Payment verified successfully",
       order: {
         orderNumber: updated.orderNumber,
         paymentStatus: updated.paymentStatus,
         orderStatus: updated.orderStatus,
+        reconciliationStatus: updated.reconciliationStatus,
       },
     });
   } catch (error) {
