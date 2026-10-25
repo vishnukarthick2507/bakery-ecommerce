@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 
 import { Order } from "../models/Order.js";
+import type { AuthRequest } from "../middleware/auth.js";
 import {
   getRazorpayClient,
   getRazorpayKeyId,
@@ -107,7 +108,7 @@ async function markOrderPaymentFailed(
 */
 
 export const createPaymentOrder = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
 ): Promise<void> => {
   try {
@@ -141,6 +142,11 @@ export const createPaymentOrder = async (
       res.status(404).json({
         message: "Order not found",
       });
+      return;
+    }
+
+    if (order.userId && order.userId.toString() !== req.customer?.id) {
+      res.status(404).json({ message: "Order not found" });
       return;
     }
 
@@ -238,7 +244,7 @@ export const createPaymentOrder = async (
 */
 
 export const verifyPayment = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
 ): Promise<void> => {
   try {
@@ -275,6 +281,11 @@ export const verifyPayment = async (
       res.status(400).json({
         message: "Payment verification failed",
       });
+      return;
+    }
+
+    if (order.userId && order.userId.toString() !== req.customer?.id) {
+      res.status(404).json({ message: "Order not found" });
       return;
     }
 

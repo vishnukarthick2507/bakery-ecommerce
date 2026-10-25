@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
-import { CakeSliceIcon, MenuIcon, ShoppingBagIcon } from 'lucide-react'
+import { CakeSliceIcon, MenuIcon, ShoppingBagIcon, UserRoundIcon } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useCart } from '@/components/cart/cart-provider'
@@ -64,6 +64,14 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <Link
+            href="/account"
+            aria-label="Customer account"
+            title="Customer account"
+            className={cn(buttonVariants({ variant: 'outline', size: 'icon-lg' }), 'hidden sm:inline-flex')}
+          >
+            <UserRoundIcon />
+          </Link>
           <Button
             variant="outline"
             size="lg"
@@ -96,6 +104,15 @@ export function SiteHeader() {
           </SheetHeader>
           <nav aria-label="Mobile" className="px-4">
             <ul className="flex flex-col gap-1">
+              <li>
+                <Link
+                  href="/account"
+                  onClick={() => setMenuOpen(false)}
+                  className="block rounded-lg px-3 py-3 text-base font-medium hover:bg-secondary"
+                >
+                  My account
+                </Link>
+              </li>
               {navLinks.map((link) => (
                 <li key={link.href}>
                   <Link

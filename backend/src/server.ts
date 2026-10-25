@@ -8,7 +8,8 @@ import productRoutes from "./routes/productRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import customCakeRoutes from "./routes/customCakeRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
-import { adminLogin, verifyToken } from "./controllers/authController.js";
+import authRoutes from "./routes/authRoutes.js";
+import { getJwtSecret } from "./config/jwt.js";
 
 dotenv.config();
 
@@ -42,12 +43,10 @@ app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/custom-cake-requests", customCakeRoutes);
 app.use("/api/payments", paymentRoutes);
-
-// Admin authentication
-app.post("/api/auth/login", adminLogin);
-app.get("/api/auth/verify", verifyToken);
+app.use("/api/auth", authRoutes);
 
 const startServer = async (): Promise<void> => {
+  getJwtSecret();
   await connectDB();
 
   app.listen(PORT, () => {

@@ -53,6 +53,12 @@ export function CustomCakeForm() {
   ) {
     event.preventDefault()
 
+    const kilograms = Number(form.weight)
+    if (!Number.isFinite(kilograms) || kilograms < 0.1 || kilograms > 5) {
+      setError('Cake weight must be between 0.1 kg and 5 kg.')
+      return
+    }
+
     try {
       setSubmitting(true)
       setError('')
@@ -61,7 +67,7 @@ export function CustomCakeForm() {
         name: form.name.trim(),
         phone: form.phone.trim(),
         flavour: form.flavour.trim(),
-        weight: form.weight.trim(),
+        weight: `${kilograms} kg`,
         theme: form.theme.trim(),
         messageOnCake:
           form.messageOnCake.trim() || undefined,
@@ -187,11 +193,14 @@ export function CustomCakeForm() {
           <input
             id="cc-phone"
             type="tel"
+            inputMode="numeric"
+            maxLength={10}
+            pattern="[6-9][0-9]{9}"
             value={form.phone}
             onChange={(event) =>
               update('phone', event.target.value)
             }
-            placeholder="+91 98409 16058"
+            placeholder="9840916058"
             className={inputClass}
             required
           />
@@ -222,16 +231,20 @@ export function CustomCakeForm() {
             htmlFor="cc-weight"
             className="text-sm font-medium"
           >
-            Weight *
+            Weight (kg) *
           </label>
 
           <input
             id="cc-weight"
+            type="number"
+            min="0.1"
+            max="5"
+            step="0.1"
             value={form.weight}
             onChange={(event) =>
               update('weight', event.target.value)
             }
-            placeholder="1 kg"
+            placeholder="1"
             className={inputClass}
             required
           />

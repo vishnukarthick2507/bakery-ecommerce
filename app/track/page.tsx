@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { customerAuthHeaders } from '@/lib/customer-auth'
 
 type OrderItem = {
   productId: string
@@ -112,6 +113,7 @@ export default function TrackPage() {
         )}`,
         {
           cache: 'no-store',
+          headers: customerAuthHeaders(),
         },
       )
 

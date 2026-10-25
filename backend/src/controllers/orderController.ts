@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Order } from "../models/Order.js";
 import type { IOrderItem } from "../models/Order.js";
 import { Product } from "../models/Product.js";
+import type { AuthRequest } from "../middleware/auth.js";
 
 type ProductRecord = {
   _id: mongoose.Types.ObjectId;
@@ -26,9 +27,11 @@ const orderItemSchema = z.object({
 });
 
 const createOrderSchema = z.object({
-  customerName: z.string().trim().min(2),
+  customerName: z.string().trim().min(2).max(100).optional(),
 
-  phone: z.string().trim().min(5),
+  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()).optional(),
+
+  phone: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number").optional(),
 
   fulfillmentType: z.enum([
     "DELIVERY",
@@ -52,7 +55,7 @@ const createOrderSchema = z.object({
     "ONLINE",
   ]),
 
-  items: z.array(orderItemSchema).min(1),
+  items: z.array(orderItemSchema).min(1).max(20),
 });
 
 /*
@@ -150,7 +153,7 @@ function generateOrderNumber(): string {
 */
 
 export const createOrder = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
 ): Promise<void> => {
   try {
@@ -171,6 +174,28 @@ export const createOrder = async (
     }
 
     const data = parsed.data;
+
+    if (
+      !req.customer &&
+      (!data.customerName || !data.email || !data.phone)
+    ) {
+      res.status(400).json({
+        message: "Guest checkout requires a name, valid email, and valid phone number",
+      });
+      return;
+    }
+
+    const customerSnapshot = req.customer
+      ? {
+          name: req.customer.name,
+          email: req.customer.email,
+          phone: req.customer.phone,
+        }
+      : {
+          name: data.customerName!,
+          email: data.email!,
+          phone: data.phone!,
+        };
 
     // Delivery orders must have an address
     if (
@@ -236,6 +261,21 @@ export const createOrder = async (
     const orderItems: IOrderItem[] =
       [];
 
+    const quantityByProduct = new Map<string, number>();
+    for (const item of data.items) {
+      quantityByProduct.set(
+        item.productId,
+        (quantityByProduct.get(item.productId) ?? 0) + item.quantity,
+      );
+    }
+
+    if ([...quantityByProduct.values()].some((quantity) => quantity > 20)) {
+      res.status(400).json({
+        message: "A maximum of 20 units per product can be ordered",
+      });
+      return;
+    }
+
     // Validate every item
     for (const item of data.items) {
       const product =
@@ -266,7 +306,7 @@ export const createOrder = async (
       // Check stock
       if (
         product.stock <
-        item.quantity
+        (quantityByProduct.get(item.productId) ?? item.quantity)
       ) {
         res.status(400).json({
           message: `Only ${product.stock} unit(s) of ${product.name} are available`,
@@ -298,6 +338,8 @@ export const createOrder = async (
 
         unitPrice,
 
+        itemTotal: totalPrice,
+
         totalPrice,
       });
     }
@@ -323,11 +365,17 @@ export const createOrder = async (
       orderNumber:
         generateOrderNumber(),
 
+      ...(req.customer ? { userId: req.customer.id } : {}),
+
+      customer: {
+        ...customerSnapshot,
+      },
+
       customerName:
-        data.customerName,
+        customerSnapshot.name,
 
       phone:
-        data.phone,
+        customerSnapshot.phone,
 
       fulfillmentType:
         data.fulfillmentType,
@@ -419,7 +467,7 @@ export const createOrder = async (
 
 export const getOrderByNumber =
   async (
-    req: Request,
+    req: AuthRequest,
     res: Response,
   ): Promise<void> => {
     try {
@@ -453,6 +501,14 @@ export const getOrderByNumber =
         return;
       }
 
+      if (
+        order.userId &&
+        order.userId.toString() !== req.customer?.id
+      ) {
+        res.status(404).json({ message: "Order not found" });
+        return;
+      }
+
       res.status(200).json({
         order: {
           id: order._id,
@@ -461,10 +517,12 @@ export const getOrderByNumber =
             order.orderNumber,
 
           customerName:
-            order.customerName,
+            order.customer?.name ?? order.customerName,
+
+          customer: order.customer,
 
           phone:
-            order.phone,
+            order.customer?.phone ?? order.phone,
 
           fulfillmentType:
             order.fulfillmentType,
@@ -526,6 +584,52 @@ export const getOrderByNumber =
 | GET /api/orders
 |--------------------------------------------------------------------------
 */
+
+export const getMyOrders = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!req.customer) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  try {
+    const orders = await Order.find({ userId: req.customer.id })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.status(200).json({ orders });
+  } catch (error) {
+    console.error("Get customer orders failed:", error);
+    res.status(500).json({ message: "Unable to fetch orders" });
+  }
+};
+
+export const getMyOrderByNumber = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!req.customer) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  try {
+    const orderNumber = String(req.params.orderNumber ?? "").trim().toUpperCase();
+    const order = await Order.findOne({
+      orderNumber,
+      userId: req.customer.id,
+    }).lean();
+    if (!order) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+    res.status(200).json({ order });
+  } catch (error) {
+    console.error("Get customer order failed:", error);
+    res.status(500).json({ message: "Unable to fetch order" });
+  }
+};
 
 export const getAllOrders =
   async (

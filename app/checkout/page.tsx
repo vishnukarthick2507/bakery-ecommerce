@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/components/cart/cart-provider'
+import { customerAuthHeaders } from '@/lib/customer-auth'
 
 type RazorpayHandlerResponse = {
   razorpay_order_id: string
@@ -86,6 +87,7 @@ export default function CheckoutPage() {
     useState<'online' | 'cod'>('cod')
 
   const [customerName, setCustomerName] = useState('')
+  const [customerEmail, setCustomerEmail] = useState('')
   const [phone, setPhone] = useState('')
 
   const [addressLine, setAddressLine] = useState('')
@@ -103,6 +105,23 @@ export default function CheckoutPage() {
   // reuse the same order instead of creating duplicates.
   const [pendingOnlineOrder, setPendingOnlineOrder] =
     useState<string | null>(null)
+
+  useEffect(() => {
+    const token = window.localStorage.getItem('customer-token')
+    if (!token) return
+    void fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        if (!response.ok) return
+        const data = await response.json()
+        setCustomerName((current) => current || data.user.name)
+        setCustomerEmail((current) => current || data.user.email)
+        setPhone((current) => current || data.user.phone)
+      })
+      .catch(() => undefined)
+  }, [])
 
   if (!items.length) {
     return (
@@ -137,6 +156,7 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...customerAuthHeaders(),
         },
         body: JSON.stringify({ orderNumber }),
       },
@@ -184,6 +204,7 @@ export default function CheckoutPage() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                ...customerAuthHeaders(),
               },
               body: JSON.stringify(paymentResponse),
             },
@@ -259,8 +280,18 @@ export default function CheckoutPage() {
       return
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+      setError('Enter a valid email address.')
+      return
+    }
+
     if (!phone.trim()) {
       setError('Please enter your phone number.')
+      return
+    }
+
+    if (!/^[6-9]\d{9}$/.test(phone.trim())) {
+      setError('Enter a valid 10-digit Indian mobile number.')
       return
     }
 
@@ -305,9 +336,11 @@ export default function CheckoutPage() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              ...customerAuthHeaders(),
             },
             body: JSON.stringify({
               customerName: customerName.trim(),
+              email: customerEmail.trim().toLowerCase(),
               phone: phone.trim(),
 
               fulfillmentType:
@@ -453,11 +486,31 @@ export default function CheckoutPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
+                  Email address
+                </label>
+
+                <input
+                  type="email"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  placeholder="Enter your email address"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium">
                   Phone number
                 </label>
 
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  pattern="[6-9][0-9]{9}"
                   placeholder="Enter your phone number"
                   value={phone}
                   onChange={(e) =>

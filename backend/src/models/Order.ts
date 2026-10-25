@@ -20,11 +20,18 @@ export interface IOrderItem {
   variantId: string;
   quantity: number;
   unitPrice: number;
+  itemTotal: number;
   totalPrice: number;
 }
 
 export interface IOrder extends Document {
   orderNumber: string;
+  userId?: mongoose.Types.ObjectId;
+  customer?: {
+    name: string;
+    email: string;
+    phone: string;
+  };
   customerName: string;
   phone: string;
   fulfillmentType: FulfillmentType;
@@ -75,6 +82,11 @@ const orderItemSchema = new Schema<IOrderItem>(
       required: true,
       min: 0,
     },
+    itemTotal: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
     totalPrice: {
       type: Number,
       required: true,
@@ -91,6 +103,16 @@ const orderSchema = new Schema<IOrder>(
       required: true,
       unique: true,
       trim: true,
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
+    customer: {
+      name: { type: String, trim: true },
+      email: { type: String, trim: true, lowercase: true },
+      phone: { type: String, trim: true },
     },
 
     customerName: {

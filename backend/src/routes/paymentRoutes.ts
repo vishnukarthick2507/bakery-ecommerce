@@ -5,11 +5,12 @@ import {
   verifyPayment,
   handleWebhook,
 } from "../controllers/paymentController.js";
+import { optionalCustomerAuth } from "../middleware/auth.js";
 
 const router = Router();
 
-router.post("/create-order", createPaymentOrder);
-router.post("/verify", verifyPayment);
+router.post("/create-order", optionalCustomerAuth, createPaymentOrder);
+router.post("/verify", optionalCustomerAuth, verifyPayment);
 router.post("/webhook", handleWebhook);
 
 export default router;

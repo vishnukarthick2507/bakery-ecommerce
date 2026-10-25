@@ -4,8 +4,8 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 
 import { Admin } from "../models/Admin.js";
+import { getJwtSecret } from "../config/jwt.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const JWT_EXPIRES_IN = "7d";
 
 const loginSchema = z.object({
@@ -65,7 +65,7 @@ export const adminLogin = async (
         username: admin.username,
         role: admin.role,
       },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: JWT_EXPIRES_IN },
     );
 
@@ -110,7 +110,7 @@ export const verifyToken = async (
 
     const token = authHeader.substring(7);
 
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const decoded = jwt.verify(token, getJwtSecret()) as {
       adminId: string;
       username: string;
       role: string;

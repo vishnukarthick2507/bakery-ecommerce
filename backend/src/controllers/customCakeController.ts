@@ -9,16 +9,18 @@ const customCakeRequestSchema = z.object({
   phone: z
     .string()
     .trim()
-    .min(8)
-    .max(20)
-    .regex(
-      /^[+0-9\s-]+$/,
-      "Phone number can only contain digits, spaces, + and -",
-    ),
+    .regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number"),
 
   flavour: z.string().trim().min(2).max(100),
 
-  weight: z.string().trim().min(1).max(50),
+  weight: z
+    .string()
+    .trim()
+    .regex(/^\d+(?:\.\d+)?\s*(?:kg)?$/i, "Enter a weight in kilograms")
+    .refine((value) => {
+      const kilograms = Number(value.toLowerCase().replace("kg", "").trim());
+      return Number.isFinite(kilograms) && kilograms >= 0.1 && kilograms <= 5;
+    }, "Cake weight must be between 0.1 kg and 5 kg"),
 
   theme: z.string().trim().min(2).max(200),
 
