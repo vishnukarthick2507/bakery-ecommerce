@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { getProducts } from '@/lib/api'
+import { getProductBySlug } from '@/lib/api'
 import { ProductDetailClient } from '@/components/product/product-detail-client'
 
 interface ProductPageProps {
@@ -14,8 +14,7 @@ export async function generateMetadata({
   const { slug } = await params
 
   try {
-    const products = await getProducts()
-    const product = products.find((p) => p.slug === slug)
+    const product = await getProductBySlug(slug)
 
     if (!product) {
       return {
@@ -39,9 +38,9 @@ export default async function ProductPage({
 }: ProductPageProps) {
   const { slug } = await params
 
-  let products
+  let product
   try {
-    products = await getProducts()
+    product = await getProductBySlug(slug)
   } catch {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
@@ -69,8 +68,6 @@ export default async function ProductPage({
       </main>
     )
   }
-
-  const product = products.find((p) => p.slug === slug)
 
   if (!product) {
     notFound()

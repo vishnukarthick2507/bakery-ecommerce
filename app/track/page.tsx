@@ -96,9 +96,13 @@ export default function TrackPage() {
 
   const fetchOrder = async (
     requestedOrderNumber: string,
+    phoneOverride?: string,
   ) => {
     const trimmed =
       requestedOrderNumber.trim()
+    const effectivePhone = (
+      phoneOverride !== undefined ? phoneOverride : guestPhone
+    ).trim()
 
     if (!trimmed) {
       setError(
@@ -130,7 +134,7 @@ export default function TrackPage() {
         : null
 
       if (!response || response.status === 401) {
-        if (!/^[6-9]\d{9}$/.test(guestPhone.trim())) {
+        if (!/^[6-9]\d{9}$/.test(effectivePhone)) {
           throw new Error('Enter the 10-digit phone number used at checkout to track a guest order.')
         }
 
@@ -140,7 +144,7 @@ export default function TrackPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orderNumber: trimmed,
-            phone: guestPhone.trim(),
+            phone: effectivePhone,
           }),
         })
       }
@@ -168,7 +172,19 @@ export default function TrackPage() {
 
   useEffect(() => {
     if (urlOrderNumber) {
-      fetchOrder(urlOrderNumber)
+      const normalizedOrder = urlOrderNumber.trim().toUpperCase()
+      const storedPhone =
+        typeof window !== 'undefined'
+          ? window.sessionStorage.getItem(`guest-track-phone-${normalizedOrder}`) ||
+            window.sessionStorage.getItem('guest-track-phone') ||
+            ''
+          : ''
+
+      if (storedPhone) {
+        setGuestPhone((current) => current || storedPhone)
+      }
+
+      fetchOrder(urlOrderNumber, storedPhone || undefined)
     }
   }, [urlOrderNumber])
 

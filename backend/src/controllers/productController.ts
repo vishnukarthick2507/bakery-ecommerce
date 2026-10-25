@@ -76,6 +76,52 @@ export const getProducts = async (
 
 /*
 |--------------------------------------------------------------------------
+| GET PRODUCT BY SLUG
+|--------------------------------------------------------------------------
+| GET /api/products/slug/:slug
+|--------------------------------------------------------------------------
+*/
+
+export const getProductBySlug = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const slug = String(req.params.slug ?? "")
+      .trim()
+      .toLowerCase();
+
+    if (!slug || slug.length > 120 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      res.status(400).json({
+        message: "Invalid product slug",
+      });
+      return;
+    }
+
+    const product = await Product.findOne({
+      slug,
+      active: true,
+    }).lean();
+
+    if (!product) {
+      res.status(404).json({
+        message: "Product not found",
+      });
+      return;
+    }
+
+    res.status(200).json(product);
+  } catch (error) {
+    console.error("Get product by slug failed:", error);
+
+    res.status(500).json({
+      message: "Unable to fetch product",
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
 | GET PRODUCT BY ID
 |--------------------------------------------------------------------------
 | GET /api/products/:id

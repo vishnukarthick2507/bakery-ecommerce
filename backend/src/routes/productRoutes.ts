@@ -4,6 +4,7 @@ import {
   createProduct,
   deleteProduct,
   getProductById,
+  getProductBySlug,
   getProducts,
   updateProduct,
 } from "../controllers/productController.js";
@@ -20,7 +21,10 @@ const router = Router();
 // Get all active products
 router.get("/", getProducts);
 
-// Get one product
+// Get one product by slug
+router.get("/slug/:slug", getProductBySlug);
+
+// Get one product by ID
 router.get("/:id", getProductById);
 
 // Create product (admin only)

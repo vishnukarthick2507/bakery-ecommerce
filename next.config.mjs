@@ -1,4 +1,9 @@
 /** @type {import('next').NextConfig} */
+const backendUrl =
+  process.env.BACKEND_INTERNAL_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:5000'
+
 const nextConfig = {
   images: {
     unoptimized: true,
@@ -7,7 +12,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:5000/api/:path*',
+        destination: `${backendUrl.replace(/\/+$/, '')}/api/:path*`,
       },
     ]
   },

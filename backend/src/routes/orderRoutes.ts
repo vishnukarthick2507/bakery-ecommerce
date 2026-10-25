@@ -14,6 +14,7 @@ import {
   authenticateCustomer,
   optionalCustomerAuth,
 } from "../middleware/auth.js";
+import { guestTrackingLimiter } from "../middleware/rateLimit.js";
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.post("/", optionalCustomerAuth, createOrder);
 
 router.get("/me", authenticateCustomer, getMyOrders);
 router.get("/me/:orderNumber", authenticateCustomer, getMyOrderByNumber);
-router.post("/track", trackGuestOrder);
+router.post("/track", guestTrackingLimiter, trackGuestOrder);
 
 // Get all orders (admin only)
 router.get("/", authenticateAdmin, getAllOrders);

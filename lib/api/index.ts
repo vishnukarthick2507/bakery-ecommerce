@@ -111,6 +111,43 @@ function applyProductFilters(products: Product[], filters: ProductFilters): Prod
   }
 }
 
+export async function getProductBySlug(slug: string): Promise<Product | null> {
+  const normalizedSlug = slug.trim().toLowerCase()
+  if (!normalizedSlug) return null
+
+  const baseUrl = apiBaseUrl()
+
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl}/api/products/slug/${encodeURIComponent(normalizedSlug)}`, {
+      cache: 'no-store',
+    })
+  } catch {
+    throw new ApiError('Unable to reach the product API.')
+  }
+
+  if (response.status === 404 || response.status === 400) {
+    return null
+  }
+
+  if (!response.ok) {
+    throw new ApiError('Failed to load product.')
+  }
+
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    throw new ApiError('Failed to load product.')
+  }
+
+  if (!isBackendProduct(payload)) {
+    throw new ApiError('Failed to load product.')
+  }
+
+  return mapBackendProduct(payload)
+}
+
 export async function getProducts(filters: ProductFilters = {}): Promise<Product[]> {
   const products = await fetchBackendProducts()
   return applyProductFilters(products, filters)

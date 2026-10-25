@@ -224,6 +224,11 @@ export default function CheckoutPage() {
           clear()
           setPendingOnlineOrder(null)
 
+          if (typeof window !== 'undefined') {
+            window.sessionStorage.setItem(`guest-track-phone-${data.orderNumber}`, phone.trim())
+            window.sessionStorage.setItem('guest-track-phone', phone.trim())
+          }
+
           router.push(
             `/track?order=${encodeURIComponent(
               data.orderNumber,
@@ -416,6 +421,11 @@ export default function CheckoutPage() {
 
         if (payment === 'cod') {
           clear()
+
+          if (typeof window !== 'undefined') {
+            window.sessionStorage.setItem(`guest-track-phone-${orderNumber}`, phone.trim())
+            window.sessionStorage.setItem('guest-track-phone', phone.trim())
+          }
 
           router.push(
             `/track?order=${encodeURIComponent(

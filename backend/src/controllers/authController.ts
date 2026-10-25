@@ -38,7 +38,9 @@ export const adminLogin = async (
 
     const { username, password } = parsed.data;
 
-    const admin = await Admin.findOne({ username }).lean();
+    const admin = await Admin.findOne({ username })
+      .select("+password")
+      .lean();
 
     if (!admin) {
       res.status(401).json({
