@@ -3,7 +3,22 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import {
+  ArrowLeftIcon,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  Mail,
+  MapPin,
+  Package,
+  Phone,
+  ShoppingBag,
+  Truck,
+  XIcon,
+} from 'lucide-react'
 import { customerAuthHeaders, getCustomerToken } from '@/lib/customer-auth'
+import { cn } from '@/lib/utils'
 
 type OrderItem = {
   productId: string
@@ -50,45 +65,102 @@ function formatStatus(status: Order['orderStatus']) {
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase(),
-    )
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
-function formatPaymentStatus(
-  status: Order['paymentStatus'],
-) {
+function formatPaymentStatus(status: Order['paymentStatus']) {
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase(),
-    )
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+/* ---------------------------------------------------------------
+   Timeline status definitions
+   --------------------------------------------------------------- */
+
+type TimelineStep = {
+  key: Order['orderStatus']
+  label: string
+  icon: React.ElementType
+  completedLabel: string
+}
+
+const TIMELINE_STEPS: TimelineStep[] = [
+  {
+    key: 'PLACED',
+    label: 'Order Placed',
+    icon: ShoppingBag,
+    completedLabel: 'Order placed',
+  },
+  {
+    key: 'PAYMENT_CONFIRMED',
+    label: 'Payment Confirmed',
+    icon: CreditCard,
+    completedLabel: 'Payment confirmed',
+  },
+  {
+    key: 'CONFIRMED',
+    label: 'Order Confirmed',
+    icon: CheckCircle2,
+    completedLabel: 'Order confirmed',
+  },
+  {
+    key: 'PREPARING',
+    label: 'Being Prepared',
+    icon: Clock,
+    completedLabel: 'Being prepared',
+  },
+  {
+    key: 'READY',
+    label: 'Ready',
+    icon: Package,
+    completedLabel: 'Ready for pickup',
+  },
+  {
+    key: 'OUT_FOR_DELIVERY',
+    label: 'Out for Delivery',
+    icon: Truck,
+    completedLabel: 'Out for delivery',
+  },
+  {
+    key: 'DELIVERED',
+    label: 'Delivered',
+    icon: CheckCircle2,
+    completedLabel: 'Delivered',
+  },
+]
+
+function timelineStepsFor(paymentMethod: Order['paymentMethod']) {
+  return paymentMethod === 'ONLINE'
+    ? TIMELINE_STEPS
+    : TIMELINE_STEPS.filter((step) => step.key !== 'PAYMENT_CONFIRMED')
+}
+
+function currentStepIndex(
+  orderStatus: Order['orderStatus'],
+  paymentMethod: Order['paymentMethod'],
+): number {
+  const steps = timelineStepsFor(paymentMethod)
+  return steps.findIndex((step) => step.key === orderStatus)
 }
 
 export default function TrackPage() {
   const searchParams = useSearchParams()
 
-  const urlOrderNumber =
-    searchParams.get('order') ?? ''
+  const urlOrderNumber = searchParams.get('order') ?? ''
 
-  const [orderNumber, setOrderNumber] =
-    useState(urlOrderNumber)
+  const [orderNumber, setOrderNumber] = useState(urlOrderNumber)
 
-  const [order, setOrder] =
-    useState<Order | null>(null)
+  const [order, setOrder] = useState<Order | null>(null)
 
-  const [guestPhone, setGuestPhone] =
-    useState('')
+  const [guestPhone, setGuestPhone] = useState('')
 
-  const [isAuthenticated, setIsAuthenticated] =
-    useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  const [loading, setLoading] =
-    useState(false)
+  const [loading, setLoading] = useState(false)
 
-  const [error, setError] =
-    useState('')
+  const [error, setError] = useState('')
 
   useEffect(() => {
     setIsAuthenticated(Boolean(getCustomerToken()))
@@ -98,16 +170,13 @@ export default function TrackPage() {
     requestedOrderNumber: string,
     phoneOverride?: string,
   ) => {
-    const trimmed =
-      requestedOrderNumber.trim()
+    const trimmed = requestedOrderNumber.trim()
     const effectivePhone = (
       phoneOverride !== undefined ? phoneOverride : guestPhone
     ).trim()
 
     if (!trimmed) {
-      setError(
-        'Please enter your order number.',
-      )
+      setError('Please enter your order number.')
       setOrder(null)
       return
     }
@@ -118,8 +187,7 @@ export default function TrackPage() {
 
     try {
       const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL ||
-        'http://localhost:5000'
+        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
       const token = getCustomerToken()
 
@@ -135,7 +203,9 @@ export default function TrackPage() {
 
       if (!response || response.status === 401) {
         if (!/^[6-9]\d{9}$/.test(effectivePhone)) {
-          throw new Error('Enter the 10-digit phone number used at checkout to track a guest order.')
+          throw new Error(
+            'Enter the 10-digit phone number used at checkout to track a guest order.',
+          )
         }
 
         response = await fetch(`${apiUrl}/api/orders/track`, {
@@ -153,17 +223,14 @@ export default function TrackPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.message ||
-            'Order not found.',
+          data.message || 'Order not found.',
         )
       }
 
       setOrder(data.order)
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to fetch order.',
+        err instanceof Error ? err.message : 'Unable to fetch order.',
       )
     } finally {
       setLoading(false)
@@ -188,13 +255,19 @@ export default function TrackPage() {
     }
   }, [urlOrderNumber])
 
-  const handleSubmit = (
-    event: React.FormEvent<HTMLFormElement>,
-  ) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-
     fetchOrder(orderNumber)
   }
+
+  const steps = order
+    ? timelineStepsFor(order.paymentMethod)
+    : []
+  const currentIndex = order
+    ? currentStepIndex(order.orderStatus, order.paymentMethod)
+    : -1
+
+  const isCancelled = order?.orderStatus === 'CANCELLED'
 
   return (
     <>
@@ -204,347 +277,403 @@ export default function TrackPage() {
             href="/"
             className="text-sm text-muted-foreground hover:underline"
           >
-            ← Back to home
+            <ArrowLeftIcon className="size-4 shrink-0" aria-hidden="true" />
+            <span>Back to home</span>
           </Link>
 
-          <h1 className="mt-3 text-4xl font-semibold">
-            Track Your Order
-          </h1>
-
-          <p className="mt-2 text-muted-foreground">
-            Check the latest status of your
-            S.V. Bakery order.
-          </p>
+          {order ? (
+            <>
+              <h1 className="mt-3 text-3xl font-semibold text-primary">
+                Order Confirmed
+              </h1>
+              <p className="mt-2 text-muted-foreground">
+                Your S.V. Bakery order has been placed successfully.
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="mt-3 text-3xl font-semibold text-primary">
+                Track Your Order
+              </h1>
+              <p className="mt-2 text-muted-foreground">
+                Check the latest status of your S.V. Bakery order.
+              </p>
+            </>
+          )}
         </div>
 
-        {/* Search */}
-        <section className="rounded-2xl border bg-background p-6 sm:p-8">
-          <h2 className="text-2xl font-semibold">
-            Track Order
-          </h2>
+        {/* Order lookup */}
+        {!order && (
+          <section className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+            <h2 className="text-xl font-semibold text-primary mb-1">
+              Track Order
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              Enter your order number to check the latest status.
+            </p>
 
-          <p className="mt-2 text-muted-foreground">
-            Enter your order number to check
-            the latest status.
-          </p>
-
-          <form
-            onSubmit={handleSubmit}
-            className="mt-6 flex flex-col gap-3 sm:flex-row"
-          >
-            <input
-              value={orderNumber}
-              onChange={(event) =>
-                setOrderNumber(
-                  event.target.value,
-                )
-              }
-              type="text"
-              placeholder="e.g. SV-44171646-7698"
-              className="flex-1 rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
-            />
-
-            <input
-              value={guestPhone}
-              onChange={(event) => setGuestPhone(event.target.value)}
-              type="tel"
-              inputMode="numeric"
-              maxLength={10}
-              pattern="[6-9][0-9]{9}"
-              required={!isAuthenticated}
-              aria-label="Phone number used at checkout"
-              placeholder={isAuthenticated ? 'Guest order phone (optional)' : 'Checkout phone number'}
-              className="flex-1 rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
-            />
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            <form
+              onSubmit={handleSubmit}
+              className="mt-6 flex flex-col gap-3 sm:flex-row"
             >
-              {loading
-                ? 'Loading...'
-                : 'Track Order'}
-            </button>
-          </form>
+              <input
+                value={orderNumber}
+                onChange={(event) =>
+                  setOrderNumber(event.target.value)
+                }
+                type="text"
+                placeholder="e.g. SV-44171646-7698"
+                className="flex-1 rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+              />
 
-          {error && (
-            <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-        </section>
+              <input
+                value={guestPhone}
+                onChange={(event) => setGuestPhone(event.target.value)}
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                pattern="[6-9][0-9]{9}"
+                required={!isAuthenticated}
+                aria-label="Phone number used at checkout"
+                placeholder={
+                  isAuthenticated
+                    ? 'Guest order phone (optional)'
+                    : 'Checkout phone number'
+                }
+                className="flex-1 rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+              />
 
-        {/* Order details */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60 hover:opacity-90"
+              >
+                {loading ? 'Loading…' : 'Track Order'}
+              </button>
+            </form>
+
+            {error && (
+              <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Order confirmed & tracking */}
         {order && (
-          <section className="mt-8 space-y-6">
-            {/* Header */}
-            <div className="rounded-2xl border bg-background p-6 sm:p-8">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <section className="mt-8 space-y-8">
+            {/* Order header */}
+            <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">
                     Order Number
                   </p>
-
-                  <h2 className="mt-1 text-2xl font-bold">
+                  <h2 className="mt-1 text-2xl font-bold text-primary">
                     {order.orderNumber}
                   </h2>
                 </div>
-
-                <div className="rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold">
-                  {formatStatus(
-                    order.orderStatus,
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Status */}
-            <div className="rounded-2xl border bg-background p-6 sm:p-8">
-              <h2 className="text-xl font-semibold">
-                Order Status
-              </h2>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                {(
-  [
-    'PLACED',
-    'CONFIRMED',
-    'PREPARING',
-    'READY',
-    'OUT_FOR_DELIVERY',
-    'DELIVERED',
-  ] as Order['orderStatus'][]
-).map((status, statusIndex) => {
-                  const currentIndex =
-                    order.orderStatus ===
-                    'PAYMENT_CONFIRMED'
-                      ? 0
-                      : [
-                          'PLACED',
-                          'CONFIRMED',
-                          'PREPARING',
-                          'READY',
-                          'OUT_FOR_DELIVERY',
-                          'DELIVERED',
-                        ].indexOf(
-                          order.orderStatus,
-                        )
-
-                  const completed =
-                    currentIndex >= statusIndex
-
-                  return (
-                    <div
-                      key={status}
-                      className={`rounded-xl border p-4 ${
-                        completed
-                          ? 'border-primary bg-primary/5'
-                          : ''
-                      }`}
-                    >
-                      <div
-                        className={`mb-3 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-                          completed
-                            ? 'bg-primary text-primary-foreground'
-                            : 'border'
-                        }`}
-                      >
-                        {statusIndex + 1}
-                      </div>
-
-                      <p className="font-medium">
-                        {formatStatus(status)}
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {order.orderStatus ===
-                'CANCELLED' && (
-                <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive">
-                  This order has been
-                  cancelled.
-                </div>
-              )}
-            </div>
-
-            {/* Items */}
-            <div className="rounded-2xl border bg-background p-6 sm:p-8">
-              <h2 className="text-xl font-semibold">
-                Your Items
-              </h2>
-
-              <div className="mt-5 divide-y">
-                {order.items.map((item) => (
-                  <div
-                    key={`${item.productId}-${item.variantId}`}
-                    className="flex items-center justify-between gap-4 py-4"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        {item.productName}
-                      </p>
-
-                      <p className="text-sm text-muted-foreground">
-                        {item.quantity} × ₹
-                        {item.unitPrice.toLocaleString(
-                          'en-IN',
-                        )}
-                      </p>
-                    </div>
-
-                    <p className="font-semibold">
-                      ₹
-                      {item.totalPrice.toLocaleString(
-                        'en-IN',
-                      )}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Delivery / pickup */}
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="rounded-2xl border bg-background p-6">
-                <h2 className="text-xl font-semibold">
-                  {order.fulfillmentType ===
-                  'DELIVERY'
-                    ? 'Delivery Details'
-                    : 'Pickup Details'}
-                </h2>
-
-                <div className="mt-4 space-y-2 text-sm">
-                  <p>
-                    <span className="font-medium">
-                      Name:
-                    </span>{' '}
-                    {order.customerName}
-                  </p>
-
-                  <p>
-                    <span className="font-medium">
-                      Phone:
-                    </span>{' '}
-                    {order.phone}
-                  </p>
-
-                  {order.fulfillmentType ===
-                    'DELIVERY' &&
-                    order.address && (
-                      <p>
-                        <span className="font-medium">
-                          Address:
-                        </span>{' '}
-                        {
-                          order.address
-                            .addressLine
-                        }
-                        , {order.address.city},{' '}
-                        {order.address.pincode}
-                      </p>
-                    )}
-
-                  {order.fulfillmentType ===
-                    'PICKUP' && (
-                    <p className="text-muted-foreground">
-                      Pick up from S.V. Bakery.
-                    </p>
-                  )}
+                <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium">
+                  <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
+                  <span>{formatStatus(order.orderStatus)}</span>
                 </div>
               </div>
 
-              <div className="rounded-2xl border bg-background p-6">
-                <h2 className="text-xl font-semibold">
-                  Schedule
-                </h2>
-
-                <div className="mt-4 space-y-2 text-sm">
-                  <p>
-                    <span className="font-medium">
-                      Date:
-                    </span>{' '}
-                    {order.scheduledDate}
+              <div className="mt-6 grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                    Payment
                   </p>
-
-                  <p>
-                    <span className="font-medium">
-                      Time:
-                    </span>{' '}
-                    {order.scheduledTime}
-                  </p>
-
-                  <p>
-                    <span className="font-medium">
-                      Payment:
-                    </span>{' '}
-                    {order.paymentMethod ===
-                    'COD'
+                  <p className="mt-1 font-medium text-foreground">
+                    {order.paymentMethod === 'COD'
                       ? 'Cash on Delivery'
                       : 'Online Payment'}
                   </p>
-
-                  <p>
-                    <span className="font-medium">
-                      Payment Status:
-                    </span>{' '}
-                    {formatPaymentStatus(
-                      order.paymentStatus,
-                    )}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatPaymentStatus(order.paymentStatus)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                    Fulfilment
+                  </p>
+                  <p className="mt-1 font-medium text-foreground">
+                    {order.fulfillmentType === 'DELIVERY'
+                      ? 'Delivery'
+                      : 'Pickup'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                    Total
+                  </p>
+                  <p className="mt-1 font-bold text-primary">
+                    ₹{order.totalAmount.toLocaleString('en-IN')}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Total */}
-            <div className="rounded-2xl border bg-background p-6 sm:p-8">
-              <h2 className="text-xl font-semibold">
-                Payment Summary
-              </h2>
-
-              <div className="mt-5 space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Subtotal
-                  </span>
-
-                  <span>
-                    ₹
-                    {order.subtotal.toLocaleString(
-                      'en-IN',
-                    )}
-                  </span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Delivery Fee
-                  </span>
-
-                  <span>
-                    ₹
-                    {order.deliveryFee.toLocaleString(
-                      'en-IN',
-                    )}
-                  </span>
-                </div>
-
-                <div className="my-4 border-t" />
-
-                <div className="flex justify-between text-xl font-bold">
-                  <span>Total</span>
-
-                  <span>
-                    ₹
-                    {order.totalAmount.toLocaleString(
-                      'en-IN',
-                    )}
-                  </span>
+            {isCancelled ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 sm:p-8 shadow-sm">
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <div className="flex size-16 items-center justify-center rounded-full bg-destructive/10">
+                    <XIcon className="size-8 text-destructive" aria-hidden="true" />
+                  </div>
+                  <h2 className="text-xl font-bold text-primary">Order Cancelled</h2>
+                  <p className="text-muted-foreground text-center">
+                    This order has been cancelled. If you have any questions,
+                    please contact us on WhatsApp.
+                  </p>
                 </div>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                  <h2 className="text-xl font-semibold text-primary mb-1">
+                    Order Status
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground mb-6">
+                    Here&apos;s where your order stands.
+                  </p>
+
+                  <div className="relative">
+                    {/* Connector line */}
+                    {steps.length > 1 && (
+                      <div
+                        className="absolute left-3 top-8 bottom-8 w-0.5 bg-primary/20"
+                        aria-hidden="true"
+                      />
+                    )}
+
+                    {steps.map((step, index) => {
+                      const isCompleted = index < currentIndex
+                      const isCurrent = index === currentIndex
+
+                      return (
+                        <div
+                          key={step.key}
+                          className="relative pl-10"
+                          style={
+                            isCurrent ? { zIndex: 10 } : undefined
+                          }
+                        >
+                          {/* Connector from previous step */}
+                          {index > 0 && (
+                            <div
+                              className="absolute left-3 top-[10px] -mt-0.5 w-full h-0.5"
+                              aria-hidden="true"
+                              style={{
+                                backgroundColor:
+                                  index - 1 < currentIndex
+                                    ? '#0B2744'
+                                    : '#D9E4EE',
+                              }}
+                            />
+                          )}
+
+                          <div className="absolute left-0 top-0 flex size-8 items-center justify-center rounded-full border-2 z-20">
+                            {isCompleted ? (
+                              <CheckCircle2
+                                className="size-4 text-primary-foreground"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <span
+                                className="text-xs font-bold text-primary"
+                                aria-hidden="true"
+                              >
+                                {index + 1}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col gap-1 pt-1">
+                            <span
+                              className={cn(
+                                'text-sm font-semibold',
+                                isCompleted || isCurrent
+                                  ? 'text-primary'
+                                  : 'text-muted-foreground',
+                              )}
+                            >
+                              {step.label}
+                            </span>
+                            <span
+                              className={cn(
+                                'text-xs',
+                                isCompleted || isCurrent
+                                  ? 'text-success'
+                                  : 'text-muted-foreground',
+                              )}
+                            >
+                              {isCompleted ? step.completedLabel : step.label}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Order items */}
+                <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                  <h2 className="text-xl font-semibold text-primary mb-1">
+                    Your Items
+                  </h2>
+
+                  <div className="mt-5 divide-y divide-border">
+                    {order.items.map((item) => (
+                      <div
+                        key={`${item.productId}-${item.variantId}`}
+                        className="flex items-center justify-between gap-4 py-4"
+                      >
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {item.productName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {item.quantity} × ₹
+                            {item.unitPrice.toLocaleString('en-IN')}
+                          </p>
+                        </div>
+                        <p className="font-semibold text-primary">
+                          ₹
+                          {item.totalPrice.toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Delivery / pickup & schedule */}
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                    <h2 className="text-xl font-semibold text-primary mb-1">
+                      {order.fulfillmentType === 'DELIVERY'
+                        ? 'Delivery Details'
+                        : 'Pickup Details'}
+                    </h2>
+
+                    <div className="mt-4 space-y-3 text-sm">
+                      <div className="flex items-start gap-3">
+                        <Mail className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {order.customerName}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {order.phone}
+                          </p>
+                        </div>
+                      </div>
+
+                      {order.fulfillmentType === 'DELIVERY' && order.address && (
+                        <div className="flex items-start gap-3 mt-3">
+                          <MapPin className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          <p className="text-muted-foreground">
+                            {order.address.addressLine},{' '}
+                            {order.address.city},{' '}
+                            {order.address.pincode}
+                          </p>
+                        </div>
+                      )}
+
+                      {order.fulfillmentType === 'PICKUP' && (
+                        <p className="mt-3 text-muted-foreground">
+                          Pick up from S.V. Bakery.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                    <h2 className="text-xl font-semibold text-primary mb-1">
+                      Schedule
+                    </h2>
+
+                    <div className="mt-4 space-y-3 text-sm">
+                      <div className="flex items-start gap-3">
+                        <Calendar className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <p className="text-muted-foreground">
+                          <span className="font-medium">Date:</span>{' '}
+                          {order.scheduledDate}
+                        </p>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <Clock className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <p className="text-muted-foreground">
+                          <span className="font-medium">Time:</span>{' '}
+                          {order.scheduledTime}
+                        </p>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <CreditCard className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <p className="text-muted-foreground">
+                          <span className="font-medium">Payment:</span>{' '}
+                          {order.paymentMethod === 'COD'
+                            ? 'Cash on Delivery'
+                            : 'Online Payment'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <Mail className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <p className="text-muted-foreground">
+                          <span className="font-medium">Payment Status:</span>{' '}
+                          {formatPaymentStatus(order.paymentStatus)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment summary */}
+                <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                  <h2 className="text-xl font-semibold text-primary mb-1">
+                    Payment Summary
+                  </h2>
+
+                  <div className="mt-5 space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span>₹{order.subtotal.toLocaleString('en-IN')}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Delivery Fee</span>
+                      <span>₹{order.deliveryFee.toLocaleString('en-IN')}</span>
+                    </div>
+
+                    <div className="my-3 border-t border-border" />
+
+                    <div className="flex justify-between text-xl font-bold text-primary">
+                      <span>Total</span>
+                      <span>₹{order.totalAmount.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  <Link
+                    href="/track"
+                    className="flex-1 flex items-center justify-center rounded-lg border border-border px-6 py-3 font-medium hover:bg-muted"
+                  >
+                    Track Another Order
+                  </Link>
+                  <Link
+                    href="/products"
+                    className="flex-1 flex items-center justify-center rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:opacity-90"
+                  >
+                    Continue Shopping
+                  </Link>
+                </div>
+              </>
+            )}
           </section>
         )}
       </main>

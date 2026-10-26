@@ -23,11 +23,11 @@ export function SectionHeading({
     <div className={cn('mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between', className)}>
       <div className="flex max-w-2xl flex-col gap-2">
         {eyebrow && (
-          <p className="text-xs font-semibold tracking-widest text-caramel-foreground uppercase">
-            <span className="rounded-full bg-caramel/20 px-2.5 py-1">{eyebrow}</span>
+          <p className="text-xs font-semibold tracking-widest text-primary uppercase">
+            <span className="rounded-full bg-primary/10 px-2.5 py-1">{eyebrow}</span>
           </p>
         )}
-        <h2 id={id} className="text-2xl font-bold text-burgundy sm:text-3xl lg:text-4xl">
+        <h2 id={id} className="text-2xl font-bold text-primary sm:text-3xl lg:text-4xl">
           {title}
         </h2>
         {description && <p className="text-pretty text-muted-foreground">{description}</p>}

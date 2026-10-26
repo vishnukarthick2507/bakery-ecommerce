@@ -38,7 +38,7 @@ export function OffersSection() {
               <li key={offer.code}>
                 <Card className="h-full border-dashed shadow-sm">
                   <CardHeader>
-                    <div className="mb-1 flex size-10 items-center justify-center rounded-xl bg-caramel/20 text-caramel-foreground">
+                    <div className="mb-1 flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <TicketPercentIcon className="size-5" aria-hidden="true" />
                     </div>
                     <CardTitle className="font-heading text-xl">{offer.title}</CardTitle>

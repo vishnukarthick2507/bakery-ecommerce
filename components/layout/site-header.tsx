@@ -16,7 +16,7 @@ export function Logo({ className }: { className?: string }) {
       <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
         <CakeSliceIcon className="size-5" aria-hidden="true" />
       </span>
-      <span className="font-heading text-lg leading-none font-bold text-burgundy sm:text-xl">
+      <span className="font-heading text-lg leading-none font-bold text-primary sm:text-xl">
         {siteConfig.name}
       </span>
     </Link>

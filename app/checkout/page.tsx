@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/components/cart/cart-provider'
 import { customerAuthHeaders } from '@/lib/customer-auth'
+import { cn } from '@/lib/utils'
+import { formatPrice } from '@/lib/format'
 
 type RazorpayHandlerResponse = {
   razorpay_order_id: string
@@ -76,6 +78,18 @@ function loadRazorpayScript(): Promise<void> {
   return razorpayScriptPromise
 }
 
+type Step = 'details' | 'fulfilment' | 'schedule' | 'payment' | 'summary'
+
+const STEPS: Array<{ key: Step; label: string }> = [
+  { key: 'details', label: 'Your details' },
+  { key: 'fulfilment', label: 'Delivery or pickup' },
+  { key: 'schedule', label: 'Date & time' },
+  { key: 'payment', label: 'Payment' },
+  { key: 'summary', label: 'Confirm' },
+]
+
+const stepIndex = (key: Step) => STEPS.findIndex((s) => s.key === key)
+
 export default function CheckoutPage() {
   const router = useRouter()
   const { items, pricing, clear } = useCart()
@@ -100,12 +114,15 @@ export default function CheckoutPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   // An ONLINE order that is created but not yet paid, so retries
   // reuse the same order instead of creating duplicates.
   const [pendingOnlineOrder, setPendingOnlineOrder] =
     useState<string | null>(null)
   const orderIdempotencyKey = useRef<string | null>(null)
+
+  const [activeStep, setActiveStep] = useState<Step>('details')
 
   useEffect(() => {
     const token = window.localStorage.getItem('customer-token')
@@ -127,8 +144,8 @@ export default function CheckoutPage() {
   if (!items.length) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
-        <div className="rounded-2xl border p-8 text-center">
-          <h1 className="text-3xl font-semibold">
+        <div className="rounded-xl border border-border p-8 text-center">
+          <h1 className="text-3xl font-semibold text-primary">
             Your cart is empty
           </h1>
 
@@ -145,6 +162,14 @@ export default function CheckoutPage() {
         </div>
       </main>
     )
+  }
+
+  const clearFieldError = (field: string) => {
+    setFieldErrors((prev) => {
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
   }
 
   const startOnlinePayment = async (
@@ -280,46 +305,76 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     setError('')
+    setFieldErrors({})
+
+    let hasError = false
+    const nextFieldErrors: Record<string, string> = {}
 
     if (!customerName.trim()) {
-      setError('Please enter your full name.')
-      return
+      nextFieldErrors.customerName = 'Please enter your full name.'
+      hasError = true
+    } else {
+      clearFieldError('customerName')
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
-      setError('Enter a valid email address.')
-      return
+      nextFieldErrors.customerEmail = 'Enter a valid email address.'
+      hasError = true
+    } else {
+      clearFieldError('customerEmail')
     }
 
     if (!phone.trim()) {
-      setError('Please enter your phone number.')
-      return
-    }
-
-    if (!/^[6-9]\d{9}$/.test(phone.trim())) {
-      setError('Enter a valid 10-digit Indian mobile number.')
-      return
+      nextFieldErrors.phone = 'Please enter your phone number.'
+      hasError = true
+    } else if (!/^[6-9]\d{9}$/.test(phone.trim())) {
+      nextFieldErrors.phone = 'Enter a valid 10-digit Indian mobile number.'
+      hasError = true
+    } else {
+      clearFieldError('phone')
     }
 
     if (fulfilment === 'delivery') {
       if (!addressLine.trim()) {
-        setError('Please enter your delivery address.')
-        return
+        nextFieldErrors.addressLine = 'Please enter your delivery address.'
+        hasError = true
+      } else {
+        clearFieldError('addressLine')
       }
 
       if (!city.trim()) {
-        setError('Please enter your city.')
-        return
+        nextFieldErrors.city = 'Please enter your city.'
+        hasError = true
+      } else {
+        clearFieldError('city')
       }
 
       if (!pincode.trim()) {
-        setError('Please enter your pincode.')
-        return
+        nextFieldErrors.pincode = 'Please enter your pincode.'
+        hasError = true
+      } else {
+        clearFieldError('pincode')
       }
     }
 
     if (!scheduledDate) {
-      setError('Please select your order date.')
+      nextFieldErrors.scheduledDate = 'Please select your order date.'
+      hasError = true
+    } else {
+      clearFieldError('scheduledDate')
+    }
+
+    if (hasError) {
+      setFieldErrors(nextFieldErrors)
+      // Move to first step with an error
+      const firstErrorKey = Object.keys(nextFieldErrors)[0]
+      if (firstErrorKey === 'customerName' || firstErrorKey === 'customerEmail' || firstErrorKey === 'phone') {
+        setActiveStep('details')
+      } else if (firstErrorKey === 'addressLine' || firstErrorKey === 'city' || firstErrorKey === 'pincode') {
+        setActiveStep('fulfilment')
+      } else if (firstErrorKey === 'scheduledDate') {
+        setActiveStep('schedule')
+      }
       return
     }
 
@@ -460,6 +515,8 @@ export default function CheckoutPage() {
     }
   }
 
+  const currentStepIndex = stepIndex(activeStep)
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <div className="mb-8">
@@ -470,7 +527,7 @@ export default function CheckoutPage() {
           ← Continue shopping
         </Link>
 
-        <h1 className="mt-3 text-4xl font-semibold">
+        <h1 className="mt-3 text-3xl font-semibold text-primary">
           Checkout
         </h1>
 
@@ -480,281 +537,569 @@ export default function CheckoutPage() {
         </p>
       </div>
 
+      {/* Progress indicator */}
+      <ol className="flex gap-1 mb-8" aria-label="Checkout progress">
+        {STEPS.map((step, i) => {
+          const isComplete = i < currentStepIndex
+          const isCurrent = i === currentStepIndex
+          return (
+            <li key={step.key} className="flex-1 relative">
+              <div className="flex flex-col items-center gap-2">
+                <span
+                  className={cn(
+                    'flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
+                    isComplete
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : isCurrent
+                        ? 'border-primary text-primary'
+                        : 'border-border text-muted-foreground',
+                  )}
+                >
+                  {i + 1}
+                </span>
+                {isComplete && (
+                  <svg className="absolute size-3 text-primary" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                )}
+                <span
+                  className={cn(
+                    'text-[0.7rem] font-medium uppercase tracking-wider',
+                    isComplete || isCurrent
+                      ? 'text-primary font-bold'
+                      : 'text-muted-foreground',
+                  )}
+                >
+                  {step.label}
+                </span>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div className="absolute left-1/2 top-8 -mt-0.5 w-full h-0.5 -z-10" aria-hidden="true">
+                  <div className={cn('h-full', isComplete ? 'bg-primary' : 'bg-border')} />
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+
       <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
         <section className="space-y-6">
-          {/* Customer details */}
-          <div className="rounded-2xl border bg-background p-6">
-            <h2 className="text-xl font-semibold">
-              Customer details
-            </h2>
-
-            <div className="mt-5 grid gap-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Full name
-                </label>
-
-                <input
-                  type="text"
-                  placeholder="Enter your name"
-                  value={customerName}
-                  onChange={(e) =>
-                    setCustomerName(e.target.value)
-                  }
-                  className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Email address
-                </label>
-
-                <input
-                  type="email"
-                  autoComplete="email"
-                  required
-                  maxLength={254}
-                  placeholder="Enter your email address"
-                  value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
-                  className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Phone number
-                </label>
-
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
-                  pattern="[6-9][0-9]{9}"
-                  placeholder="Enter your phone number"
-                  value={phone}
-                  onChange={(e) =>
-                    setPhone(e.target.value)
-                  }
-                  className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
-                />
-              </div>
+          {error && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              {error}
             </div>
-          </div>
+          )}
 
-          {/* Fulfilment */}
-          <div className="rounded-2xl border bg-background p-6">
-            <h2 className="text-xl font-semibold">
-              Fulfilment
-            </h2>
+          {/* Step: Customer details */}
+          {activeStep === 'details' && (
+            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-primary mb-1">
+                Customer details
+              </h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                We&apos;ll use this to confirm your order.
+              </p>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setFulfilment('delivery')
-                }
-                className={`rounded-xl border p-4 text-left ${
-                  fulfilment === 'delivery'
-                    ? 'border-primary bg-primary/5'
-                    : ''
-                }`}
-              >
-                <div className="font-semibold">
-                  Delivery
-                </div>
-
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Deliver to my address
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setFulfilment('pickup')
-                }
-                className={`rounded-xl border p-4 text-left ${
-                  fulfilment === 'pickup'
-                    ? 'border-primary bg-primary/5'
-                    : ''
-                }`}
-              >
-                <div className="font-semibold">
-                  Pickup
-                </div>
-
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Pick up from S.V. Bakery
-                </div>
-              </button>
-            </div>
-
-            {fulfilment === 'delivery' && (
               <div className="mt-5 grid gap-4">
                 <div>
-                  <label className="mb-2 block text-sm font-medium">
-                    Address
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Full name
                   </label>
-
-                  <textarea
-                    placeholder="Enter your complete delivery address"
-                    rows={4}
-                    value={addressLine}
-                    onChange={(e) =>
-                      setAddressLine(e.target.value)
-                    }
-                    className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
+                  {fieldErrors.customerName && (
+                    <p className="mb-1 text-xs text-destructive">
+                      {fieldErrors.customerName}
+                    </p>
+                  )}
+                  <input
+                    type="text"
+                    placeholder="Enter your name"
+                    value={customerName}
+                    onChange={(e) => {
+                      setCustomerName(e.target.value)
+                      clearFieldError('customerName')
+                    }}
+                    onBlur={() => clearFieldError('customerName')}
+                    className={cn(
+                      'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      fieldErrors.customerName
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-primary',
+                    )}
                   />
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium">
-                      City
-                    </label>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Email address
+                  </label>
+                  {fieldErrors.customerEmail && (
+                    <p className="mb-1 text-xs text-destructive">
+                      {fieldErrors.customerEmail}
+                    </p>
+                  )}
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    maxLength={254}
+                    placeholder="Enter your email address"
+                    value={customerEmail}
+                    onChange={(e) => {
+                      setCustomerEmail(e.target.value)
+                      clearFieldError('customerEmail')
+                    }}
+                    onBlur={() => clearFieldError('customerEmail')}
+                    className={cn(
+                      'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      fieldErrors.customerEmail
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-primary',
+                    )}
+                  />
+                </div>
 
-                    <input
-                      type="text"
-                      placeholder="City"
-                      value={city}
-                      onChange={(e) =>
-                        setCity(e.target.value)
-                      }
-                      className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium">
-                      Pincode
-                    </label>
-
-                    <input
-                      type="text"
-                      placeholder="Pincode"
-                      value={pincode}
-                      onChange={(e) =>
-                        setPincode(e.target.value)
-                      }
-                      className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
-                    />
-                  </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Phone number
+                  </label>
+                  {fieldErrors.phone && (
+                    <p className="mb-1 text-xs text-destructive">
+                      {fieldErrors.phone}
+                    </p>
+                  )}
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    pattern="[6-9][0-9]{9}"
+                    placeholder="Enter your phone number"
+                    value={phone}
+                    onChange={(e) => {
+                      setPhone(e.target.value)
+                      clearFieldError('phone')
+                    }}
+                    onBlur={() => clearFieldError('phone')}
+                    className={cn(
+                      'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      fieldErrors.phone
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-primary',
+                    )}
+                  />
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Date and time */}
-          <div className="rounded-2xl border bg-background p-6">
-            <h2 className="text-xl font-semibold">
-              Schedule your order
-            </h2>
+              <button
+                type="button"
+                onClick={() => setActiveStep('fulfilment')}
+                disabled={isSubmitting}
+                className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+              >
+                Continue <span aria-hidden="true">›</span>
+              </button>
+            </div>
+          )}
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Date
-                </label>
+          {/* Step: Fulfilment */}
+          {activeStep === 'fulfilment' && (
+            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-primary mb-1">
+                Delivery or pickup
+              </h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                How would you like to receive your order?
+              </p>
 
-                <input
-                  type="date"
-                  value={scheduledDate}
-                  onChange={(e) =>
-                    setScheduledDate(e.target.value)
-                  }
-                  className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Time slot
-                </label>
-
-                <select
-                  value={scheduledTime}
-                  onChange={(e) =>
-                    setScheduledTime(e.target.value)
-                  }
-                  className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setFulfilment('delivery')}
+                  className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${fulfilment === 'delivery' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
                 >
-                  <option>
-                    10:00 AM - 12:00 PM
-                  </option>
-                  <option>
-                    12:00 PM - 2:00 PM
-                  </option>
-                  <option>
-                    2:00 PM - 4:00 PM
-                  </option>
-                  <option>
-                    4:00 PM - 6:00 PM
-                  </option>
-                  <option>
-                    6:00 PM - 8:00 PM
-                  </option>
-                </select>
+                  <div className="font-semibold text-foreground">Delivery</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Deliver to my address
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFulfilment('pickup')}
+                  className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${fulfilment === 'pickup' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                >
+                  <div className="font-semibold text-foreground">Pickup</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Pick up from S.V. Bakery
+                  </div>
+                </button>
+              </div>
+
+              {fulfilment === 'delivery' && (
+                <div className="mt-6 grid gap-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-foreground">
+                      Address
+                    </label>
+                    {fieldErrors.addressLine && (
+                      <p className="mb-1 text-xs text-destructive">
+                        {fieldErrors.addressLine}
+                      </p>
+                    )}
+                    <textarea
+                      placeholder="Enter your complete delivery address"
+                      rows={4}
+                      value={addressLine}
+                      onChange={(e) => {
+                        setAddressLine(e.target.value)
+                        clearFieldError('addressLine')
+                      }}
+                      onBlur={() => clearFieldError('addressLine')}
+                      className={cn(
+                        'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                        fieldErrors.addressLine
+                          ? 'border-destructive focus:ring-destructive'
+                          : 'border-border focus:ring-primary',
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-foreground">
+                        City
+                      </label>
+                      {fieldErrors.city && (
+                        <p className="mb-1 text-xs text-destructive">
+                          {fieldErrors.city}
+                        </p>
+                      )}
+                      <input
+                        type="text"
+                        placeholder="City"
+                        value={city}
+                        onChange={(e) => {
+                          setCity(e.target.value)
+                          clearFieldError('city')
+                        }}
+                        onBlur={() => clearFieldError('city')}
+                        className={cn(
+                          'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                          fieldErrors.city
+                            ? 'border-destructive focus:ring-destructive'
+                            : 'border-border focus:ring-primary',
+                        )}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-foreground">
+                        Pincode
+                      </label>
+                      {fieldErrors.pincode && (
+                        <p className="mb-1 text-xs text-destructive">
+                          {fieldErrors.pincode}
+                        </p>
+                      )}
+                      <input
+                        type="text"
+                        placeholder="Pincode"
+                        value={pincode}
+                        onChange={(e) => {
+                          setPincode(e.target.value)
+                          clearFieldError('pincode')
+                        }}
+                        onBlur={() => clearFieldError('pincode')}
+                        className={cn(
+                          'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                          fieldErrors.pincode
+                            ? 'border-destructive focus:ring-destructive'
+                            : 'border-border focus:ring-primary',
+                        )}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-8 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveStep('details')}
+                  className="text-sm text-muted-foreground hover:text-foreground underline"
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveStep('schedule')}
+                  disabled={isSubmitting}
+                  className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                >
+                  Continue <span aria-hidden="true">›</span>
+                </button>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Payment */}
-          <div className="rounded-2xl border bg-background p-6">
-            <h2 className="text-xl font-semibold">
-              Payment method
-            </h2>
+          {/* Step: Schedule */}
+          {activeStep === 'schedule' && (
+            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-primary mb-1">
+                Schedule your order
+              </h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Choose when you&apos;d like to pick up or receive your order.
+              </p>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setPayment('cod')
-                  setPendingOnlineOrder(null)
-                }}
-                className={`rounded-xl border p-4 text-left ${
-                  payment === 'cod'
-                    ? 'border-primary bg-primary/5'
-                    : ''
-                }`}
-              >
-                <div className="font-semibold">
-                  Cash on Delivery
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Date
+                  </label>
+                  {fieldErrors.scheduledDate && (
+                    <p className="mb-1 text-xs text-destructive">
+                      {fieldErrors.scheduledDate}
+                    </p>
+                  )}
+                  <input
+                    type="date"
+                    value={scheduledDate}
+                    onChange={(e) => {
+                      setScheduledDate(e.target.value)
+                      clearFieldError('scheduledDate')
+                    }}
+                    className={cn(
+                      'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      fieldErrors.scheduledDate
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-primary',
+                    )}
+                  />
                 </div>
 
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Pay when your order arrives
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Time slot
+                  </label>
+                  <select
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 border-border focus:ring-primary"
+                  >
+                    <option>
+                      10:00 AM - 12:00 PM
+                    </option>
+                    <option>
+                      12:00 PM - 2:00 PM
+                    </option>
+                    <option>
+                      2:00 PM - 4:00 PM
+                    </option>
+                    <option>
+                      4:00 PM - 6:00 PM
+                    </option>
+                    <option>
+                      6:00 PM - 8:00 PM
+                    </option>
+                  </select>
                 </div>
-              </button>
+              </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setPayment('online')
-                }
-                className={`rounded-xl border p-4 text-left ${
-                  payment === 'online'
-                    ? 'border-primary bg-primary/5'
-                    : ''
-                }`}
-              >
-                <div className="font-semibold">
-                  Online Payment
-                </div>
-
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Pay securely via Razorpay — UPI,
-                  cards & netbanking
-                </div>
-              </button>
+              <div className="mt-8 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveStep('fulfilment')}
+                  className="text-sm text-muted-foreground hover:text-foreground underline"
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveStep('payment')}
+                  disabled={isSubmitting}
+                  className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                >
+                  Continue <span aria-hidden="true">›</span>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Step: Payment */}
+          {activeStep === 'payment' && (
+            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-primary mb-1">
+                Payment method
+              </h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Choose how you&apos;d like to pay.
+              </p>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPayment('cod')
+                    setPendingOnlineOrder(null)
+                  }}
+                  className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'cod' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                >
+                  <div className="font-semibold text-foreground">Cash on Delivery</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Pay when your order arrives
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPayment('online')}
+                  className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'online' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                >
+                  <div className="font-semibold text-foreground">Online Payment</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Pay securely via Razorpay — UPI,
+                    cards & netbanking
+                  </div>
+                </button>
+              </div>
+
+              <div className="mt-8 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveStep('schedule')}
+                  className="text-sm text-muted-foreground hover:text-foreground underline"
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveStep('summary')}
+                  disabled={isSubmitting}
+                  className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                >
+                  Continue <span aria-hidden="true">›</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step: Summary */}
+          {activeStep === 'summary' && (
+            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-primary mb-1">
+                Review your order
+              </h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Please review your order before placing it.
+              </p>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-start py-3 border-b border-border">
+                  <div>
+                    <p className="font-medium text-foreground">
+                      {fulfilment === 'delivery' ? 'Delivery' : 'Pickup'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {scheduledDate} · {scheduledTime}
+                    </p>
+                  </div>
+                  <p className="font-medium text-primary">
+                    {payment === 'online' ? 'Online Payment' : 'Cash on Delivery'}
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {pricing.lines.map((line) => (
+                    <div
+                      key={`${line.item.productId}-${line.item.variantId}`}
+                      className="flex justify-between gap-4"
+                    >
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {line.product.name}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {line.variant.label} ×{' '}
+                          {line.item.quantity}
+                        </p>
+                      </div>
+                      <p className="font-medium text-primary">
+                        {formatPrice(line.lineTotal)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="my-4 border-t border-border" />
+
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      Subtotal
+                    </span>
+                    <span>{formatPrice(pricing.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold text-primary">
+                    <span>Total</span>
+                    <span>{formatPrice(pricing.subtotal)}</span>
+                  </div>
+                </div>
+
+                {pendingOnlineOrder && (
+                  <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
+                    Order{' '}
+                    <span className="font-semibold">
+                      {pendingOnlineOrder}
+                    </span>{' '}
+                    is awaiting payment. Press the button
+                    below to pay — you will not be charged
+                    twice for the same order.
+                  </div>
+                )}
+
+                {error && (
+                  <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-8 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveStep('payment')}
+                  className="text-sm text-muted-foreground hover:text-foreground underline"
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={handlePlaceOrder}
+                  className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                >
+                  {isSubmitting
+                    ? payment === 'online'
+                      ? 'Processing Payment…'
+                      : 'Placing Order…'
+                    : pendingOnlineOrder
+                      ? 'Retry Payment'
+                      : payment === 'online'
+                        ? 'Place Order & Pay Online'
+                        : 'Place Order'}
+                </button>
+              </div>
+
+              <p className="mt-4 text-center text-xs text-muted-foreground">
+                Your order will be securely saved to our system.
+              </p>
+            </div>
+          )}
         </section>
 
-        {/* Order summary */}
-        <aside className="h-fit rounded-2xl border bg-background p-6 lg:sticky lg:top-6">
-          <h2 className="text-xl font-semibold">
+        {/* Order summary sidebar */}
+        <aside className="h-fit rounded-xl border border-border p-6 shadow-sm lg:sticky lg:top-6">
+          <h2 className="text-xl font-semibold text-primary">
             Order summary
           </h2>
 
@@ -765,61 +1110,47 @@ export default function CheckoutPage() {
                 className="flex justify-between gap-4"
               >
                 <div>
-                  <p className="font-medium">
+                  <p className="font-medium text-foreground line-clamp-1">
                     {line.product.name}
                   </p>
-
                   <p className="text-sm text-muted-foreground">
                     {line.variant.label} ×{' '}
                     {line.item.quantity}
                   </p>
                 </div>
-
-                <p className="font-medium">
-                  ₹
-                  {line.lineTotal.toLocaleString(
-                    'en-IN',
-                  )}
+                <p className="font-medium text-primary">
+                  {formatPrice(line.lineTotal)}
                 </p>
               </div>
             ))}
           </div>
 
-          <div className="my-6 border-t" />
+          <div className="my-6 border-t border-border" />
 
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-muted-foreground">
                 Subtotal
               </span>
-
-              <span>
-                ₹
-                {pricing.subtotal.toLocaleString(
-                  'en-IN',
-                )}
-              </span>
+              <span>{formatPrice(pricing.subtotal)}</span>
             </div>
-
-            <div className="flex justify-between text-lg font-semibold">
+            <div className="flex justify-between text-lg font-bold text-primary">
               <span>Total</span>
-
-              <span>
-                ₹
-                {pricing.subtotal.toLocaleString(
-                  'en-IN',
-                )}
-              </span>
+              <span>{formatPrice(pricing.subtotal)}</span>
             </div>
           </div>
 
+          <p className="mt-4 text-xs text-muted-foreground text-center">
+            Delivery is currently free on all orders.
+          </p>
+
           {pendingOnlineOrder && (
-            <div className="mt-5 rounded-lg border bg-muted/40 p-3 text-sm">
+            <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
               Order{' '}
               <span className="font-semibold">
                 {pendingOnlineOrder}
               </span>{' '}
-              is awaiting payment. Press the button
+              is awaiting payment. Press the pay button
               below to pay — you will not be charged
               twice for the same order.
             </div>
@@ -835,12 +1166,12 @@ export default function CheckoutPage() {
             type="button"
             disabled={isSubmitting}
             onClick={handlePlaceOrder}
-            className="mt-6 w-full rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-6 w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting
               ? payment === 'online'
-                ? 'Processing Payment...'
-                : 'Placing Order...'
+                ? 'Processing Payment…'
+                : 'Placing Order…'
               : pendingOnlineOrder
                 ? 'Retry Payment'
                 : payment === 'online'

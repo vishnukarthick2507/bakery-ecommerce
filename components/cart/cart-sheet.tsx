@@ -22,14 +22,14 @@ export function CartSheet() {
         side={isDesktop ? 'right' : 'bottom'}
         className={cn(
           'gap-0 p-0',
-          isDesktop ? 'w-full sm:max-w-md' : 'max-h-[85dvh] rounded-t-2xl',
+          isDesktop ? 'w-full sm:max-w-md' : 'max-h-[85dvh] rounded-t-xl',
         )}
       >
         {!isDesktop && (
           <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-border" aria-hidden="true" />
         )}
-        <SheetHeader className="border-b px-5 py-4">
-          <SheetTitle className="font-heading text-xl">Your cart</SheetTitle>
+        <SheetHeader className="border-b border-border px-5 py-4">
+          <SheetTitle className="font-heading text-xl text-primary">Your cart</SheetTitle>
           <SheetDescription>
             {count === 0 ? 'No items yet' : `${count} ${count === 1 ? 'item' : 'items'}`}
           </SheetDescription>
@@ -46,20 +46,20 @@ export function CartSheet() {
                 <CartLine key={`${line.item.productId}-${line.item.variantId}`} line={line} onNavigate={close} />
               ))}
             </ul>
-            <SheetFooter className="gap-3 border-t bg-cream px-5 py-4">
+            <SheetFooter className="gap-3 border-t border-border px-5 py-4">
               <p className="text-xs text-muted-foreground">
                 Delivery is currently free on all orders.
               </p>
               {pricing.savings > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">You save</span>
-                  <span className="font-medium text-success">{formatPrice(pricing.savings)}</span>
+                  <span className="font-medium text-primary">{formatPrice(pricing.savings)}</span>
                 </div>
               )}
               <Separator />
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-2">
                 <span className="font-medium">Subtotal</span>
-                <span className="text-lg font-semibold">{formatPrice(pricing.subtotal)}</span>
+                <span className="text-lg font-bold text-primary">{formatPrice(pricing.subtotal)}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Link href="/cart" onClick={close} className={buttonVariants({ variant: 'outline', size: 'xl' })}>

@@ -44,12 +44,12 @@ export default async function ProductPage({
   } catch {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-        <div className="rounded-2xl border bg-background p-10 text-center shadow-sm">
+        <div className="rounded-xl border border-border bg-background p-10 text-center shadow-sm">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted text-3xl">
             ⚠️
           </div>
 
-          <h1 className="mt-6 text-3xl font-semibold">
+          <h1 className="mt-6 text-3xl font-semibold text-primary">
             Something went wrong
           </h1>
 

@@ -13,7 +13,7 @@ export function Rating({
 }) {
   return (
     <div className={cn('flex items-center gap-1 text-sm', className)}>
-      <StarIcon className="size-4 fill-caramel text-caramel" aria-hidden="true" />
+      <StarIcon className="size-4 fill-primary text-primary" aria-hidden="true" />
       <span className="font-medium">{value.toFixed(1)}</span>
       {count !== undefined && <span className="text-muted-foreground">({count})</span>}
       <span className="sr-only">
@@ -30,7 +30,7 @@ export function StarRow({ value }: { value: number }) {
         <StarIcon
           key={i}
           aria-hidden="true"
-          className={cn('size-4', i < Math.round(value) ? 'fill-caramel text-caramel' : 'text-border')}
+          className={cn('size-4', i < Math.round(value) ? 'fill-primary text-primary' : 'text-border')}
         />
       ))}
     </div>
@@ -58,7 +58,7 @@ export function Price({
             <span className="sr-only">Original price </span>
             {formatPrice(mrp)}
           </span>
-          <span className="text-sm font-semibold text-success">{off}% off</span>
+          <span className="text-sm font-semibold text-primary">{off}% off</span>
         </>
       )}
     </div>

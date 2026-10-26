@@ -29,7 +29,7 @@ export function AvailabilityBadge({
       )
     case 'SOLD_OUT':
       return (
-        <Badge variant="muted" className={className}>
+        <Badge variant="secondary" className={className}>
           <CircleSlashIcon data-icon="inline-start" />
           {label}
         </Badge>

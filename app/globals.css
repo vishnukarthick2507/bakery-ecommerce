@@ -67,8 +67,8 @@
   --secondary-foreground: #16324F;
   --muted: #F5F9FC;
   --muted-foreground: #526779;
-  --accent: #E3EFF7;
-  --accent-foreground: #16324F;
+  --accent: #2D6FA3;
+  --accent-foreground: #ffffff;
   --destructive: #a91f31;
   --border: #D9E6F2;
   --input: #C6D9E8;
@@ -95,8 +95,6 @@
   --sidebar-ring: #2D6FA3;
 }
 
-
-
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -116,7 +114,7 @@
   z-index: 9999;
   display: grid;
   place-items: center;
-  background: #2a1115;
+  background: #0B2744;
   animation: opening-intro-exit 700ms ease 1900ms forwards;
 }
 
@@ -125,7 +123,7 @@
   width: min(100vw, 560px);
   height: min(100vh, 760px);
   overflow: hidden;
-  background: #2a1115;
+  background: #0B2744;
   animation: opening-intro-card 2600ms cubic-bezier(.22, 1, .36, 1) forwards;
 }
 
@@ -141,9 +139,9 @@
   background:
     linear-gradient(
       to bottom,
-      rgba(42, 17, 21, 0.2),
-      rgba(42, 17, 21, 0.35) 45%,
-      rgba(42, 17, 21, 0.9)
+      rgba(11, 39, 68, 0.18),
+      rgba(11, 39, 68, 0.38) 45%,
+      rgba(11, 39, 68, 0.92)
     );
 }
 
@@ -297,45 +295,3 @@
     pointer-events: none;
   }
 }
-
-/* S.V. BAKERY BLUE & WHITE THEME */
-:root {
-  --primary: 213 70% 24%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 208 65% 95%;
-  --secondary-foreground: 213 70% 24%;
-  --accent: 207 56% 41%;
-  --accent-foreground: 0 0% 100%;
-  --background: 0 0% 100%;
-  --foreground: 210 50% 20%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 20% 45%;
-  --border: 207 35% 88%;
-  --input: 207 35% 88%;
-  --ring: 207 56% 41%;
-  --card: 0 0% 100%;
-  --card-foreground: 210 50% 20%;
-}
-
-body {
-  background: #ffffff;
-  color: #16324f;
-}
-
-.opening-intro {
-  background: #0b2744;
-}
-
-.opening-intro__overlay {
-  background: linear-gradient(
-    to bottom,
-    rgba(11, 39, 68, 0.18),
-    rgba(11, 39, 68, 0.38) 45%,
-    rgba(11, 39, 68, 0.92)
-  );
-}
-
-/* S.V. BAKERY BLUE WHITE THEME */
-:root { --primary: 213 70% 24%; --primary-foreground: 0 0% 100%; --secondary: 210 60% 96%; --secondary-foreground: 213 70% 24%; --accent: 207 65% 42%; --accent-foreground: 0 0% 100%; --background: 0 0% 100%; --foreground: 213 45% 18%; --muted: 210 40% 96%; --muted-foreground: 215 20% 45%; --border: 210 30% 88%; --input: 210 30% 88%; --ring: 207 65% 42%; --card: 0 0% 100%; --card-foreground: 213 45% 18%; }
-html,body { background:#fff; color:#16324f; }
-header { background-color:#fff !important; border-color:#d9e6f2 !important; }.opening-intro { background:#0B2744 !important; }.opening-intro__overlay { background:linear-gradient(to bottom,rgba(11,39,68,.12),rgba(11,39,68,.35) 45%,rgba(11,39,68,.92)) !important; }

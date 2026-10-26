@@ -14,20 +14,20 @@ export function CartLine({ line, onNavigate }: { line: PricedLine; onNavigate?: 
   const { product, variant, item, lineTotal } = line
 
   return (
-    <li className="flex gap-3 py-4">
-      <div className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-cream">
-        <Image src={product.image || '/placeholder.svg'} alt="" fill sizes="80px" className="object-cover" />
+    <li className="flex gap-4 py-4 border-b border-border last:border-0">
+      <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+        <Image src={product.image || '/placeholder.svg'} alt={product.name} fill sizes="64px" className="object-cover" />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
           <Link
             href={`/products/${product.slug}`}
             onClick={onNavigate}
-            className="text-sm leading-snug font-semibold hover:underline"
+            className="text-sm leading-snug font-semibold text-foreground hover:text-primary transition-colors"
           >
             {product.name}
           </Link>
-          <span className="text-sm font-semibold">{formatPrice(lineTotal)}</span>
+          <span className="text-sm font-semibold text-primary">{formatPrice(lineTotal)}</span>
         </div>
         <p className="text-xs text-muted-foreground">
           {variant.label} · {formatPrice(variant.price)} each
@@ -40,12 +40,13 @@ export function CartLine({ line, onNavigate }: { line: PricedLine; onNavigate?: 
             Only {product.stock} available. Reduce the quantity to continue.
           </p>
         )}
-        <div className="mt-1 flex items-center justify-between">
+        <div className="mt-2 flex items-end gap-4">
           <div className="flex items-center rounded-lg border" role="group" aria-label={`Quantity for ${product.name}`}>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => updateQuantity(item.productId, item.variantId, item.quantity - 1)}
+              disabled={item.quantity <= 1}
               aria-label="Decrease quantity"
             >
               <MinusIcon />

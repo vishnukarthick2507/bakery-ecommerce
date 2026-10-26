@@ -2,6 +2,8 @@ import { OpeningIntro } from '@/components/home/opening-intro'
 import { Hero } from '@/components/home/hero'
 import { CategoriesSection } from '@/components/home/categories-section'
 import { AvailableNowRail } from '@/components/home/product-rail'
+import { OffersSection } from '@/components/home/offers-section'
+import { ReviewsSection } from '@/components/home/reviews-section'
 import { CustomCakeSection } from '@/components/home/custom-cake-section'
 import { ContactBlock } from '@/components/contact/contact-block'
 import { Section, SectionHeading } from '@/components/section-heading'
@@ -24,6 +26,8 @@ export default async function HomePage() {
         emptyTitle="Nothing on the shelf right now"
         emptyDescription="Our next batch is in the oven. Pre-order to reserve yours."
       />
+      <OffersSection />
+      <ReviewsSection />
       <CustomCakeSection />
       <Section labelledBy="contact-title" className="bg-secondary">
         <SectionHeading id="contact-title" eyebrow="Visit us" title="Find the bakery" />

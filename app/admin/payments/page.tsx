@@ -59,7 +59,7 @@ function AdminPaymentsPage() {
         </Link>
         <div className="mt-3 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <h1 className="text-3xl font-bold">Payments &amp; Transactions</h1>
+            <h1 className="text-3xl font-bold text-primary">Payments &amp; Transactions</h1>
             <p className="mt-2 text-muted-foreground">
               Payment records attached to real customer orders.
             </p>
@@ -71,7 +71,7 @@ function AdminPaymentsPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Order or Razorpay ID"
-              className="h-11 rounded-lg border bg-background px-3 font-normal outline-none focus:ring-2"
+              className="h-11 rounded-lg border border-border bg-white px-3 font-normal outline-none focus:ring-2 focus:ring-primary"
             />
           </label>
         </div>
@@ -83,12 +83,12 @@ function AdminPaymentsPage() {
         )}
 
         {loading ? (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
+          <div className="mt-8 rounded-xl border border-border p-10 text-center">
             Loading payment records...
           </div>
         ) : !error && payments.length === 0 ? (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
-            <h2 className="text-xl font-semibold">
+          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+            <h2 className="text-xl font-semibold text-primary">
               {orders.length === 0 ? 'No payment records yet' : 'No matching records'}
             </h2>
             <p className="mt-2 text-muted-foreground">
@@ -98,28 +98,28 @@ function AdminPaymentsPage() {
             </p>
           </div>
         ) : !error ? (
-          <div className="mt-8 divide-y rounded-xl border bg-background">
+          <div className="mt-8 divide-y divide-border rounded-xl border border-border bg-white shadow-sm">
             {payments.map((payment) => (
               <article key={payment.orderNumber} className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-5">
                 <div>
-                  <h2 className="font-semibold">{payment.orderNumber}</h2>
+                  <h2 className="font-semibold text-primary">{payment.orderNumber}</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {new Date(payment.createdAt).toLocaleString('en-IN')}
                   </p>
                 </div>
                 <p className="text-sm">
                   <span className="block text-muted-foreground">Amount</span>
-                  <span className="mt-1 block font-semibold">₹{payment.totalAmount.toLocaleString('en-IN')}</span>
+                  <span className="mt-1 block font-semibold text-primary">₹{payment.totalAmount.toLocaleString('en-IN')}</span>
                 </p>
                 <p className="text-sm">
                   <span className="block text-muted-foreground">Method</span>
-                  <span className="mt-1 block font-medium">
+                  <span className="mt-1 block font-medium text-primary">
                     {payment.paymentMethod === 'COD' ? 'Cash on Delivery' : 'Razorpay'}
                   </span>
                 </p>
                 <p className="text-sm">
                   <span className="block text-muted-foreground">Payment status</span>
-                  <span className="mt-1 block font-medium">{payment.paymentStatus}</span>
+                  <span className="mt-1 block font-medium text-primary">{payment.paymentStatus}</span>
                 </p>
                 <div className="min-w-0 text-xs text-muted-foreground">
                   {payment.razorpayOrderId && (

@@ -17,14 +17,12 @@ export default function AdminLoginPage() {
     setLoading(true)
 
     try {
-      // Use relative path - Next.js rewrites will proxy to backend
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       })
 
-      // Safely parse JSON - handle non-JSON responses
       let data
       const contentType = response.headers.get('content-type')
       if (contentType && contentType.includes('application/json')) {
@@ -38,7 +36,6 @@ export default function AdminLoginPage() {
         throw new Error(data.message || 'Login failed')
       }
 
-      // Store token in localStorage
       localStorage.setItem('admin-token', data.token)
       localStorage.setItem('admin-user', JSON.stringify(data.admin))
 
@@ -54,16 +51,14 @@ export default function AdminLoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/20 px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold">Admin Login</h1>
-          <p className="mt-2 text-muted-foreground">
-            S.V. Bakery Admin
-          </p>
+          <h1 className="text-3xl font-bold text-primary">Admin Login</h1>
+          <p className="mt-2 text-muted-foreground">S.V. Bakery Admin</p>
         </div>
 
-        <div className="rounded-2xl border bg-background p-8 shadow-sm">
+        <div className="rounded-xl border border-border bg-white p-8 shadow-sm">
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="mb-2 block text-sm font-medium">
+              <label className="mb-2 block text-sm font-medium text-foreground">
                 Username
               </label>
               <input
@@ -71,13 +66,13 @@ export default function AdminLoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter username"
-                className="w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                 required
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">
+              <label className="mb-2 block text-sm font-medium text-foreground">
                 Password
               </label>
               <input
@@ -85,13 +80,13 @@ export default function AdminLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"
-                className="w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                 required
               />
             </div>
 
             {error && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                 {error}
               </div>
             )}
@@ -99,9 +94,9 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60 hover:opacity-90"
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Logging in…' : 'Login'}
             </button>
           </form>
 

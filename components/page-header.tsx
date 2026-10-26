@@ -33,7 +33,7 @@ export function PageHeader({
             </ol>
           </nav>
         )}
-        <h1 className="text-3xl font-bold text-burgundy sm:text-4xl">{title}</h1>
+        <h1 className="text-3xl font-bold text-primary sm:text-4xl">{title}</h1>
         {description && <p className="max-w-2xl text-pretty text-muted-foreground">{description}</p>}
       </div>
     </div>

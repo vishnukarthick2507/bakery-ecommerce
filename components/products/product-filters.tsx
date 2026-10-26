@@ -63,7 +63,7 @@ function CheckboxList<T extends string>({
               checked={selected.includes(o.value)}
               onCheckedChange={(checked) => onChange(toggle(selected, o.value, checked === true))}
             />
-            <FieldLabel htmlFor={`${idPrefix}-${o.value}`} className="font-normal">
+            <FieldLabel htmlFor={`${idPrefix}-${o.value}`} className="font-normal text-sm">
               {o.label}
             </FieldLabel>
           </Field>

@@ -108,9 +108,9 @@ function AdminInventoryPage() {
         </Link>
         <div className="mt-3 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <h1 className="text-3xl font-bold">Inventory</h1>
+            <h1 className="text-3xl font-bold text-primary">Inventory</h1>
             <p className="mt-2 text-muted-foreground">
-              Stock and availability are saved to the shared product catalogue. Low-stock alerts need a configured threshold.
+              Stock and availability are saved to the shared product catalogue.
             </p>
           </div>
           <div className="flex gap-2">
@@ -120,13 +120,13 @@ function AdminInventoryPage() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search products"
               aria-label="Search products"
-              className="h-11 rounded-lg border bg-background px-3 outline-none focus:ring-2"
+              className="h-11 rounded-lg border border-border bg-white px-3 outline-none focus:ring-2 focus:ring-primary"
             />
             <button
               type="button"
               onClick={fetchProducts}
               disabled={loading}
-              className="h-11 rounded-lg border bg-background px-4 text-sm font-medium hover:bg-muted disabled:opacity-60"
+              className="h-11 rounded-lg border border-border bg-white px-4 text-sm font-medium hover:bg-muted disabled:opacity-60"
             >
               Refresh
             </button>
@@ -139,23 +139,23 @@ function AdminInventoryPage() {
           </div>
         )}
         {message && (
-          <p className="mt-4 text-sm text-success" role="status">{message}</p>
+          <p className="mt-4 text-sm text-primary" role="status">{message}</p>
         )}
 
         {loading ? (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">Loading inventory...</div>
+          <div className="mt-8 rounded-xl border border-border p-10 text-center">Loading inventory...</div>
         ) : !error && filteredProducts.length === 0 ? (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
-            <h2 className="text-xl font-semibold">No matching products</h2>
+          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+            <h2 className="text-xl font-semibold text-primary">No matching products</h2>
           </div>
         ) : !error ? (
-          <div className="mt-8 divide-y rounded-xl border bg-background">
+          <div className="mt-8 divide-y divide-border rounded-xl border border-border bg-white shadow-sm">
             {filteredProducts.map((product) => {
               const outOfStock = product.stock <= 0 || product.availability === 'OUT_OF_STOCK'
               return (
                 <article key={product._id} className="grid items-center gap-4 p-5 sm:grid-cols-[1fr_auto_auto_auto]">
                   <div>
-                    <h2 className="font-semibold">{product.name}</h2>
+                    <h2 className="font-semibold text-primary">{product.name}</h2>
                     <p className="mt-1 text-sm text-muted-foreground">{product.category}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {!product.active || product.availability === 'DISABLED'
@@ -167,7 +167,7 @@ function AdminInventoryPage() {
                   </div>
                   <p className="text-sm">
                     <span className="block text-muted-foreground">Current stock</span>
-                    <span className="mt-1 block font-semibold">{product.stock}</span>
+                    <span className="mt-1 block font-semibold text-primary">{product.stock}</span>
                   </p>
                   <label className="grid gap-1 text-sm font-medium">
                     Set stock
@@ -180,7 +180,7 @@ function AdminInventoryPage() {
                         ...current,
                         [product._id]: event.target.value,
                       }))}
-                      className="h-10 w-28 rounded-lg border bg-background px-3 outline-none focus:ring-2"
+                      className="h-10 w-28 rounded-lg border border-border bg-white px-3 outline-none focus:ring-2 focus:ring-primary"
                     />
                   </label>
                   <button

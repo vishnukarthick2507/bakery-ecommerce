@@ -64,11 +64,11 @@ export function ProductsBrowser({
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[260px_1fr]">
+    <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
       <aside aria-label="Filters" className="hidden lg:block">
         <div className="sticky top-24 flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-sans text-base font-semibold">Filters</h2>
+            <h2 className="font-sans text-base font-semibold text-primary">Filters</h2>
             {activeCount > 0 && (
               <Button variant="link" size="sm" onClick={() => setFilters(defaultFilterState)}>
                 Clear all
@@ -81,9 +81,9 @@ export function ProductsBrowser({
 
       <div className="flex min-w-0 flex-col gap-5">
         <div className="flex flex-col gap-3 sm:flex-row">
-          <InputGroup className="h-11 flex-1 bg-card">
-            <InputGroupAddon>
-              <SearchIcon />
+          <InputGroup className="h-11 flex-1 bg-card border border-border">
+            <InputGroupAddon className="bg-transparent">
+              <SearchIcon className="size-4 text-muted-foreground" />
             </InputGroupAddon>
             <InputGroupInput
               type="search"
@@ -91,11 +91,12 @@ export function ProductsBrowser({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Search products"
+              className="bg-transparent"
             />
             {search && (
               <InputGroupAddon align="inline-end">
                 <InputGroupButton size="icon-xs" onClick={() => setSearch('')} aria-label="Clear search">
-                  <XIcon />
+                  <XIcon className="size-4" />
                 </InputGroupButton>
               </InputGroupAddon>
             )}
@@ -110,8 +111,12 @@ export function ProductsBrowser({
               <SlidersHorizontalIcon data-icon="inline-start" />
               Filters{activeCount > 0 ? ` (${activeCount})` : ''}
             </Button>
-            <Select items={sortItems} value={sort} onValueChange={(v) => v && setSort(v as SortOption)}>
-              <SelectTrigger className="h-11! flex-1 bg-card sm:w-52" aria-label="Sort products">
+            <Select
+              items={sortItems}
+              value={sort}
+              onValueChange={(v) => v && setSort(v as SortOption)}
+            >
+              <SelectTrigger className="h-11! flex-1 bg-card sm:w-52 border border-border" aria-label="Sort products">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -138,14 +143,14 @@ export function ProductsBrowser({
         {isLoading ? (
           <ProductGridSkeleton count={6} className="lg:grid-cols-3" />
         ) : error ? (
-          <Empty className="border border-dashed bg-card">
+          <Empty className="border border-dashed border-border bg-card rounded-2xl p-8 text-center">
             <EmptyHeader>
               <EmptyMedia variant="icon">
-                <TriangleAlertIcon />
+                <TriangleAlertIcon className="text-muted-foreground" />
               </EmptyMedia>
-              <EmptyTitle>Couldn&apos;t load products</EmptyTitle>
+              <EmptyTitle>Couldn't load products</EmptyTitle>
               <EmptyDescription>
-                We couldn&apos;t reach the store server. Please try again in a moment.
+                We couldn't reach the store server. Please try again in a moment.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
@@ -157,14 +162,14 @@ export function ProductsBrowser({
             <ProductGrid products={data} className="lg:grid-cols-3" />
           </div>
         ) : (
-          <Empty className="border border-dashed bg-card">
+          <Empty className="border border-dashed border-border bg-card rounded-2xl p-8 text-center">
             <EmptyHeader>
               <EmptyMedia variant="icon">
-                <SearchXIcon />
+                <SearchXIcon className="text-muted-foreground" />
               </EmptyMedia>
               <EmptyTitle>No products match</EmptyTitle>
               <EmptyDescription>
-                Try a different search term or remove a filter. Can&apos;t find what you need? Ask us about a
+                Try a different search term or remove a filter. Can't find what you need? Ask us about a
                 custom order.
               </EmptyDescription>
             </EmptyHeader>
@@ -177,13 +182,13 @@ export function ProductsBrowser({
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="max-h-[85dvh] gap-0 rounded-t-2xl p-0">
-          <SheetHeader className="border-b px-5 py-4">
-            <SheetTitle className="font-heading text-xl">Filters</SheetTitle>
+          <SheetHeader className="border-b border-border px-5 py-4">
+            <SheetTitle className="font-heading text-xl text-primary">Filters</SheetTitle>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-5 py-5">
             <ProductFiltersPanel value={filters} onChange={setFilters} idPrefix="mob" categoryOptions={categoryOptions} />
           </div>
-          <SheetFooter className="grid grid-cols-2 gap-2 border-t px-5 py-4">
+          <SheetFooter className="grid grid-cols-2 gap-2 border-t border-border px-5 py-4">
             <Button variant="outline" size="xl" onClick={() => setFilters(defaultFilterState)}>
               Clear all
             </Button>

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCart } from '@/components/cart/cart-provider'
+import { formatPrice } from '@/lib/format'
 
 export default function CartPage() {
   const {
@@ -15,9 +16,9 @@ export default function CartPage() {
   if (!hydrated) {
     return (
       <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6">
-        <div className="rounded-2xl border bg-background p-10 text-center">
+        <div className="rounded-xl border border-border p-10 text-center">
           <p className="text-muted-foreground">
-            Loading your cart...
+            Loading your cart…
           </p>
         </div>
       </main>
@@ -27,18 +28,17 @@ export default function CartPage() {
   if (items.length === 0) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-        <div className="rounded-2xl border bg-background p-10 text-center shadow-sm">
+        <div className="rounded-xl border border-border p-10 text-center shadow-sm">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted text-3xl">
             🛒
           </div>
 
-          <h1 className="mt-6 text-3xl font-semibold">
+          <h1 className="mt-6 text-3xl font-semibold text-primary">
             Your cart is empty
           </h1>
 
           <p className="mt-3 text-muted-foreground">
-            Add some delicious items from S.V. Bakery before
-            checking out.
+            Add some delicious items from S.V. Bakery before checking out.
           </p>
 
           <Link
@@ -63,7 +63,7 @@ export default function CartPage() {
           ← Continue Shopping
         </Link>
 
-        <h1 className="mt-3 text-4xl font-semibold">
+        <h1 className="mt-3 text-3xl font-semibold text-primary">
           Your Cart
         </h1>
 
@@ -75,14 +75,14 @@ export default function CartPage() {
 
       <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
         {/* Cart items */}
-        <section className="rounded-2xl border bg-background shadow-sm">
-          <div className="border-b px-6 py-5">
-            <h2 className="text-xl font-semibold">
+        <section className="rounded-xl border border-border shadow-sm">
+          <div className="border-b border-border px-6 py-5">
+            <h2 className="text-xl font-semibold text-primary">
               Cart Items
             </h2>
           </div>
 
-          <div className="divide-y">
+          <div className="divide-y divide-border">
             {pricing.lines.map((line) => {
               const product = line.product
               const variant = line.variant
@@ -95,7 +95,7 @@ export default function CartPage() {
                 >
                   <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
                     {/* Product image */}
-                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                       {product.image ? (
                         <img
                           src={product.image}
@@ -103,7 +103,7 @@ export default function CartPage() {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <span className="text-3xl">
+                        <span className="text-2xl">
                           🍰
                         </span>
                       )}
@@ -113,7 +113,7 @@ export default function CartPage() {
                     <div className="min-w-0 flex-1">
                       <Link
                         href={`/products/${product.slug}`}
-                        className="text-lg font-semibold hover:underline"
+                        className="text-base font-semibold text-foreground hover:text-primary transition-colors"
                       >
                         {product.name}
                       </Link>
@@ -122,12 +122,8 @@ export default function CartPage() {
                         {product.category}
                       </p>
 
-                      <p className="mt-2 text-sm text-muted-foreground">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {variant.label}
-                      </p>
-
-                      <p className="mt-2 font-medium">
-                        ₹{variant.price.toLocaleString('en-IN')}
                       </p>
                     </div>
 
@@ -142,7 +138,8 @@ export default function CartPage() {
                             quantity - 1,
                           )
                         }
-                        className="flex h-9 w-9 items-center justify-center rounded-lg border text-lg hover:bg-muted"
+                        disabled={quantity <= 1}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg border text-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
                         aria-label={`Decrease ${product.name} quantity`}
                       >
                         −
@@ -162,7 +159,7 @@ export default function CartPage() {
                           )
                         }
                         disabled={quantity >= 20}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg border text-lg hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg border text-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
                         aria-label={`Increase ${product.name} quantity`}
                       >
                         +
@@ -171,8 +168,8 @@ export default function CartPage() {
 
                     {/* Price and remove */}
                     <div className="text-left sm:text-right">
-                      <p className="font-semibold">
-                        ₹{line.lineTotal.toLocaleString('en-IN')}
+                      <p className="font-semibold text-primary">
+                        {formatPrice(line.lineTotal)}
                       </p>
 
                       <button
@@ -196,8 +193,8 @@ export default function CartPage() {
         </section>
 
         {/* Order summary */}
-        <aside className="h-fit rounded-2xl border bg-background p-6 shadow-sm lg:sticky lg:top-6">
-          <h2 className="text-xl font-semibold">
+        <aside className="h-fit rounded-xl border border-border p-6 shadow-sm lg:sticky lg:top-6">
+          <h2 className="text-xl font-semibold text-primary">
             Order Summary
           </h2>
 
@@ -208,7 +205,7 @@ export default function CartPage() {
               </span>
 
               <span className="font-medium">
-                ₹{pricing.subtotal.toLocaleString('en-IN')}
+                {formatPrice(pricing.subtotal)}
               </span>
             </div>
 
@@ -218,20 +215,20 @@ export default function CartPage() {
                   Savings
                 </span>
 
-                <span className="font-medium text-green-600">
-                  −₹{pricing.savings.toLocaleString('en-IN')}
+                <span className="font-medium text-primary">
+                  −{formatPrice(pricing.savings)}
                 </span>
               </div>
             )}
 
-            <div className="border-t pt-4">
+            <div className="border-t border-border pt-4">
               <div className="flex justify-between gap-4">
                 <span className="font-semibold">
                   Total
                 </span>
 
-                <span className="text-xl font-bold">
-                  ₹{pricing.subtotal.toLocaleString('en-IN')}
+                <span className="text-xl font-bold text-primary">
+                  {formatPrice(pricing.subtotal)}
                 </span>
               </div>
             </div>
@@ -246,7 +243,7 @@ export default function CartPage() {
 
           <Link
             href="/products"
-            className="mt-3 flex w-full items-center justify-center rounded-lg border px-6 py-3 font-medium hover:bg-muted"
+            className="mt-3 flex w-full items-center justify-center rounded-lg border border-border px-6 py-3 font-medium hover:bg-muted"
           >
             Continue Shopping
           </Link>

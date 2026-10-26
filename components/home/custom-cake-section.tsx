@@ -14,7 +14,7 @@ const steps = [
 
 export function CustomCakeSection() {
   return (
-    <section aria-labelledby="custom-cake-title" className="bg-burgundy text-white">
+    <section aria-labelledby="custom-cake-title" className="bg-primary text-white">
       <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 md:grid-cols-2 md:py-16 lg:gap-14">
         <div className="relative order-last aspect-[4/3] overflow-hidden rounded-3xl md:order-first">
           <Image
@@ -26,7 +26,7 @@ export function CustomCakeSection() {
           />
         </div>
         <div className="flex flex-col gap-5">
-          <p className="w-fit rounded-full bg-caramel px-3 py-1 text-xs font-semibold tracking-widest text-caramel-foreground uppercase">
+          <p className="w-fit rounded-full bg-primary px-3 py-1 text-xs font-semibold tracking-widest text-primary-foreground uppercase">
             Custom cakes
           </p>
           <h2 id="custom-cake-title" className="text-3xl font-bold sm:text-4xl">

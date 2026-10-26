@@ -106,7 +106,7 @@ function AdminCustomersPage() {
         </Link>
         <div className="mt-3 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <h1 className="text-3xl font-bold">Customers</h1>
+            <h1 className="text-3xl font-bold text-primary">Customers</h1>
             <p className="mt-2 text-muted-foreground">
               Customers are listed from existing orders. Paid totals include paid orders only.
             </p>
@@ -118,7 +118,7 @@ function AdminCustomersPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Name or phone number"
-              className="h-11 rounded-lg border bg-background px-3 font-normal outline-none focus:ring-2"
+              className="h-11 rounded-lg border border-border bg-white px-3 font-normal outline-none focus:ring-2 focus:ring-primary"
             />
           </label>
         </div>
@@ -130,12 +130,12 @@ function AdminCustomersPage() {
         )}
 
         {loading ? (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
+          <div className="mt-8 rounded-xl border border-border p-10 text-center">
             Loading customers...
           </div>
         ) : !error && customers.length === 0 ? (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
-            <h2 className="text-xl font-semibold">
+          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+            <h2 className="text-xl font-semibold text-primary">
               {orders.length === 0 ? 'No customers yet' : 'No matching customers'}
             </h2>
             <p className="mt-2 text-muted-foreground">
@@ -145,26 +145,26 @@ function AdminCustomersPage() {
             </p>
           </div>
         ) : !error ? (
-          <div className="mt-8 divide-y rounded-xl border bg-background">
+          <div className="mt-8 divide-y divide-border rounded-xl border border-border bg-white shadow-sm">
             {customers.map((customer) => (
               <article key={customer.phone} className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <h2 className="font-semibold">{customer.name}</h2>
+                  <h2 className="font-semibold text-primary">{customer.name}</h2>
                   <a className="mt-1 text-sm text-muted-foreground hover:underline" href={`tel:${customer.phone}`}>
                     {customer.phone}
                   </a>
                 </div>
                 <p className="text-sm">
                   <span className="block text-muted-foreground">Orders</span>
-                  <span className="mt-1 block font-medium">{customer.orderCount}</span>
+                  <span className="mt-1 block font-medium text-primary">{customer.orderCount}</span>
                 </p>
                 <p className="text-sm">
                   <span className="block text-muted-foreground">Paid total</span>
-                  <span className="mt-1 block font-medium">₹{customer.paidTotal.toLocaleString('en-IN')}</span>
+                  <span className="mt-1 block font-medium text-primary">₹{customer.paidTotal.toLocaleString('en-IN')}</span>
                 </p>
                 <div className="text-sm">
                   <span className="block text-muted-foreground">Latest order</span>
-                  <span className="mt-1 block font-medium">
+                  <span className="mt-1 block font-medium text-primary">
                     {new Date(customer.latestOrder).toLocaleDateString('en-IN')}
                   </span>
                   {customer.address && (

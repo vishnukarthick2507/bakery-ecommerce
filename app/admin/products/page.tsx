@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 
 import { withAdminAuth } from '@/components/admin/admin-auth'
 
@@ -68,6 +69,29 @@ function createSlug(name: string) {
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+function availabilityBadge(availability: Availability, active: boolean) {
+  if (!active) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+        Disabled
+      </span>
+    )
+  }
+  const isAvailable = availability === 'AVAILABLE'
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold',
+        isAvailable
+          ? 'border-primary/20 bg-primary/10 text-primary'
+          : 'border-border/50 bg-muted text-muted-foreground',
+      )}
+    >
+      {formatAvailability(availability)}
+    </span>
+  )
 }
 
 function AdminProductsPage() {
@@ -246,8 +270,6 @@ function AdminProductsPage() {
         preparationTime,
         availability:
           form.availability,
-        // Never reactivate implicitly: `active` is only
-        // sent when creating a new product.
         ...(editingProduct
           ? {}
           : { active: true }),
@@ -496,7 +518,7 @@ function AdminProductsPage() {
               ← Back to Dashboard
             </Link>
 
-            <h1 className="mt-3 text-3xl font-bold">
+            <h1 className="mt-3 text-3xl font-bold text-primary">
               Products
             </h1>
 
@@ -510,7 +532,7 @@ function AdminProductsPage() {
               type="button"
               onClick={fetchProducts}
               disabled={loading}
-              className="rounded-lg border bg-background px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
             >
               {loading
                 ? 'Refreshing...'
@@ -536,10 +558,10 @@ function AdminProductsPage() {
 
         {/* Add / Edit form */}
         {showForm && (
-          <section className="mt-8 rounded-2xl border bg-background p-6 shadow-sm sm:p-8">
+          <section className="mt-8 rounded-xl border border-border bg-white p-6 shadow-sm sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold">
+                <h2 className="text-2xl font-bold text-primary">
                   {editingProduct
                     ? 'Edit Product'
                     : 'Add Product'}
@@ -556,7 +578,7 @@ function AdminProductsPage() {
                 type="button"
                 onClick={closeForm}
                 disabled={saving}
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-60"
+                className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-muted disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -568,7 +590,7 @@ function AdminProductsPage() {
             >
               {/* Name */}
               <div>
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium text-foreground">
                   Product Name *
                 </label>
 
@@ -588,14 +610,14 @@ function AdminProductsPage() {
                     }))
                   }}
                   placeholder="Red Velvet Cake"
-                  className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                   required
                 />
               </div>
 
               {/* Slug */}
               <div>
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium text-foreground">
                   Slug *
                 </label>
 
@@ -605,17 +627,16 @@ function AdminProductsPage() {
                     updateForm(
                       'slug',
                       event.target.value,
-                    )
-                  }
+                    )}
                   placeholder="red-velvet-cake"
-                  className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                   required
                 />
               </div>
 
               {/* Price */}
               <div>
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium text-foreground">
                   Price (₹) *
                 </label>
 
@@ -628,17 +649,16 @@ function AdminProductsPage() {
                     updateForm(
                       'price',
                       event.target.value,
-                    )
-                  }
+                    )}
                   placeholder="750"
-                  className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                   required
                 />
               </div>
 
               {/* Category */}
               <div>
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium text-foreground">
                   Category *
                 </label>
 
@@ -648,9 +668,8 @@ function AdminProductsPage() {
                     updateForm(
                       'category',
                       event.target.value,
-                    )
-                  }
-                  className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                    )}
+                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                 >
                   {(categories.includes(
                     form.category,
@@ -659,22 +678,21 @@ function AdminProductsPage() {
                     : [
                         form.category,
                         ...categories,
-                      ]
-                  ).map((category) => (
-                      <option
-                        key={category}
-                        value={category}
-                      >
-                        {category}
-                      </option>
-                    ),
-                  )}
+                      ])
+                  .map((category) => (
+                    <option
+                      key={category}
+                      value={category}
+                    >
+                      {category}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               {/* Stock */}
               <div>
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium text-foreground">
                   Stock *
                 </label>
 
@@ -687,17 +705,16 @@ function AdminProductsPage() {
                     updateForm(
                       'stock',
                       event.target.value,
-                    )
-                  }
+                    )}
                   placeholder="10"
-                  className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                   required
                 />
               </div>
 
               {/* Preparation */}
               <div>
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium text-foreground">
                   Preparation Time (minutes) *
                 </label>
 
@@ -712,17 +729,16 @@ function AdminProductsPage() {
                     updateForm(
                       'preparationTime',
                       event.target.value,
-                    )
-                  }
+                    )}
                   placeholder="120"
-                  className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                   required
                 />
               </div>
 
               {/* Availability */}
               <div>
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium text-foreground">
                   Availability *
                 </label>
 
@@ -732,9 +748,8 @@ function AdminProductsPage() {
                     updateForm(
                       'availability',
                       event.target.value,
-                    )
-                  }
-                  className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                    )}
+                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="AVAILABLE">
                     Available
@@ -752,7 +767,7 @@ function AdminProductsPage() {
 
               {/* Image URL */}
               <div>
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium text-foreground">
                   Image URL
                 </label>
 
@@ -763,16 +778,15 @@ function AdminProductsPage() {
                     updateForm(
                       'image',
                       event.target.value,
-                    )
-                  }
+                    )}
                   placeholder="https://..."
-                  className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
               {/* Description */}
               <div className="md:col-span-2">
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium text-foreground">
                   Description *
                 </label>
 
@@ -782,11 +796,10 @@ function AdminProductsPage() {
                     updateForm(
                       'description',
                       event.target.value,
-                    )
-                  }
+                    )}
                   placeholder="Rich, moist red velvet cake with cream cheese frosting."
                   rows={4}
-                  className="mt-2 w-full resize-none rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2"
+                  className="mt-2 w-full resize-none rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
                   required
                 />
               </div>
@@ -797,7 +810,7 @@ function AdminProductsPage() {
                   type="button"
                   onClick={closeForm}
                   disabled={saving}
-                  className="rounded-lg border px-6 py-3 font-medium hover:bg-muted disabled:opacity-60"
+                  className="rounded-lg border border-border px-6 py-3 font-medium hover:bg-muted disabled:opacity-60"
                 >
                   Cancel
                 </button>
@@ -820,7 +833,7 @@ function AdminProductsPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
+          <div className="mt-8 rounded-xl border border-border p-10 text-center">
             Loading products...
           </div>
         )}
@@ -829,8 +842,8 @@ function AdminProductsPage() {
         {!loading &&
           !error &&
           products.length === 0 && (
-            <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
-              <h2 className="text-xl font-semibold">
+            <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+              <h2 className="text-xl font-semibold text-primary">
                 No products found
               </h2>
 
@@ -838,7 +851,8 @@ function AdminProductsPage() {
                 Add your first bakery product.
               </p>
             </div>
-          )}
+          )
+        }
 
         {/* Products */}
         {!loading &&
@@ -847,12 +861,12 @@ function AdminProductsPage() {
               {products.map((product) => (
                 <section
                   key={product._id}
-                  className="rounded-2xl border bg-background p-6 shadow-sm"
+                  className="rounded-xl border border-border bg-white p-6 shadow-sm"
                 >
-                  <div className="border-b pb-5">
+                  <div className="border-b border-border pb-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h2 className="text-xl font-bold">
+                        <h2 className="text-xl font-bold text-primary">
                           {product.name}
                         </h2>
 
@@ -861,25 +875,7 @@ function AdminProductsPage() {
                         </p>
                       </div>
 
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          !product.active
-                            ? 'bg-muted text-muted-foreground'
-                            : product.availability ===
-                                'AVAILABLE'
-                              ? 'bg-green-100 text-green-700'
-                              : product.availability ===
-                                  'OUT_OF_STOCK'
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-red-100 text-red-700'
-                        }`}
-                      >
-                        {!product.active
-                          ? 'Disabled'
-                          : formatAvailability(
-                              product.availability,
-                            )}
-                      </span>
+                      {availabilityBadge(product.availability, product.active)}
                     </div>
                   </div>
 
@@ -889,7 +885,7 @@ function AdminProductsPage() {
                         Price
                       </p>
 
-                      <p className="mt-1 text-2xl font-bold">
+                      <p className="mt-1 text-2xl font-bold text-primary">
                         ₹
                         {product.price.toLocaleString(
                           'en-IN',
@@ -913,17 +909,17 @@ function AdminProductsPage() {
                         Product ID
                       </p>
 
-                      <p className="mt-1 break-all font-mono text-xs">
+                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                         {product._id}
                       </p>
                     </div>
                   </div>
 
                   {/* Stock */}
-                  <div className="border-t pt-5">
+                  <div className="border-t border-border pt-5">
                     <label
                       htmlFor={`stock-${product._id}`}
-                      className="text-sm font-medium"
+                      className="text-sm font-medium text-foreground"
                     >
                       Stock
                     </label>
@@ -933,6 +929,7 @@ function AdminProductsPage() {
                         id={`stock-${product._id}`}
                         type="number"
                         min="0"
+                        step="1"
                         defaultValue={
                           product.stock
                         }
@@ -940,7 +937,7 @@ function AdminProductsPage() {
                           updatingProduct ===
                           product._id
                         }
-                        className="w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2 disabled:opacity-60"
+                        className="w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
                         onKeyDown={(event) => {
                           if (
                             event.key !==
@@ -998,7 +995,7 @@ function AdminProductsPage() {
                             )
                           }
                         }}
-                        className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+                        className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
                       >
                         Save
                       </button>
@@ -1009,7 +1006,7 @@ function AdminProductsPage() {
                   <div className="mt-5">
                     <label
                       htmlFor={`availability-${product._id}`}
-                      className="text-sm font-medium"
+                      className="text-sm font-medium text-foreground"
                     >
                       Availability
                     </label>
@@ -1028,9 +1025,8 @@ function AdminProductsPage() {
                           product._id,
                           event.target
                             .value as Availability,
-                        )
-                      }
-                      className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2 disabled:opacity-60"
+                        )}
+                      className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
                     >
                       <option value="AVAILABLE">
                         Available
@@ -1071,7 +1067,7 @@ function AdminProductsPage() {
                           false,
                         )
                       }
-                      className="mt-3 w-full rounded-lg border border-destructive/40 px-4 py-3 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60"
+                      className="mt-3 w-full rounded-lg border border-destructive/30 px-4 py-3 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60"
                     >
                       Disable Product
                     </button>
@@ -1088,7 +1084,7 @@ function AdminProductsPage() {
                           true,
                         )
                       }
-                      className="mt-3 w-full rounded-lg border border-green-600/40 px-4 py-3 font-medium text-green-700 hover:bg-green-50 disabled:opacity-60"
+                      className="mt-3 w-full rounded-lg border border-primary px-4 py-3 font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
                     >
                       Enable Product
                     </button>

@@ -24,7 +24,7 @@ export function MobileBottomBar() {
             <ShoppingBagIcon data-icon="inline-start" />
             Cart
             {showCount && (
-              <span className="flex min-w-5 items-center justify-center rounded-full bg-caramel px-1.5 text-xs font-semibold text-caramel-foreground">
+              <span className="flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
                 {count}
               </span>
             )}

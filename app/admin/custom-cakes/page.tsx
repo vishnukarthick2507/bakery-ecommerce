@@ -129,7 +129,7 @@ function AdminCustomCakesPage() {
               ← Back to Dashboard
             </Link>
 
-            <h1 className="mt-3 text-3xl font-bold">
+            <h1 className="mt-3 text-3xl font-bold text-primary">
               Custom Cake Requests
             </h1>
 
@@ -142,7 +142,7 @@ function AdminCustomCakesPage() {
             type="button"
             onClick={fetchRequests}
             disabled={loading}
-            className="rounded-lg border bg-background px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
           >
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -155,14 +155,14 @@ function AdminCustomCakesPage() {
         )}
 
         {loading && (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
+          <div className="mt-8 rounded-xl border border-border p-10 text-center">
             Loading requests...
           </div>
         )}
 
         {!loading && !error && requests.length === 0 && (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
-            <h2 className="text-xl font-semibold">
+          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+            <h2 className="text-xl font-semibold text-primary">
               No custom cake requests yet
             </h2>
 
@@ -177,16 +177,16 @@ function AdminCustomCakesPage() {
             {requests.map((request) => (
               <section
                 key={request._id}
-                className="rounded-2xl border bg-background p-6 shadow-sm sm:p-8"
+                className="rounded-xl border border-border bg-white p-6 shadow-sm sm:p-8"
               >
                 {/* Header */}
-                <div className="flex flex-col justify-between gap-4 border-b pb-6 sm:flex-row">
+                <div className="flex flex-col justify-between gap-4 border-b border-border pb-6 sm:flex-row">
                   <div>
                     <p className="text-sm text-muted-foreground">
                       Reference Number
                     </p>
 
-                    <h2 className="mt-1 text-2xl font-bold">
+                    <h2 className="mt-1 text-2xl font-bold text-primary">
                       {request.referenceNumber}
                     </h2>
 
@@ -201,20 +201,20 @@ function AdminCustomCakesPage() {
                       Status
                     </p>
 
-                    <p className="mt-1 text-xl font-bold">
+                    <p className="mt-1 text-xl font-bold text-primary">
                       {formatStatus(request.status)}
                     </p>
                   </div>
                 </div>
 
                 {/* Customer details */}
-                <div className="grid gap-6 border-b py-6 md:grid-cols-2">
+                <div className="grid gap-6 border-b border-border py-6 md:grid-cols-2">
                   <div>
                     <p className="text-sm text-muted-foreground">
                       Customer
                     </p>
 
-                    <p className="mt-1 font-semibold">
+                    <p className="mt-1 font-semibold text-primary">
                       {request.name}
                     </p>
 
@@ -228,7 +228,7 @@ function AdminCustomCakesPage() {
                       Cake Details
                     </p>
 
-                    <p className="mt-1 font-semibold">
+                    <p className="mt-1 font-semibold text-primary">
                       {request.flavour}
                     </p>
 
@@ -239,14 +239,14 @@ function AdminCustomCakesPage() {
                 </div>
 
                 {/* Theme and message */}
-                <div className="border-b py-6">
+                <div className="border-b border-border py-6">
                   <div className="grid gap-6 md:grid-cols-2">
                     <div>
                       <p className="text-sm text-muted-foreground">
                         Theme
                       </p>
 
-                      <p className="mt-1 font-medium">
+                      <p className="mt-1 font-medium text-primary">
                         {request.theme}
                       </p>
                     </div>
@@ -257,7 +257,7 @@ function AdminCustomCakesPage() {
                           Message on Cake
                         </p>
 
-                        <p className="mt-1 font-medium">
+                        <p className="mt-1 font-medium text-primary">
                           {request.messageOnCake}
                         </p>
                       </div>
@@ -267,12 +267,12 @@ function AdminCustomCakesPage() {
 
                 {/* Instructions */}
                 {request.instructions && (
-                  <div className="border-b py-6">
+                  <div className="border-b border-border py-6">
                     <p className="text-sm text-muted-foreground">
                       Additional Instructions
                     </p>
 
-                    <p className="mt-1 font-medium">
+                    <p className="mt-1 font-medium text-primary">
                       {request.instructions}
                     </p>
                   </div>
@@ -280,7 +280,7 @@ function AdminCustomCakesPage() {
 
                 {/* Reference image */}
                 {request.referenceImageUrl && (
-                  <div className="border-b py-6">
+                  <div className="border-b border-border py-6">
                     <p className="text-sm text-muted-foreground">
                       Reference Image
                     </p>
@@ -301,7 +301,7 @@ function AdminCustomCakesPage() {
                   <div>
                     <label
                       htmlFor={`status-${request._id}`}
-                      className="text-sm font-medium"
+                      className="text-sm font-medium text-foreground"
                     >
                       Update Status
                     </label>
@@ -316,7 +316,7 @@ function AdminCustomCakesPage() {
                           event.target.value as CustomCakeRequest['status'],
                         )
                       }
-                      className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus:ring-2 disabled:opacity-60 sm:w-72"
+                      className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60 sm:w-72"
                     >
                       <option value="PENDING">
                         Pending

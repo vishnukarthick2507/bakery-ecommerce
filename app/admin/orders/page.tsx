@@ -223,7 +223,7 @@ function AdminOrdersPage() {
               ← Back to Dashboard
             </Link>
 
-            <h1 className="mt-3 text-3xl font-bold">
+            <h1 className="mt-3 text-3xl font-bold text-primary">
               Orders
             </h1>
 
@@ -236,7 +236,7 @@ function AdminOrdersPage() {
             type="button"
             onClick={fetchOrders}
             disabled={loading}
-            className="rounded-lg border bg-background px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
           >
             {loading ? 'Refreshing...' : 'Refresh Orders'}
           </button>
@@ -250,7 +250,7 @@ function AdminOrdersPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Order number, customer or phone"
-              className="h-11 rounded-lg border bg-background px-3 font-normal outline-none focus:ring-2"
+              className="h-11 rounded-lg border border-border bg-white px-3 font-normal outline-none focus:ring-2 focus:ring-primary"
             />
           </label>
 
@@ -259,21 +259,19 @@ function AdminOrdersPage() {
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as 'ALL' | OrderStatus)}
-              className="h-11 rounded-lg border bg-background px-3 font-normal outline-none focus:ring-2"
+              className="h-11 rounded-lg border border-border bg-white px-3 font-normal outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="ALL">All statuses</option>
-              {(
-                [
-                  'PLACED',
-                  'PAYMENT_CONFIRMED',
-                  'CONFIRMED',
-                  'PREPARING',
-                  'READY',
-                  'OUT_FOR_DELIVERY',
-                  'DELIVERED',
-                  'CANCELLED',
-                ] as OrderStatus[]
-              ).map((status) => (
+              {([
+                'PLACED',
+                'PAYMENT_CONFIRMED',
+                'CONFIRMED',
+                'PREPARING',
+                'READY',
+                'OUT_FOR_DELIVERY',
+                'DELIVERED',
+                'CANCELLED',
+              ] as OrderStatus[]).map((status) => (
                 <option key={status} value={status}>
                   {formatStatus(status)}
                 </option>
@@ -286,7 +284,7 @@ function AdminOrdersPage() {
             <select
               value={fulfillmentFilter}
               onChange={(event) => setFulfillmentFilter(event.target.value as FulfillmentFilter)}
-              className="h-11 rounded-lg border bg-background px-3 font-normal outline-none focus:ring-2"
+              className="h-11 rounded-lg border border-border bg-white px-3 font-normal outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="ALL">Delivery and pickup</option>
               <option value="DELIVERY">Delivery</option>
@@ -302,14 +300,14 @@ function AdminOrdersPage() {
         )}
 
         {loading && (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
+          <div className="mt-8 rounded-xl border border-border p-10 text-center">
             Loading orders...
           </div>
         )}
 
         {!loading && !error && orders.length === 0 && (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
-            <h2 className="text-xl font-semibold">
+          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+            <h2 className="text-xl font-semibold text-primary">
               No orders yet
             </h2>
 
@@ -320,8 +318,8 @@ function AdminOrdersPage() {
         )}
 
         {!loading && !error && orders.length > 0 && filteredOrders.length === 0 && (
-          <div className="mt-8 rounded-2xl border bg-background p-10 text-center">
-            <h2 className="text-xl font-semibold">No matching orders</h2>
+          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+            <h2 className="text-xl font-semibold text-primary">No matching orders</h2>
             <p className="mt-2 text-muted-foreground">
               Change or clear the search and filters to see other orders.
             </p>
@@ -333,16 +331,16 @@ function AdminOrdersPage() {
             {filteredOrders.map((order) => (
               <section
                 key={order._id}
-                className="rounded-2xl border bg-background p-6 shadow-sm sm:p-8"
+                className="rounded-xl border border-border bg-white p-6 shadow-sm sm:p-8"
               >
                 {/* Order header */}
-                <div className="flex flex-col justify-between gap-4 border-b pb-6 sm:flex-row">
+                <div className="flex flex-col justify-between gap-4 border-b border-border pb-6 sm:flex-row">
                   <div>
                     <p className="text-sm text-muted-foreground">
                       Order Number
                     </p>
 
-                    <h2 className="mt-1 text-2xl font-bold">
+                    <h2 className="mt-1 text-2xl font-bold text-primary">
                       {order.orderNumber}
                     </h2>
 
@@ -357,21 +355,21 @@ function AdminOrdersPage() {
                       Total
                     </p>
 
-                    <p className="text-2xl font-bold">
+                    <p className="text-2xl font-bold text-primary">
                       ₹{order.totalAmount.toLocaleString('en-IN')}
                     </p>
                   </div>
                 </div>
 
                 {/* Customer details */}
-                <div className="grid gap-6 border-b py-6 md:grid-cols-4">
+                <div className="grid gap-6 border-b border-border py-6 md:grid-cols-4">
 
                   <div>
                     <p className="text-sm text-muted-foreground">
                       Customer
                     </p>
 
-                    <p className="mt-1 font-semibold">
+                    <p className="mt-1 font-semibold text-primary">
                       {order.customerName}
                     </p>
 
@@ -385,7 +383,7 @@ function AdminOrdersPage() {
                       Fulfillment
                     </p>
 
-                    <p className="mt-1 font-semibold">
+                    <p className="mt-1 font-semibold text-primary">
                       {order.fulfillmentType === 'DELIVERY'
                         ? 'Delivery'
                         : 'Pickup'}
@@ -401,7 +399,7 @@ function AdminOrdersPage() {
                       Payment
                     </p>
 
-                    <p className="mt-1 font-semibold">
+                    <p className="mt-1 font-semibold text-primary">
                       {order.paymentMethod === 'COD'
                         ? 'Cash on Delivery'
                         : 'Online (Razorpay)'}
@@ -435,7 +433,7 @@ function AdminOrdersPage() {
                       Inventory
                     </p>
 
-                    <p className="mt-1 font-semibold">
+                    <p className="mt-1 font-semibold text-primary">
                       {order.inventoryStatus
                         ? order.inventoryStatus.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())
                         : 'Not tracked (legacy order)'}
@@ -450,19 +448,19 @@ function AdminOrdersPage() {
                 </div>
 
                 {/* Items */}
-                <div className="border-b py-6">
-                  <h3 className="font-semibold">
+                <div className="border-b border-border py-6">
+                  <h3 className="font-semibold text-primary">
                     Items
                   </h3>
 
-                  <div className="mt-4 divide-y">
+                  <div className="mt-4 divide-y divide-border">
                     {order.items.map((item, index) => (
                       <div
                         key={`${order._id}-${index}`}
                         className="flex items-center justify-between gap-4 py-3"
                       >
                         <div>
-                          <p className="font-medium">
+                          <p className="font-medium text-primary">
                             {item.productName}
                           </p>
 
@@ -472,7 +470,7 @@ function AdminOrdersPage() {
                           </p>
                         </div>
 
-                        <p className="font-semibold">
+                        <p className="font-semibold text-primary">
                           ₹{item.totalPrice.toLocaleString('en-IN')}
                         </p>
                       </div>
@@ -488,7 +486,7 @@ function AdminOrdersPage() {
                       Current Status
                     </p>
 
-                    <p className="mt-1 text-xl font-bold">
+                    <p className="mt-1 text-xl font-bold text-primary">
                       {formatStatus(order.orderStatus)}
                     </p>
                   </div>
@@ -548,7 +546,7 @@ function AdminOrdersPage() {
                                   )
                                 }
                               }}
-                              className="w-full rounded-lg border border-destructive/40 px-4 py-2.5 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60"
+                              className="w-full rounded-lg border border-destructive/30 px-4 py-2.5 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60"
                             >
                               Cancel Order
                             </button>
