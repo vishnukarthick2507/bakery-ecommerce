@@ -178,6 +178,7 @@ function AdminPage() {
   ).length
 
   const navLinks = [
+    { href: '/admin/analytics', label: 'Analytics', description: 'View business analytics and export reports.' },
     { href: '/admin/orders', label: 'Orders', description: 'View and manage customer orders.' },
     { href: '/admin/products', label: 'Products', description: 'Manage bakery products, prices, stock and availability.' },
     { href: '/admin/inventory', label: 'Inventory', description: 'Review stock and product availability.' },

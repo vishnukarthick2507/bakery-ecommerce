@@ -438,11 +438,12 @@ export default function TrackPage() {
                     Here&apos;s where your order stands.
                   </p>
 
+                  {/* Vertical timeline */}
                   <div className="relative">
-                    {/* Connector line */}
+                    {/* Connector line - short, centered between nodes */}
                     {steps.length > 1 && (
                       <div
-                        className="absolute left-3 top-8 bottom-8 w-0.5 bg-primary/20"
+                        className="absolute left-[20px] top-[44px] bottom-4 w-[1px] bg-primary/20"
                         aria-hidden="true"
                       />
                     )}
@@ -454,7 +455,7 @@ export default function TrackPage() {
                       return (
                         <div
                           key={step.key}
-                          className="relative pl-10"
+                          className="relative mb-8 pl-16"
                           style={
                             isCurrent ? { zIndex: 10 } : undefined
                           }
@@ -462,7 +463,7 @@ export default function TrackPage() {
                           {/* Connector from previous step */}
                           {index > 0 && (
                             <div
-                              className="absolute left-3 top-[10px] -mt-0.5 w-full h-0.5"
+                              className="absolute left-[20px] top-[44px] -mt-px w-[1px] h-[12px]"
                               aria-hidden="true"
                               style={{
                                 backgroundColor:
@@ -473,22 +474,34 @@ export default function TrackPage() {
                             />
                           )}
 
-                          <div className="absolute left-0 top-0 flex size-8 items-center justify-center rounded-full border-2 z-20">
+                          {/* Status node circle */}
+                          <div
+                            className={cn(
+                              'absolute left-[16px] top-0 z-20 flex size-9 shrink-0 items-center justify-center rounded-full border-2',
+                              isCompleted
+                                ? 'bg-primary border-primary text-primary-foreground'
+                                : isCurrent
+                                  ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_0_4px_rgba(11,39,68,0.2)]'
+                                  : 'bg-white border-primary text-primary',
+                            )}
+                          >
                             {isCompleted ? (
                               <CheckCircle2
-                                className="size-4 text-primary-foreground"
+                                className="size-4"
                                 aria-hidden="true"
                               />
+                            ) : isCurrent ? (
+                              <span className="text-xs font-bold">
+                                {index + 1}
+                              </span>
                             ) : (
-                              <span
-                                className="text-xs font-bold text-primary"
-                                aria-hidden="true"
-                              >
+                              <span className="text-xs font-bold">
                                 {index + 1}
                               </span>
                             )}
                           </div>
 
+                          {/* Status content */}
                           <div className="flex flex-col gap-1 pt-1">
                             <span
                               className={cn(

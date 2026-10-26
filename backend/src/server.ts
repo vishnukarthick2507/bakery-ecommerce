@@ -9,6 +9,7 @@ import orderRoutes from "./routes/orderRoutes.js";
 import customCakeRoutes from "./routes/customCakeRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
 import { getJwtSecret } from "./config/jwt.js";
 import { Order } from "./models/Order.js";
 import { startInventoryExpiryWorker } from "./services/inventoryExpiry.js";
@@ -46,6 +47,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/custom-cake-requests", customCakeRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", analyticsRoutes);
 
 const startServer = async (): Promise<void> => {
   getJwtSecret();
