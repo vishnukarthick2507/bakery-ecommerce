@@ -14,7 +14,7 @@ const steps = [
 
 export function CustomCakeSection() {
   return (
-    <section aria-labelledby="custom-cake-title" className="bg-burgundy text-primary-foreground">
+    <section aria-labelledby="custom-cake-title" className="bg-burgundy text-white">
       <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 md:grid-cols-2 md:py-16 lg:gap-14">
         <div className="relative order-last aspect-[4/3] overflow-hidden rounded-3xl md:order-first">
           <Image
@@ -32,7 +32,7 @@ export function CustomCakeSection() {
           <h2 id="custom-cake-title" className="text-3xl font-bold sm:text-4xl">
             A cake designed around your celebration
           </h2>
-          <p className="leading-relaxed text-primary-foreground/80">
+          <p className="leading-relaxed text-white/80">
             Birthdays, weddings, baby showers and office milestones. Eggless options available on
             every design. Please order at least 48 hours in advance.
           </p>

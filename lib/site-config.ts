@@ -1,16 +1,16 @@
 export const siteConfig = {
-  name: 'The Cake Point',
+  name: 'S.V. Sweets & Bakers',
   tagline: 'Freshly Baked Happiness',
   description:
     'Cakes, breads, pastries and custom celebration cakes baked fresh every day in Chromepet, Chennai. Order online for pickup or delivery.',
   whatsappNumber: '919840916058',
   phoneDisplay: '+91 98409 16058',
   address: {
-    line1: '30, Dr Rajendra Prasad Rd',
-    city: 'Hasthinapuram, Chromepet, Chennai, Tamil Nadu',
+    line1: 'X42V+XP4, Radha Nagar, Lakshmi Nagar',
+    city: 'Chromepet, Tambaram, Chennai, Tamil Nadu',
     pincode: '600044',
   },
-  mapQuery: 'The Cake Point, 30, Dr Rajendra Prasad Rd, Hasthinapuram, Chromepet, Chennai, Tamil Nadu',
+  mapQuery: 'S.V. Sweets & Bakers, X42V+XP4, Radha Nagar, Lakshmi Nagar, Chromepet, Tambaram, Tamil Nadu 600044',
   openingHours: [
     { days: 'Monday – Friday', hours: '7:00 AM – 9:00 PM' },
     { days: 'Saturday', hours: '7:00 AM – 10:00 PM' },

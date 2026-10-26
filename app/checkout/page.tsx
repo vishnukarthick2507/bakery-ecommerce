@@ -193,7 +193,7 @@ export default function CheckoutPage() {
         contact: phone.trim(),
       },
 
-      theme: { color: '#B12D3B' },
+      theme: { color: '#0B2744' },
 
       handler: async (
         paymentResponse: RazorpayHandlerResponse,
