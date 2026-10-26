@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import mongoose from "mongoose";
 import { z } from "zod";
 
-import { Order } from "../models/Order.js";
+import { Order, type IOrder } from "../models/Order.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import {
   InventoryUnavailableError,
@@ -183,6 +183,131 @@ async function markOrderPaymentFailedById(orderId: string): Promise<void> {
 
 /*
 |--------------------------------------------------------------------------
+| SHARED RAZORPAY ATTEMPT
+|--------------------------------------------------------------------------
+| Creates a new Razorpay order attempt for an already-validated order.
+| Re-reserves inventory if it was released (e.g. after a failed payment),
+| resets payment state to PENDING, refreshes the reservation TTL, creates a
+| Razorpay order, and records the attempt on the order.
+*/
+
+async function createRazorpayAttempt(
+  order: IOrder,
+): Promise<{
+  razorpayOrderId: string;
+  amount: number;
+  currency: string;
+  keyId: string | null;
+  orderNumber: string;
+  totalAmount: number;
+}> {
+  // If inventory was released (e.g. after a failed payment), re-reserve it
+  // and reset the payment state so a new Razorpay attempt can be made.
+  if (
+    order.inventoryStatus !== "RESERVED" &&
+    order.inventoryStatus !== "COMMITTED"
+  ) {
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        const retryOrder = await Order.findById(order._id).session(session);
+        if (!retryOrder || retryOrder.paymentStatus === "PAID") {
+          throw new Error("Order payment state changed; refresh and try again");
+        }
+        if (retryOrder.inventoryStatus === "RELEASED") {
+          await reserveInventory(session, retryOrder.items);
+          retryOrder.inventoryStatus = "RESERVED";
+          retryOrder.reconciliationStatus = "NONE";
+          retryOrder.reconciliationReason = undefined;
+        }
+        retryOrder.paymentStatus = "PENDING";
+        retryOrder.reservationExpiresAt = new Date(
+          Date.now() + ONLINE_RESERVATION_TTL_MS,
+        );
+        await retryOrder.save({ session });
+        order = retryOrder;
+      });
+    } catch (error) {
+      if (error instanceof InventoryUnavailableError) {
+        throw error;
+      }
+      throw error;
+    } finally {
+      await session.endSession();
+    }
+  } else {
+    // Already reserved/committed — reset payment state and refresh TTL
+    // for a fresh payment attempt.
+    order.paymentStatus = "PENDING";
+    order.reservationExpiresAt = new Date(
+      Date.now() + ONLINE_RESERVATION_TTL_MS,
+    );
+    await order.save();
+  }
+
+  // Amount comes from MongoDB only — never from the browser.
+  const amount = toPaise(order.totalAmount);
+
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
+    throw new Error("Order amount is invalid");
+  }
+
+  let razorpayOrder;
+  try {
+    razorpayOrder = await getRazorpayClient().orders.create({
+      amount,
+      currency: "INR",
+      receipt: order.orderNumber,
+      notes: {
+        orderNumber: order.orderNumber,
+      },
+    });
+  } catch (razorpayError) {
+    console.error("Razorpay order creation failed:", razorpayError);
+
+    await markOrderPaymentFailedById(order._id.toString());
+
+    throw new Error(
+      "Unable to start online payment right now. Please try again or choose Cash on Delivery.",
+    );
+  }
+
+  const updatedOrder = await Order.findOneAndUpdate(
+    {
+      _id: order._id,
+      paymentStatus: "PENDING",
+      inventoryStatus: "RESERVED",
+      orderStatus: { $ne: "CANCELLED" },
+    },
+    {
+      $set: {
+        razorpayOrderId: razorpayOrder.id,
+        reservationExpiresAt: new Date(Date.now() + ONLINE_RESERVATION_TTL_MS),
+      },
+      $addToSet: {
+        razorpayOrderIds: razorpayOrder.id,
+      },
+    },
+    { returnDocument: "after", runValidators: true },
+  );
+
+  if (!updatedOrder) {
+    throw new Error("Order is no longer available for payment");
+  }
+
+  const keyId = getRazorpayKeyId();
+  return {
+    razorpayOrderId: razorpayOrder.id,
+    amount,
+    currency: "INR",
+    keyId,
+    orderNumber: updatedOrder.orderNumber,
+    totalAmount: updatedOrder.totalAmount,
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
 | CREATE RAZORPAY ORDER
 |--------------------------------------------------------------------------
 | POST /api/payments/create-order
@@ -255,115 +380,144 @@ export const createPaymentOrder = async (
       return;
     }
 
-    if (
-      order.inventoryStatus !== "RESERVED" &&
-      order.inventoryStatus !== "COMMITTED"
-    ) {
-      const session = await mongoose.startSession();
-      try {
-        await session.withTransaction(async () => {
-          const retryOrder = await Order.findById(order!._id).session(session);
-          if (!retryOrder || retryOrder.paymentStatus === "PAID") {
-            throw new Error("Order payment state changed; refresh and try again");
-          }
-          if (retryOrder.inventoryStatus === "RELEASED") {
-            await reserveInventory(session, retryOrder.items);
-            retryOrder.inventoryStatus = "RESERVED";
-            retryOrder.reconciliationStatus = "NONE";
-            retryOrder.reconciliationReason = undefined;
-          }
-          retryOrder.paymentStatus = "PENDING";
-          retryOrder.reservationExpiresAt = new Date(Date.now() + ONLINE_RESERVATION_TTL_MS);
-          await retryOrder.save({ session });
-          order = retryOrder;
-        });
-      } catch (error) {
-        if (error instanceof InventoryUnavailableError) {
-          res.status(400).json({ message: "This order can no longer reserve its items" });
-          return;
-        }
-        throw error;
-      } finally {
-        await session.endSession();
-      }
-    }
-
-    // Amount comes from MongoDB only — never from the browser.
-    const amount = toPaise(order.totalAmount);
-
-    if (!Number.isSafeInteger(amount) || amount <= 0) {
-      res.status(400).json({
-        message: "Order amount is invalid",
-      });
-      return;
-    }
-
-    let razorpayOrder;
-
+    let result;
     try {
-      razorpayOrder = await getRazorpayClient().orders.create(
-        {
-          amount,
-          currency: "INR",
-          receipt: order.orderNumber,
-          notes: {
-            orderNumber: order.orderNumber,
-          },
-        },
-      );
-    } catch (razorpayError) {
-      console.error(
-        "Razorpay order creation failed:",
-        razorpayError,
-      );
-
-      await markOrderPaymentFailedById(order._id.toString());
-
-      res.status(502).json({
-        message:
-          "Unable to start online payment right now. Please try again or choose Cash on Delivery.",
-      });
-      return;
+      result = await createRazorpayAttempt(order);
+    } catch (error) {
+      if (error instanceof InventoryUnavailableError) {
+        res.status(400).json({ message: "This order can no longer reserve its items" });
+        return;
+      }
+      const err = error as Error;
+      if (err.message === "Order is no longer available for payment") {
+        res.status(409).json({ message: "Order is no longer available for payment" });
+        return;
+      }
+      if (
+        err.message ===
+        "Unable to start online payment right now. Please try again or choose Cash on Delivery."
+      ) {
+        res.status(502).json({ message: err.message });
+        return;
+      }
+      throw error;
     }
 
-    const updatedOrder = await Order.findOneAndUpdate(
-      {
-        _id: order._id,
-        paymentStatus: "PENDING",
-        inventoryStatus: "RESERVED",
-        orderStatus: { $ne: "CANCELLED" },
-      },
-      {
-        $set: {
-          razorpayOrderId: razorpayOrder.id,
-          reservationExpiresAt: new Date(Date.now() + ONLINE_RESERVATION_TTL_MS),
-        },
-        $addToSet: {
-          razorpayOrderIds: razorpayOrder.id,
-        },
-      },
-      { returnDocument: "after", runValidators: true },
-    );
-
-    if (!updatedOrder) {
-      res.status(409).json({ message: "Order is no longer available for payment" });
-      return;
-    }
-    order = updatedOrder;
-
-    res.status(200).json({
-      razorpayOrderId: razorpayOrder.id,
-      amount,
-      currency: "INR",
-      keyId,
-      orderNumber: order.orderNumber,
-      totalAmount: order.totalAmount,
-    });
+    res.status(200).json(result);
   } catch (error) {
     console.error("Create payment order failed:", error);
 
     res.status(500).json({
       message: "Unable to start payment",
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| RETRY PAYMENT
+|--------------------------------------------------------------------------
+| POST /api/payments/retry
+| Body: { "orderNumber": "SV-12345678-1234" }
+|--------------------------------------------------------------------------
+| Creates a new Razorpay attempt for an existing failed/pending online order
+| without creating a duplicate customer order.
+*/
+
+export const retryPayment = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const parsed =
+      createPaymentOrderSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid payment request",
+      });
+      return;
+    }
+
+    const keyId = getRazorpayKeyId();
+
+    if (!keyId || !getRazorpayKeySecret()) {
+      res.status(503).json({
+        message:
+          "Online payments are not configured yet. Please choose Cash on Delivery.",
+      });
+      return;
+    }
+
+    let order = await Order.findOne({
+      orderNumber: parsed.data.orderNumber
+        .trim()
+        .toUpperCase(),
+    });
+
+    if (!order) {
+      res.status(404).json({
+        message: "Order not found",
+      });
+      return;
+    }
+
+    if (order.userId && order.userId.toString() !== req.customer?.id) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    if (order.paymentMethod !== "ONLINE") {
+      res.status(400).json({
+        message:
+          "This order is not an online payment order",
+      });
+      return;
+    }
+
+    if (order.orderStatus === "CANCELLED") {
+      res.status(400).json({
+        message: "This order has been cancelled",
+      });
+      return;
+    }
+
+    if (order.paymentStatus === "PAID") {
+      res.status(400).json({
+        message: "This order has already been paid",
+      });
+      return;
+    }
+
+    let result;
+    try {
+      result = await createRazorpayAttempt(order);
+    } catch (error) {
+      if (error instanceof InventoryUnavailableError) {
+        res.status(400).json({ message: "This order can no longer reserve its items" });
+        return;
+      }
+      const err = error as Error;
+      if (err.message === "Order is no longer available for payment") {
+        res.status(409).json({ message: "Order is no longer available for payment" });
+        return;
+      }
+      if (
+        err.message ===
+        "Unable to start online payment right now. Please try again or choose Cash on Delivery."
+      ) {
+        res.status(502).json({ message: err.message });
+        return;
+      }
+      throw error;
+    }
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Retry payment failed:", error);
+
+    res.status(500).json({
+      message: "Unable to retry payment",
     });
   }
 };

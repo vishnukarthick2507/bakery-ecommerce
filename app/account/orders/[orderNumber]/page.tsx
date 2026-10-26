@@ -5,12 +5,83 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { CustomerOrder, customerAuthHeaders, formatOrderStatus } from '@/lib/customer-auth'
 
+type RazorpayHandlerResponse = {
+  razorpay_order_id: string
+  razorpay_payment_id: string
+  razorpay_signature: string
+}
+
+type RazorpayInstance = {
+  open: () => void
+  on: (
+    event: 'payment.failed',
+    callback: (response: {
+      error?: { description?: string }
+    }) => void,
+  ) => void
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: {
+      key: string
+      amount: number
+      currency: string
+      name: string
+      description: string
+      order_id: string
+      prefill: { name: string; contact: string }
+      theme: { color: string }
+      handler: (response: RazorpayHandlerResponse) => void
+      modal?: { ondismiss?: () => void }
+    }) => RazorpayInstance
+  }
+}
+
+let razorpayScriptPromise: Promise<void> | null = null
+
+function loadRazorpayScript(): Promise<void> {
+  if (typeof window === 'undefined') {
+    return Promise.reject(
+      new Error('Payment gateway is unavailable.'),
+    )
+  }
+
+  if (window.Razorpay) return Promise.resolve()
+
+  if (!razorpayScriptPromise) {
+    razorpayScriptPromise = new Promise<void>(
+      (resolve, reject) => {
+        const script = document.createElement('script')
+        script.src =
+          'https://checkout.razorpay.com/v1/checkout.js'
+
+        script.onload = () => resolve()
+
+        script.onerror = () => {
+          razorpayScriptPromise = null
+          reject(
+            new Error(
+              'Unable to load the payment gateway. Please check your connection and try again.',
+            ),
+          )
+        }
+
+        document.body.appendChild(script)
+      },
+    )
+  }
+
+  return razorpayScriptPromise
+}
+
 export default function CustomerOrderDetailPage() {
   const params = useParams<{ orderNumber: string }>()
   const router = useRouter()
   const [order, setOrder] = useState<CustomerOrder | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (!window.localStorage.getItem('customer-token')) {
@@ -29,6 +100,148 @@ export default function CustomerOrderDetailPage() {
       .catch((requestError: unknown) => setError(requestError instanceof Error ? requestError.message : 'Unable to load order.'))
       .finally(() => setLoading(false))
   }, [params.orderNumber, router])
+
+  const startRetryPayment = async (
+    orderNumber: string,
+    totalAmount: number,
+    customerName: string,
+    phone: string,
+  ): Promise<boolean> => {
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL ||
+      'http://localhost:5000'
+
+    try {
+      setError('')
+
+      const response = await fetch(
+        `${apiUrl}/api/payments/retry`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...customerAuthHeaders(),
+          },
+          body: JSON.stringify({ orderNumber }),
+        },
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            'Unable to start online payment.',
+        )
+      }
+
+      await loadRazorpayScript()
+
+      if (!window.Razorpay) {
+        throw new Error(
+          'Unable to load the payment gateway. Please try again or choose Cash on Delivery.',
+        )
+      }
+
+      const razorpay = new window.Razorpay({
+        key: data.keyId,
+        amount: data.amount,
+        currency: data.currency,
+        name: 'S.V. Bakery',
+        description: `Order ${data.orderNumber}`,
+        order_id: data.razorpayOrderId,
+
+        prefill: {
+          name: customerName.trim(),
+          contact: phone.trim(),
+        },
+
+        theme: { color: '#0B2744' },
+
+        handler: async (
+          paymentResponse: RazorpayHandlerResponse,
+        ) => {
+          try {
+            const verifyResponse = await fetch(
+              `${apiUrl}/api/payments/verify`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...customerAuthHeaders(),
+                },
+                body: JSON.stringify(paymentResponse),
+              },
+            )
+
+            const verifyData =
+              await verifyResponse.json()
+
+            if (!verifyResponse.ok) {
+              throw new Error(
+                verifyData.message ||
+                  'Payment verification failed.',
+              )
+            }
+
+            router.push(
+              `/track?order=${encodeURIComponent(
+                data.orderNumber,
+              )}`,
+            )
+          } catch (err) {
+            setError(
+              `${
+                err instanceof Error
+                  ? err.message
+                  : 'Payment verification failed.'
+              } Your order ${orderNumber} is saved — do not pay again. If money was deducted, contact us on WhatsApp.`,
+            )
+
+            setIsSubmitting(false)
+          }
+        },
+
+        modal: {
+          ondismiss: () => {
+            setError(
+              `Payment was cancelled. Your order ${orderNumber} is saved — press the pay button to try again.`,
+            )
+
+            setIsSubmitting(false)
+          },
+        },
+      })
+
+      razorpay.on(
+        'payment.failed',
+        (failureResponse) => {
+          setError(
+            `Payment failed${
+              failureResponse?.error?.description
+                ? `: ${failureResponse.error.description}`
+                : ''
+            }. Your order ${orderNumber} is saved — you can try again.`,
+          )
+
+          setIsSubmitting(false)
+        },
+      )
+
+      razorpay.open()
+
+      return true
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to start payment.',
+      )
+
+      setIsSubmitting(false)
+      return false
+    }
+  }
 
   if (loading) return (
     <main className="mx-auto max-w-4xl px-4 py-12">
@@ -66,6 +279,42 @@ export default function CustomerOrderDetailPage() {
           <p className="mt-1 text-muted-foreground">Payment: {order.paymentStatus}</p>
         </div>
       </div>
+
+      {order.paymentMethod === 'ONLINE' &&
+        order.paymentStatus !== 'PAID' &&
+        order.orderStatus !== 'CANCELLED' &&
+        (order.paymentStatus === 'FAILED' || order.paymentStatus === 'PENDING') && (
+          <section className="mt-6 rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+            <h2 className="text-xl font-semibold text-primary">Retry Payment</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your online payment was not completed. You can retry payment for this order.
+            </p>
+            {error && (
+              <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => {
+                setIsSubmitting(true)
+                void startRetryPayment(
+                  order.orderNumber,
+                  order.totalAmount,
+                  order.customer?.name ?? order.customerName,
+                  order.customer?.phone ?? order.phone,
+                )
+              }}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Processing Payment…' : 'Retry Payment'}
+            </button>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              You will not be charged twice for the same order.
+            </p>
+          </section>
+        )}
 
       <section className="mt-6 rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
         <h2 className="text-xl font-semibold text-primary">Items</h2>
