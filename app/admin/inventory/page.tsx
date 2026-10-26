@@ -102,7 +102,7 @@ function AdminInventoryPage() {
   return (
     <main className="min-h-screen bg-muted/20">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <p className="text-sm font-medium text-primary">The Cake Point Admin</p>
+        <p className="text-sm font-medium text-primary">S.V. Bakery Admin</p>
         <Link href="/admin" className="mt-2 inline-block text-sm text-muted-foreground hover:underline">
           ← Back to Dashboard
         </Link>

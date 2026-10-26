@@ -19,7 +19,7 @@ export function Hero() {
             Neighbourhood bakery · Chromepet, Chennai
           </p>
           <h1 id="hero-title" className="text-4xl leading-tight font-bold text-burgundy sm:text-5xl lg:text-6xl">
-            Freshly Baked Happiness
+            Freshly Baked. Made With Love.
           </h1>
           <p className="max-w-lg text-lg leading-relaxed text-pretty text-muted-foreground">
             Cakes, breads and pastries made from scratch in small batches. Order ahead for pickup or
@@ -47,7 +47,7 @@ export function Hero() {
         <div className="relative aspect-[4/3] overflow-hidden rounded-3xl shadow-lg md:aspect-square lg:aspect-[4/3.4]">
           <Image
             src="/images/hero.png"
-            alt="A display of freshly baked cakes, croissants and breads at The Cake Point"
+            alt="A display of freshly baked cakes, croissants and breads at S.V. Bakery"
             fill
             priority
             sizes="(min-width: 768px) 50vw, 100vw"

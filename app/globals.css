@@ -108,3 +108,229 @@
     @apply font-heading text-balance;
   }
 }
+
+/* THE CAKE POINT opening intro */
+.opening-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background: #2a1115;
+  animation: opening-intro-exit 700ms ease 1900ms forwards;
+}
+
+.opening-intro__card {
+  position: relative;
+  width: min(100vw, 560px);
+  height: min(100vh, 760px);
+  overflow: hidden;
+  background: #2a1115;
+  animation: opening-intro-card 2600ms cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+.opening-intro__image {
+  object-fit: cover;
+  transform: scale(1.08);
+  animation: opening-intro-image 2600ms ease-out forwards;
+}
+
+.opening-intro__overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(42, 17, 21, 0.2),
+      rgba(42, 17, 21, 0.35) 45%,
+      rgba(42, 17, 21, 0.9)
+    );
+}
+
+.opening-intro__content {
+  position: absolute;
+  inset: auto 24px 72px;
+  z-index: 2;
+  text-align: center;
+  color: white;
+  animation: opening-intro-content 1100ms ease-out 350ms both;
+}
+
+.opening-intro__eyebrow {
+  margin-bottom: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.opening-intro__content h1 {
+  margin: 0;
+  font-size: clamp(2rem, 9vw, 4rem);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  font-weight: 800;
+}
+
+.opening-intro__content p:last-child {
+  margin-top: 14px;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  opacity: 0.9;
+}
+
+.opening-intro__steam {
+  position: absolute;
+  z-index: 2;
+  bottom: 42%;
+  width: 18px;
+  height: 90px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  filter: blur(8px);
+  opacity: 0;
+  animation: opening-intro-steam 1800ms ease-out infinite;
+}
+
+.opening-intro__steam--one {
+  left: 35%;
+  animation-delay: 500ms;
+}
+
+.opening-intro__steam--two {
+  left: 50%;
+  animation-delay: 900ms;
+}
+
+.opening-intro__steam--three {
+  left: 63%;
+  animation-delay: 700ms;
+}
+
+@keyframes opening-intro-image {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes opening-intro-card {
+  0%,
+  72% {
+    border-radius: 0;
+  }
+
+  100% {
+    border-radius: 24px;
+  }
+}
+
+@keyframes opening-intro-content {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes opening-intro-steam {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scaleX(0.8);
+  }
+
+  35% {
+    opacity: 0.55;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-70px) scaleX(1.4);
+  }
+}
+
+@keyframes opening-intro-exit {
+  from {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .opening-intro__card {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border-radius: 0;
+  }
+
+  .opening-intro__content {
+    inset: auto 40px 90px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opening-intro,
+  .opening-intro__card,
+  .opening-intro__image,
+  .opening-intro__content,
+  .opening-intro__steam {
+    animation: none;
+  }
+
+  .opening-intro {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* S.V. BAKERY BLUE & WHITE THEME */
+:root {
+  --primary: 213 70% 24%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 208 65% 95%;
+  --secondary-foreground: 213 70% 24%;
+  --accent: 207 56% 41%;
+  --accent-foreground: 0 0% 100%;
+  --background: 0 0% 100%;
+  --foreground: 210 50% 20%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 20% 45%;
+  --border: 207 35% 88%;
+  --input: 207 35% 88%;
+  --ring: 207 56% 41%;
+  --card: 0 0% 100%;
+  --card-foreground: 210 50% 20%;
+}
+
+body {
+  background: #ffffff;
+  color: #16324f;
+}
+
+.opening-intro {
+  background: #0b2744;
+}
+
+.opening-intro__overlay {
+  background: linear-gradient(
+    to bottom,
+    rgba(11, 39, 68, 0.18),
+    rgba(11, 39, 68, 0.38) 45%,
+    rgba(11, 39, 68, 0.92)
+  );
+}

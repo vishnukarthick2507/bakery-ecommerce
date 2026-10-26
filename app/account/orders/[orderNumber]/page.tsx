@@ -56,7 +56,7 @@ export default function CustomerOrderDetailPage() {
       </section>
       <section className="mt-5 grid gap-5 rounded-xl border bg-background p-6 sm:grid-cols-2">
         <div><h2 className="font-semibold">Customer</h2><p className="mt-2 text-sm">{order.customer?.name ?? order.customerName}</p><p className="text-sm text-muted-foreground">{order.customer?.email}</p><p className="text-sm text-muted-foreground">{order.customer?.phone ?? order.phone}</p></div>
-        <div><h2 className="font-semibold">{order.fulfillmentType === 'DELIVERY' ? 'Delivery address' : 'Pickup'}</h2><p className="mt-2 text-sm">{order.address ? `${order.address.addressLine}, ${order.address.city}, ${order.address.pincode}` : 'Pick up from THE CAKE POINT'}</p><p className="mt-1 text-sm text-muted-foreground">{order.scheduledDate} · {order.scheduledTime}</p><p className="mt-1 text-sm text-muted-foreground">{order.paymentMethod}</p></div>
+        <div><h2 className="font-semibold">{order.fulfillmentType === 'DELIVERY' ? 'Delivery address' : 'Pickup'}</h2><p className="mt-2 text-sm">{order.address ? `${order.address.addressLine}, ${order.address.city}, ${order.address.pincode}` : 'Pick up from S.V. BAKERY'}</p><p className="mt-1 text-sm text-muted-foreground">{order.scheduledDate} · {order.scheduledTime}</p><p className="mt-1 text-sm text-muted-foreground">{order.paymentMethod}</p></div>
       </section>
     </main>
   )

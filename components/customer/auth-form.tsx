@@ -66,7 +66,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   return (
     <main className="mx-auto max-w-lg px-4 py-12 sm:px-6">
       <section className="rounded-xl border bg-background p-6 sm:p-8">
-        <p className="text-sm font-semibold text-primary">THE CAKE POINT</p>
+        <p className="text-sm font-semibold text-primary">S.V. BAKERY</p>
         <h1 className="mt-2 text-3xl font-semibold">
           {mode === 'register' ? 'Create your account' : 'Customer sign in'}
         </h1>
@@ -164,7 +164,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         </form>
 
         <p className="mt-5 text-sm text-muted-foreground">
-          {mode === 'register' ? 'Already have an account?' : 'New to THE CAKE POINT?'}{' '}
+          {mode === 'register' ? 'Already have an account?' : 'New to S.V. BAKERY?'}{' '}
           <Link
             className="font-medium text-primary underline-offset-4 hover:underline"
             href={mode === 'register' ? '/account/login' : '/account/register'}

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: { absolute: 'The Cake Point Admin' },
+  title: { absolute: 'S.V. Bakery Admin' },
 }
 
 export default function AdminLayout({

@@ -184,7 +184,7 @@ export default function CheckoutPage() {
       key: data.keyId,
       amount: data.amount,
       currency: data.currency,
-      name: 'The Cake Point',
+      name: 'S.V. Bakery',
       description: `Order ${data.orderNumber}`,
       order_id: data.razorpayOrderId,
 
@@ -586,7 +586,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="mt-1 text-sm text-muted-foreground">
-                  Pick up from The Cake Point
+                  Pick up from S.V. Bakery
                 </div>
               </button>
             </div>

@@ -18,7 +18,7 @@ export function isImmediatelyOrderable(product: Product) {
 }
 
 export function whatsappProductMessage(product: Product, variantLabel?: string) {
-  return `Hi The Cake Point! I'd like to order "${product.name}"${
+  return `Hi S.V. Bakery! I'd like to order "${product.name}"${
     variantLabel ? ` (${variantLabel})` : ''
   }. Is it possible to get it for a later date?`
 }

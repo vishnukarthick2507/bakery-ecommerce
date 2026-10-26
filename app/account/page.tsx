@@ -49,7 +49,7 @@ export default function AccountPage() {
     <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-primary">THE CAKE POINT</p>
+          <p className="text-sm font-semibold text-primary">S.V. BAKERY</p>
           <h1 className="mt-2 text-3xl font-semibold">My account</h1>
         </div>
         <button onClick={logout} className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">

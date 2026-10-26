@@ -486,7 +486,7 @@ function AdminProductsPage() {
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-medium text-primary">
-              The Cake Point Admin
+              S.V. Bakery Admin
             </p>
 
             <Link

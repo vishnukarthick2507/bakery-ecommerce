@@ -1,3 +1,4 @@
+import { OpeningIntro } from '@/components/home/opening-intro'
 import { Hero } from '@/components/home/hero'
 import { CategoriesSection } from '@/components/home/categories-section'
 import { AvailableNowRail } from '@/components/home/product-rail'
@@ -11,6 +12,7 @@ export default async function HomePage() {
 
   return (
     <>
+      <OpeningIntro />
       <Hero />
       <CategoriesSection categories={categories} />
       <AvailableNowRail
