@@ -92,9 +92,8 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
 
     setSubmitting(true)
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
       const response = await fetch(
-        `${apiBase}/api/auth/${mode === 'register' ? 'register' : 'customer/login'}`,
+        `/api/auth/${mode === 'register' ? 'register' : 'customer/login'}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

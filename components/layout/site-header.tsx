@@ -29,7 +29,7 @@ export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false)
   // `isAdmin` is only true when the backend confirms the current httpOnly
   // admin-token cookie is valid (GET /api/admin/me). localStorage is never
-  // inspected for admin authentication.
+  // inspected for admin authentication. Only verified on the homepage `/`.
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminVerified, setAdminVerified] = useState(false)
 
@@ -37,6 +37,11 @@ export function SiteHeader() {
     let cancelled = false
 
     const verifyAdminSession = async () => {
+      // Only check admin status on the homepage.
+      if (pathname !== '/') {
+        return
+      }
+
       try {
         const response = await fetch('/api/admin/me', {
           cache: 'no-store',
@@ -51,7 +56,7 @@ export function SiteHeader() {
           setIsAdmin(false)
         }
       } catch {
-        // Network or parse failure: fail closed, do not show admin link.
+        // Network or parse failure: fail silently, do not show admin link.
         setIsAdmin(false)
       } finally {
         if (!cancelled) {
@@ -65,7 +70,7 @@ export function SiteHeader() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [pathname])
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
 
