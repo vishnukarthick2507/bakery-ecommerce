@@ -28,16 +28,27 @@ export type CustomerOrder = {
   address?: { addressLine: string; city: string; pincode: string }
   scheduledDate: string
   scheduledTime: string
-  paymentMethod: 'COD' | 'ONLINE'
+  requestedSlot?: string
+  confirmedSlot?: string
+  proposedSlot?: {
+    time: string
+    note: string
+    status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED'
+    expiresAt?: string
+  }
+  paymentMethod: 'COD' | 'ONLINE' | 'PAY_AT_STORE'
   paymentStatus: 'PENDING' | 'PAID' | 'FAILED'
+  paidAt?: string
   orderStatus:
     | 'PLACED'
     | 'PAYMENT_CONFIRMED'
     | 'CONFIRMED'
     | 'PREPARING'
     | 'READY'
+    | 'READY_FOR_PICKUP'
     | 'OUT_FOR_DELIVERY'
     | 'DELIVERED'
+    | 'COLLECTED'
     | 'CANCELLED'
   items: CustomerOrderItem[]
   subtotal: number

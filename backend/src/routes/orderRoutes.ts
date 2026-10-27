@@ -8,6 +8,9 @@ import {
   getMyOrders,
   getMyOrderByNumber,
   trackGuestOrder,
+  markOrderPaid,
+  acceptProposal,
+  declineProposal,
 } from "../controllers/orderController.js";
 import {
   authenticateAdmin,
@@ -33,6 +36,26 @@ router.patch(
   "/:orderNumber/status",
   authenticateAdmin,
   updateOrderStatus,
+);
+
+// Mark payment as paid (admin only, PAY_AT_STORE orders)
+router.post(
+  "/:orderNumber/mark-paid",
+  authenticateAdmin,
+  markOrderPaid,
+);
+
+// Customer proposal actions
+router.post(
+  "/:id/proposal/accept",
+  authenticateCustomer,
+  acceptProposal,
+);
+
+router.post(
+  "/:id/proposal/decline",
+  authenticateCustomer,
+  declineProposal,
 );
 
 // Get one order by order number (public)

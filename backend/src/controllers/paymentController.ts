@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { Order, type IOrder } from "../models/Order.js";
 import type { AuthRequest } from "../middleware/auth.js";
+import { Settings } from "../models/Settings.js";
 import {
   InventoryUnavailableError,
   reserveInventory,
@@ -99,6 +100,11 @@ export async function markOrderPaid(
       order.paymentStatus = "PAID";
       order.razorpayPaymentId = razorpayPaymentId;
       order.razorpayPaymentIds = [...new Set([...capturedPaymentIds, razorpayPaymentId])];
+
+      // Record server-side paid timestamp when first marked PAID.
+      if (!order.paidAt) {
+        order.paidAt = new Date();
+      }
 
       const inventoryUnavailable =
         order.inventoryStatus === "RELEASED" ||
@@ -355,6 +361,26 @@ export const createPaymentOrder = async (
 
     if (order.userId && order.userId.toString() !== req.customer?.id) {
       res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ONLINE ORDERING SETTINGS ENFORCEMENT (Feature 3 + Phase 3)
+    |--------------------------------------------------------------------------
+    | A customer must not bypass the ordering switch via the payment endpoint.
+    | If online ordering is OFF, reject starting a NEW payment attempt.
+    | But an order that already has a Razorpay attempt (created while ordering
+    | was ON) can still be retried/completed — do not strand it.
+    |--------------------------------------------------------------------------
+    */
+
+    const settings = await Settings.getSingleton();
+    if (!settings.onlineOrdersEnabled && !order.razorpayOrderId) {
+      res.status(403).json({
+        message:
+          settings.closedMessage || "Online ordering is currently disabled.",
+      });
       return;
     }
 

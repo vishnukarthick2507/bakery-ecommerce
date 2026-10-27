@@ -35,10 +35,8 @@ type ProductForm = {
   stock: string
   preparationTime: string
   availability: Availability
-  image: string
+  images: string[]
 }
-
-const API_URL = ''
 
 const emptyForm: ProductForm = {
   name: '',
@@ -49,8 +47,11 @@ const emptyForm: ProductForm = {
   stock: '0',
   preparationTime: '60',
   availability: 'AVAILABLE',
-  image: '',
+  images: [],
 }
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
 
 function formatAvailability(
   availability: Availability,
@@ -112,6 +113,12 @@ function AdminProductsPage() {
   const [updatingProduct, setUpdatingProduct] =
     useState<string | null>(null)
 
+  // Image upload state
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+
   async function fetchProducts() {
     try {
       setLoading(true)
@@ -160,6 +167,9 @@ function AdminProductsPage() {
   function openAddForm() {
     setEditingProduct(null)
     setForm(emptyForm)
+    setUploadFile(null)
+    setUploadPreview(null)
+    setUploadError('')
     setShowForm(true)
     setError('')
   }
@@ -178,9 +188,12 @@ function AdminProductsPage() {
         product.preparationTime,
       ),
       availability: product.availability,
-      image: product.images?.[0] ?? '',
+      images: product.images ?? [],
     })
 
+    setUploadFile(null)
+    setUploadPreview(null)
+    setUploadError('')
     setShowForm(true)
     setError('')
   }
@@ -191,6 +204,9 @@ function AdminProductsPage() {
     setShowForm(false)
     setEditingProduct(null)
     setForm(emptyForm)
+    setUploadFile(null)
+    setUploadPreview(null)
+    setUploadError('')
   }
 
   function updateForm(
@@ -203,6 +219,122 @@ function AdminProductsPage() {
     }))
   }
 
+  async function fetchUploadSignature() {
+    const response = await fetch('/api/admin/uploads/signature', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
+      },
+    })
+
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(
+        data.message || 'Unable to get upload authorization',
+      )
+    }
+
+    return response.json()
+  }
+
+  async function uploadToCloudinary(file: File): Promise<string> {
+    const { signature } = await fetchUploadSignature()
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('api_key', signature.apiKey)
+    formData.append('timestamp', String(signature.timestamp))
+    formData.append('signature', signature.signature)
+    formData.append('folder', signature.folder)
+
+    const uploadResponse = await fetch(
+      `https://api.cloudinary.com/v1_1/${signature.cloudName}/image/upload`,
+      {
+        method: 'POST',
+        body: formData,
+      },
+    )
+
+    const result = await uploadResponse.json()
+
+    if (!uploadResponse.ok || !result.secure_url) {
+      throw new Error(
+        result.error?.message || 'Image upload failed',
+      )
+    }
+
+    return result.secure_url
+  }
+
+  async function handleImageChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Client-side validation
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setUploadError(
+        'Please upload a JPG, PNG or WebP image only.',
+      )
+      setUploadFile(null)
+      setUploadPreview(null)
+      return
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setUploadError(
+        'Image must be smaller than 5 MB.',
+      )
+      setUploadFile(null)
+      setUploadPreview(null)
+      return
+    }
+
+    setUploadFile(file)
+    setUploadError('')
+    setUploadPreview(URL.createObjectURL(file))
+  }
+
+  async function handleUploadImage() {
+    if (!uploadFile) return
+
+    setUploading(true)
+    setUploadError('')
+
+    try {
+      const secureUrl = await uploadToCloudinary(uploadFile)
+
+      setForm((current) => {
+        const images = current.images.filter((img) => img !== secureUrl)
+        return {
+          ...current,
+          images: [secureUrl, ...images],
+        }
+      })
+
+      setUploadPreview(secureUrl)
+    } catch (err) {
+      setUploadError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to upload image',
+      )
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function removeImage(url: string) {
+    setForm((current) => ({
+      ...current,
+      images: current.images.filter((img) => img !== url),
+    }))
+    if (uploadPreview === url) {
+      setUploadPreview(null)
+    }
+  }
+
   async function saveProduct(
     event: React.FormEvent<HTMLFormElement>,
   ) {
@@ -211,6 +343,7 @@ function AdminProductsPage() {
     try {
       setSaving(true)
       setError('')
+      setUploadError('')
 
       const price = Number(form.price)
       const stock = Number(form.stock)
@@ -273,15 +406,7 @@ function AdminProductsPage() {
         ...(editingProduct
           ? {}
           : { active: true }),
-        ...(form.image.trim()
-          ? {
-              images: [
-                form.image.trim(),
-              ],
-            }
-          : {
-              images: [],
-            }),
+        images: form.images,
       }
 
       const response = await fetch(
@@ -447,7 +572,7 @@ function AdminProductsPage() {
       setError('')
 
       const response = await fetch(
-        `${API_URL}/api/products/${productId}`,
+        `/api/products/${productId}`,
         {
           method: 'PATCH',
           headers: {
@@ -765,23 +890,106 @@ function AdminProductsPage() {
                 </select>
               </div>
 
-              {/* Image URL */}
-              <div>
+              {/* Images */}
+              <div className="md:col-span-2">
                 <label className="text-sm font-medium text-foreground">
-                  Image URL
+                  Images
                 </label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Upload product images directly from your computer. JPG, PNG,
+                  WebP up to 5 MB each.
+                </p>
 
-                <input
-                  type="url"
-                  value={form.image}
-                  onChange={(event) =>
-                    updateForm(
-                      'image',
-                      event.target.value,
+                <div className="mt-3 grid gap-3">
+                  {/* Existing images preview */}
+                  {form.images.map((img, idx) => (
+                    <div
+                      key={idx}
+                      className="relative group rounded-lg border border-border bg-muted/50 p-2"
+                    >
+                      <img
+                        src={img}
+                        alt={`Product image ${idx + 1}`}
+                        className="h-24 w-24 rounded object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            '/placeholder.svg';
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          removeImage(img)
+                        }}
+                        className="absolute -top-1 -right-1 rounded-full border border-border bg-white px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10"
+                        aria-label={`Remove image ${idx + 1}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Upload area */}
+                  <div className="relative group rounded-lg border border-dashed border-border bg-muted/50 p-4 text-center hover:border-primary/50 cursor-pointer">
+                    <input
+                      type="file"
+                      accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                      onChange={handleImageChange}
+                      className="sr-only"
+                      disabled={uploading}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleUploadImage}
+                      disabled={uploading || !uploadFile}
+                      className="w-full flex flex-col items-center gap-2 px-4 py-4 rounded-lg border border-dashed border-border bg-white hover:bg-primary/5 transition-colors disabled:opacity-60"
+                    >
+                      {uploading ? (
+                        <span className="text-sm text-primary">Uploading…</span>
+                      ) : uploadFile ? (
+                        <>
+                          <span className="text-sm font-medium text-primary">
+                            Upload {uploadFile.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {(
+                              uploadFile.size / 1024 / 1024
+                            ).toFixed(2)} MB
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-sm font-medium text-foreground">
+                            Upload Image
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Select from computer
+                          </span>
+                        </>
+                      )}
+                    </button>
+
+                    {uploadPreview && (
+                      <div className="mt-2 rounded-lg border border-primary bg-primary/10 p-2">
+                        <img
+                          src={uploadPreview}
+                          alt="Preview"
+                          className="h-24 w-24 rounded object-cover mx-auto"
+                        />
+                        <p className="mt-1 text-xs text-primary">
+                          Ready to save
+                        </p>
+                      </div>
                     )}
-                  placeholder="https://..."
-                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
-                />
+
+                    {uploadError && (
+                      <p className="mt-1 text-xs text-destructive">
+                        {uploadError}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Description */}
@@ -842,264 +1050,263 @@ function AdminProductsPage() {
         {!loading &&
           !error &&
           products.length === 0 && (
-            <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
-              <h2 className="text-xl font-semibold text-primary">
-                No products found
-              </h2>
+          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+            <h2 className="text-xl font-semibold text-primary">
+              No products found
+            </h2>
 
-              <p className="mt-2 text-muted-foreground">
-                Add your first bakery product.
-              </p>
-            </div>
-          )
-        }
+            <p className="mt-2 text-muted-foreground">
+              Add your first bakery product.
+            </p>
+          </div>
+        )}
 
         {/* Products */}
         {!loading &&
           products.length > 0 && (
-            <div className="mt-8 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-              {products.map((product) => (
-                <section
-                  key={product._id}
-                  className="rounded-xl border border-border bg-white p-6 shadow-sm"
-                >
-                  <div className="border-b border-border pb-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="text-xl font-bold text-primary">
-                          {product.name}
-                        </h2>
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            {products.map((product) => (
+              <section
+                key={product._id}
+                className="rounded-xl border border-border bg-white p-6 shadow-sm"
+              >
+                <div className="border-b border-border pb-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-xl font-bold text-primary">
+                        {product.name}
+                      </h2>
 
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {product.category}
-                        </p>
-                      </div>
-
-                      {availabilityBadge(product.availability, product.active)}
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {product.category}
+                      </p>
                     </div>
+
+                    {availabilityBadge(product.availability, product.active)}
+                  </div>
+                </div>
+
+                <div className="space-y-4 py-5">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Price
+                    </p>
+
+                    <p className="mt-1 text-2xl font-bold text-primary">
+                      ₹
+                      {product.price.toLocaleString(
+                        'en-IN',
+                      )}
+                    </p>
                   </div>
 
-                  <div className="space-y-4 py-5">
-                    <div>
-                      <p className="text-sm text-muted-foreground">
-                        Price
-                      </p>
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Preparation
+                    </p>
 
-                      <p className="mt-1 text-2xl font-bold text-primary">
-                        ₹
-                        {product.price.toLocaleString(
-                          'en-IN',
-                        )}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm text-muted-foreground">
-                        Preparation
-                      </p>
-
-                      <p className="mt-1 font-medium">
-                        {product.preparationTime}{' '}
-                        minutes
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm text-muted-foreground">
-                        Product ID
-                      </p>
-
-                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                        {product._id}
-                      </p>
-                    </div>
+                    <p className="mt-1 font-medium">
+                      {product.preparationTime}{' '}
+                      minutes
+                    </p>
                   </div>
 
-                  {/* Stock */}
-                  <div className="border-t border-border pt-5">
-                    <label
-                      htmlFor={`stock-${product._id}`}
-                      className="text-sm font-medium text-foreground"
-                    >
-                      Stock
-                    </label>
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Product ID
+                    </p>
 
-                    <div className="mt-2 flex gap-2">
-                      <input
-                        id={`stock-${product._id}`}
-                        type="number"
-                        min="0"
-                        step="1"
-                        defaultValue={
-                          product.stock
-                        }
-                        disabled={
-                          updatingProduct ===
-                          product._id
-                        }
-                        className="w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
-                        onKeyDown={(event) => {
-                          if (
-                            event.key !==
-                            'Enter'
-                          ) {
-                            return
-                          }
-
-                          const value =
-                            Number(
-                              (
-                                event.target as HTMLInputElement
-                              ).value,
-                            )
-
-                          if (
-                            Number.isInteger(
-                              value,
-                            ) &&
-                            value >= 0
-                          ) {
-                            updateStock(
-                              product._id,
-                              value,
-                            )
-                          }
-                        }}
-                      />
-
-                      <button
-                        type="button"
-                        disabled={
-                          updatingProduct ===
-                          product._id
-                        }
-                        onClick={(event) => {
-                          const input =
-                            event.currentTarget
-                              .previousElementSibling as HTMLInputElement
-
-                          const value =
-                            Number(
-                              input.value,
-                            )
-
-                          if (
-                            Number.isInteger(
-                              value,
-                            ) &&
-                            value >= 0
-                          ) {
-                            updateStock(
-                              product._id,
-                              value,
-                            )
-                          }
-                        }}
-                        className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-                      >
-                        Save
-                      </button>
-                    </div>
+                    <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                      {product._id}
+                    </p>
                   </div>
+                </div>
 
-                  {/* Availability */}
-                  <div className="mt-5">
-                    <label
-                      htmlFor={`availability-${product._id}`}
-                      className="text-sm font-medium text-foreground"
-                    >
-                      Availability
-                    </label>
+                {/* Stock */}
+                <div className="border-t border-border pt-5">
+                  <label
+                    htmlFor={`stock-${product._id}`}
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Stock
+                  </label>
 
-                    <select
-                      id={`availability-${product._id}`}
-                      value={
-                        product.availability
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      id={`stock-${product._id}`}
+                      type="number"
+                      min="0"
+                      step="1"
+                      defaultValue={
+                        product.stock
                       }
                       disabled={
                         updatingProduct ===
                         product._id
                       }
-                      onChange={(event) =>
-                        updateAvailability(
-                          product._id,
-                          event.target
-                            .value as Availability,
-                        )}
-                      className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
+                      className="w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
+                      onKeyDown={(event) => {
+                        if (
+                          event.key !==
+                          'Enter'
+                        ) {
+                          return
+                        }
+
+                        const value =
+                          Number(
+                            (
+                              event.target as HTMLInputElement
+                            ).value,
+                          )
+
+                        if (
+                          Number.isInteger(
+                            value,
+                          ) &&
+                          value >= 0
+                        ) {
+                          updateStock(
+                            product._id,
+                            value,
+                          )
+                        }
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      disabled={
+                        updatingProduct ===
+                        product._id
+                      }
+                      onClick={(event) => {
+                        const input =
+                          event.currentTarget
+                            .previousElementSibling as HTMLInputElement
+
+                        const value =
+                          Number(
+                            input.value,
+                          )
+
+                        if (
+                          Number.isInteger(
+                            value,
+                          ) &&
+                          value >= 0
+                        ) {
+                          updateStock(
+                            product._id,
+                            value,
+                          )
+                        }
+                      }}
+                      className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
                     >
-                      <option value="AVAILABLE">
-                        Available
-                      </option>
-
-                      <option value="OUT_OF_STOCK">
-                        Out of Stock
-                      </option>
-
-                      <option value="DISABLED">
-                        Disabled
-                      </option>
-                    </select>
+                      Save
+                    </button>
                   </div>
+                </div>
 
-                  {/* Edit */}
+                {/* Availability */}
+                <div className="mt-5">
+                  <label
+                    htmlFor={`availability-${product._id}`}
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Availability
+                  </label>
+
+                  <select
+                    id={`availability-${product._id}`}
+                    value={
+                      product.availability
+                    }
+                    disabled={
+                      updatingProduct ===
+                      product._id
+                    }
+                    onChange={(event) =>
+                      updateAvailability(
+                        product._id,
+                        event.target
+                          .value as Availability,
+                      )}
+                    className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
+                  >
+                    <option value="AVAILABLE">
+                      Available
+                    </option>
+
+                    <option value="OUT_OF_STOCK">
+                      Out of Stock
+                    </option>
+
+                    <option value="DISABLED">
+                      Disabled
+                    </option>
+                  </select>
+                </div>
+
+                {/* Edit */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    openEditForm(product)
+                  }
+                  className="mt-5 w-full rounded-lg bg-primary px-4 py-3 font-semibold text-primary-foreground hover:opacity-90"
+                >
+                  Edit Product
+                </button>
+
+                {/* Disable / Enable */}
+                {product.active ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      openEditForm(product)
+                    disabled={
+                      updatingProduct ===
+                      product._id
                     }
-                    className="mt-5 w-full rounded-lg bg-primary px-4 py-3 font-semibold text-primary-foreground hover:opacity-90"
+                    onClick={() =>
+                      setProductActive(
+                        product._id,
+                        false,
+                      )
+                    }
+                    className="mt-3 w-full rounded-lg border border-destructive/30 px-4 py-3 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60"
                   >
-                    Edit Product
+                    Disable Product
                   </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={
+                      updatingProduct ===
+                      product._id
+                    }
+                    onClick={() =>
+                      setProductActive(
+                        product._id,
+                        true,
+                      )
+                    }
+                    className="mt-3 w-full rounded-lg border border-primary px-4 py-3 font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
+                  >
+                    Enable Product
+                  </button>
+                )}
 
-                  {/* Disable / Enable */}
-                  {product.active ? (
-                    <button
-                      type="button"
-                      disabled={
-                        updatingProduct ===
-                        product._id
-                      }
-                      onClick={() =>
-                        setProductActive(
-                          product._id,
-                          false,
-                        )
-                      }
-                      className="mt-3 w-full rounded-lg border border-destructive/30 px-4 py-3 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60"
-                    >
-                      Disable Product
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={
-                        updatingProduct ===
-                        product._id
-                      }
-                      onClick={() =>
-                        setProductActive(
-                          product._id,
-                          true,
-                        )
-                      }
-                      className="mt-3 w-full rounded-lg border border-primary px-4 py-3 font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
-                    >
-                      Enable Product
-                    </button>
-                  )}
-
-                  {updatingProduct ===
-                    product._id && (
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      Updating product...
-                    </p>
-                  )}
-                </section>
-              ))}
-            </div>
-          )}
+                {updatingProduct ===
+                  product._id && (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Updating product...
+                  </p>
+                )}
+              </section>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   )

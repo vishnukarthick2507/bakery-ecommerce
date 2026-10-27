@@ -82,6 +82,7 @@ export default function CustomerOrderDetailPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [proposing, setProposing] = useState<'accept' | 'decline' | null>(null)
 
   useEffect(() => {
     if (!window.localStorage.getItem('customer-token')) {
@@ -243,6 +244,77 @@ export default function CustomerOrderDetailPage() {
     }
   }
 
+  async function handleAcceptProposal() {
+    if (!order) return
+    setProposing('accept')
+    setError('')
+    try {
+      const response = await fetch(
+        `/api/orders/${encodeURIComponent(order._id)}/proposal/accept`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...customerAuthHeaders(),
+          },
+        },
+      )
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Unable to accept proposal')
+      // Re-fetch order to reflect changes
+      const refreshResponse = await fetch(
+        `/api/orders/me/${encodeURIComponent(order.orderNumber)}`,
+        {
+          headers: customerAuthHeaders(),
+          cache: 'no-store',
+        },
+      )
+      const refreshData = await refreshResponse.json()
+      if (refreshResponse.ok) {
+        setOrder(refreshData.order)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to accept proposal')
+    } finally {
+      setProposing(null)
+    }
+  }
+
+  async function handleDeclineProposal() {
+    if (!order) return
+    setProposing('decline')
+    setError('')
+    try {
+      const response = await fetch(
+        `/api/orders/${encodeURIComponent(order._id)}/proposal/decline`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...customerAuthHeaders(),
+          },
+        },
+      )
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Unable to decline proposal')
+      const refreshResponse = await fetch(
+        `/api/orders/me/${encodeURIComponent(order.orderNumber)}`,
+        {
+          headers: customerAuthHeaders(),
+          cache: 'no-store',
+        },
+      )
+      const refreshData = await refreshResponse.json()
+      if (refreshResponse.ok) {
+        setOrder(refreshData.order)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to decline proposal')
+    } finally {
+      setProposing(null)
+    }
+  }
+
   if (loading) return (
     <main className="mx-auto max-w-4xl px-4 py-12">
       <div className="rounded-xl border border-border p-10 text-center">
@@ -279,6 +351,76 @@ export default function CustomerOrderDetailPage() {
           <p className="mt-1 text-muted-foreground">Payment: {order.paymentStatus}</p>
         </div>
       </div>
+
+      {order.proposedSlot?.status === 'PENDING' && (
+        <section className="mt-6 rounded-xl border border-primary bg-primary/5 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-semibold text-primary">New time suggested</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The bakery has suggested a different time for your order.
+          </p>
+          <div className="mt-4 space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Original time:</span>
+              <span>
+                {order.requestedSlot
+                  ? new Date(order.requestedSlot).toLocaleString('en-IN')
+                  : order.scheduledDate + ' ' + order.scheduledTime}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm font-semibold">
+              <span className="text-muted-foreground">Suggested time:</span>
+              <span>
+                {new Date(order.proposedSlot.time).toLocaleString('en-IN')}
+              </span>
+            </div>
+            {order.proposedSlot.note && (
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium">Note:</span> {order.proposedSlot.note}
+              </div>
+            )}
+            {order.proposedSlot.expiresAt && (
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium">Expires:</span>{' '}
+                {new Date(order.proposedSlot.expiresAt).toLocaleString('en-IN')}
+              </div>
+            )}
+          </div>
+          <div className="mt-5 flex gap-3 sm:flex-row">
+            <button
+              type="button"
+              disabled={proposing === 'accept' || isSubmitting}
+              onClick={handleAcceptProposal}
+              className="flex-1 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground disabled:opacity-60 hover:opacity-90"
+            >
+              {proposing === 'accept' ? 'Accepting…' : 'Accept'}
+            </button>
+            <button
+              type="button"
+              disabled={proposing === 'decline' || isSubmitting}
+              onClick={handleDeclineProposal}
+              className="flex-1 rounded-lg border border-destructive px-5 py-3 font-medium text-destructive disabled:opacity-60 hover:bg-destructive/5"
+            >
+              {proposing === 'decline' ? 'Declining…' : 'Decline'}
+            </button>
+          </div>
+          {error && (
+            <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+        </section>
+      )}
+
+      {order.proposedSlot?.status === 'DECLINED' && (
+        <section className="mt-6 rounded-xl border border-destructive bg-destructive/5 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-semibold text-primary">Proposal declined</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            You declined the suggested time. Your order retains its original
+            scheduled time. Contact the bakery if you need to arrange a new
+            time.
+          </p>
+        </section>
+      )}
 
       {order.paymentMethod === 'ONLINE' &&
         order.paymentStatus !== 'PAID' &&

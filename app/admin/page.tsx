@@ -185,6 +185,7 @@ function AdminPage() {
     { href: '/admin/custom-cakes', label: 'Custom Cakes', description: 'View and manage custom cake requests.' },
     { href: '/admin/payments', label: 'Payments', description: 'Review payment records linked to real orders.' },
     { href: '/admin/customers', label: 'Customers', description: 'View customer information and orders.' },
+    { href: '/admin/settings', label: 'Settings', description: 'Control online ordering and fulfilment options.' },
   ]
 
   return (

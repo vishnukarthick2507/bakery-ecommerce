@@ -98,7 +98,7 @@ export default function CheckoutPage() {
     useState<'delivery' | 'pickup'>('delivery')
 
   const [payment, setPayment] =
-    useState<'online' | 'cod'>('cod')
+    useState<'online' | 'cod' | 'pay_at_store'>('cod')
 
   const [customerName, setCustomerName] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
@@ -111,6 +111,14 @@ export default function CheckoutPage() {
   const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledTime, setScheduledTime] =
     useState('10:00 AM - 12:00 PM')
+
+  const [settings, setSettings] = useState<{
+    onlineOrdersEnabled: boolean
+    deliveryEnabled: boolean
+    pickupEnabled: boolean
+    closedMessage: string
+  } | null>(null)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -140,6 +148,27 @@ export default function CheckoutPage() {
       })
       .catch(() => undefined)
   }, [])
+
+  useEffect(() => {
+    void fetch('/api/settings', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return
+        const data = await response.json()
+        setSettings(data.settings ?? null)
+      })
+      .catch(() => undefined)
+      .finally(() => setSettingsLoaded(true))
+  }, [])
+
+  useEffect(() => {
+    if (!settings || !settingsLoaded) return
+    if (fulfilment === 'delivery' && !settings.deliveryEnabled) {
+      setFulfilment(settings.pickupEnabled ? 'pickup' : 'delivery')
+    }
+    if (fulfilment === 'pickup' && !settings.pickupEnabled) {
+      setFulfilment(settings.deliveryEnabled ? 'delivery' : 'pickup')
+    }
+  }, [settings, settingsLoaded, fulfilment])
 
   if (!items.length) {
     return (
@@ -306,6 +335,14 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async () => {
     setError('')
     setFieldErrors({})
+
+    if (!settings?.onlineOrdersEnabled) {
+      setError(
+        settings?.closedMessage ||
+          'Online ordering is currently closed. Please check back soon.',
+      )
+      return
+    }
 
     let hasError = false
     const nextFieldErrors: Record<string, string> = {}
@@ -474,7 +511,7 @@ export default function CheckoutPage() {
         window.sessionStorage.removeItem('checkout-order-idempotency-key')
         orderIdempotencyKey.current = null
 
-        if (payment === 'cod') {
+        if (payment === 'cod' || payment === 'pay_at_store') {
           clear()
 
           if (typeof window !== 'undefined') {
@@ -588,6 +625,13 @@ export default function CheckoutPage() {
           {error && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
               {error}
+            </div>
+          )}
+
+          {!settings?.onlineOrdersEnabled && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              {settings?.closedMessage ||
+                'Online ordering is currently closed. Please check back soon.'}
             </div>
           )}
 
@@ -711,27 +755,56 @@ export default function CheckoutPage() {
               </p>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setFulfilment('delivery')}
-                  className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${fulfilment === 'delivery' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
-                >
-                  <div className="font-semibold text-foreground">Delivery</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    Deliver to my address
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFulfilment('pickup')}
-                  className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${fulfilment === 'pickup' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
-                >
-                  <div className="font-semibold text-foreground">Pickup</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    Pick up from S.V. Bakery
-                  </div>
-                </button>
+                {!settings?.deliveryEnabled ? null : (
+                  <button
+                    type="button"
+                    disabled={!settings?.onlineOrdersEnabled}
+                    onClick={() => setFulfilment('delivery')}
+                    className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${
+                      fulfilment === 'delivery' && settings?.deliveryEnabled
+                        ? 'border-primary bg-primary/5'
+                        : !settings?.deliveryEnabled
+                          ? 'border-border opacity-50'
+                          : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    <div className="font-semibold text-foreground">
+                      Delivery
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      Deliver to my address
+                    </div>
+                    {!settings?.onlineOrdersEnabled && (
+                      <div className="mt-1 text-xs text-destructive">
+                        Ordering is currently closed
+                      </div>
+                    )}
+                  </button>
+                )}
+                {!settings?.pickupEnabled ? null : (
+                  <button
+                    type="button"
+                    disabled={!settings?.onlineOrdersEnabled}
+                    onClick={() => setFulfilment('pickup')}
+                    className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${
+                      fulfilment === 'pickup' && settings?.pickupEnabled
+                        ? 'border-primary bg-primary/5'
+                        : !settings?.pickupEnabled
+                          ? 'border-border opacity-50'
+                          : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    <div className="font-semibold text-foreground">Pickup</div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      Pick up from S.V. Bakery
+                    </div>
+                    {!settings?.onlineOrdersEnabled && (
+                      <div className="mt-1 text-xs text-destructive">
+                        Ordering is currently closed
+                      </div>
+                    )}
+                  </button>
+                )}
               </div>
 
               {fulfilment === 'delivery' && (
@@ -936,31 +1009,69 @@ export default function CheckoutPage() {
               </p>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPayment('cod')
-                    setPendingOnlineOrder(null)
-                  }}
-                  className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'cod' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
-                >
-                  <div className="font-semibold text-foreground">Cash on Delivery</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    Pay when your order arrives
-                  </div>
-                </button>
+                {fulfilment === 'delivery' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPayment('cod')
+                        setPendingOnlineOrder(null)
+                      }}
+                      className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'cod' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                    >
+                      <div className="font-semibold text-foreground">Cash on Delivery</div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        Pay when your order arrives
+                      </div>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => setPayment('online')}
-                  className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'online' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
-                >
-                  <div className="font-semibold text-foreground">Online Payment</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    Pay securely via Razorpay — UPI,
-                    cards & netbanking
-                  </div>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPayment('online')
+                        setPendingOnlineOrder(null)
+                      }}
+                      className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'online' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                    >
+                      <div className="font-semibold text-foreground">Online Payment</div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        Pay securely via Razorpay — UPI,
+                        cards & netbanking
+                      </div>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPayment('online')
+                        setPendingOnlineOrder(null)
+                      }}
+                      className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'online' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                    >
+                      <div className="font-semibold text-foreground">Online Payment</div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        Pay securely via Razorpay — UPI,
+                        cards & netbanking
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPayment('pay_at_store')
+                        setPendingOnlineOrder(null)
+                      }}
+                      className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'pay_at_store' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                    >
+                      <div className="font-semibold text-foreground">Pay at Store</div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        Pay when you collect your order
+                      </div>
+                    </button>
+                  </>
+                )}
               </div>
 
               <div className="mt-8 flex items-center gap-2">
@@ -1004,7 +1115,11 @@ export default function CheckoutPage() {
                     </p>
                   </div>
                   <p className="font-medium text-primary">
-                    {payment === 'online' ? 'Online Payment' : 'Cash on Delivery'}
+                    {payment === 'online'
+                      ? 'Online Payment'
+                      : payment === 'pay_at_store'
+                        ? 'Pay at Store'
+                        : 'Cash on Delivery'}
                   </p>
                 </div>
 

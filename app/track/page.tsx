@@ -42,7 +42,9 @@ type Order = {
   }
   scheduledDate: string
   scheduledTime: string
-  paymentMethod: 'COD' | 'ONLINE'
+  requestedSlot?: string
+  confirmedSlot?: string
+  paymentMethod: 'COD' | 'ONLINE' | 'PAY_AT_STORE'
   paymentStatus: 'PENDING' | 'PAID' | 'FAILED'
   orderStatus:
     | 'PLACED'
@@ -50,8 +52,10 @@ type Order = {
     | 'CONFIRMED'
     | 'PREPARING'
     | 'READY'
+    | 'READY_FOR_PICKUP'
     | 'OUT_FOR_DELIVERY'
     | 'DELIVERED'
+    | 'COLLECTED'
     | 'CANCELLED'
   items: OrderItem[]
   subtotal: number
@@ -112,10 +116,16 @@ const TIMELINE_STEPS: TimelineStep[] = [
     completedLabel: 'Being prepared',
   },
   {
+    key: 'READY_FOR_PICKUP',
+    label: 'Ready for Pickup',
+    icon: Package,
+    completedLabel: 'Ready for pickup',
+  },
+  {
     key: 'READY',
     label: 'Ready',
     icon: Package,
-    completedLabel: 'Ready for pickup',
+    completedLabel: 'Ready',
   },
   {
     key: 'OUT_FOR_DELIVERY',
@@ -129,19 +139,66 @@ const TIMELINE_STEPS: TimelineStep[] = [
     icon: CheckCircle2,
     completedLabel: 'Delivered',
   },
+  {
+    key: 'COLLECTED',
+    label: 'Collected',
+    icon: CheckCircle2,
+    completedLabel: 'Collected',
+  },
 ]
 
-function timelineStepsFor(paymentMethod: Order['paymentMethod']) {
-  return paymentMethod === 'ONLINE'
-    ? TIMELINE_STEPS
-    : TIMELINE_STEPS.filter((step) => step.key !== 'PAYMENT_CONFIRMED')
+function timelineStepsFor(
+  paymentMethod: Order['paymentMethod'],
+  paymentStatus: Order['paymentStatus'],
+  fulfillmentType: Order['fulfillmentType'],
+  orderStatus: Order['orderStatus'],
+) {
+  const isPickup = fulfillmentType === 'PICKUP'
+  const isPayAtStore = paymentMethod === 'PAY_AT_STORE'
+
+  let steps = TIMELINE_STEPS.filter((step) => {
+    // Remove delivery-specific steps for pickup orders
+    if (isPickup) {
+      if (step.key === 'READY' || step.key === 'OUT_FOR_DELIVERY' || step.key === 'DELIVERED') {
+        return false
+      }
+    }
+    // Remove pickup-specific steps for delivery orders
+    if (!isPickup) {
+      if (step.key === 'READY_FOR_PICKUP' || step.key === 'COLLECTED') {
+        return false
+      }
+    }
+    // For PAY_AT_STORE with pending payment, hide PAYMENT_CONFIRMED
+    if (isPayAtStore && paymentStatus !== 'PAID') {
+      if (step.key === 'PAYMENT_CONFIRMED') {
+        return false
+      }
+    }
+    // For non-ONLINE, non-PAY_AT_STORE methods, hide PAYMENT_CONFIRMED
+    if (paymentMethod !== 'ONLINE' && paymentMethod !== 'PAY_AT_STORE') {
+      if (step.key === 'PAYMENT_CONFIRMED') {
+        return false
+      }
+    }
+    return true
+  })
+
+  return steps
 }
 
 function currentStepIndex(
   orderStatus: Order['orderStatus'],
   paymentMethod: Order['paymentMethod'],
+  paymentStatus: Order['paymentStatus'],
+  fulfillmentType: Order['fulfillmentType'],
 ): number {
-  const steps = timelineStepsFor(paymentMethod)
+  const steps = timelineStepsFor(
+    paymentMethod,
+    paymentStatus,
+    fulfillmentType,
+    orderStatus,
+  )
   return steps.findIndex((step) => step.key === orderStatus)
 }
 
@@ -275,10 +332,20 @@ function TrackPageContent() {
   }
 
   const steps = order
-    ? timelineStepsFor(order.paymentMethod)
+    ? timelineStepsFor(
+        order.paymentMethod,
+        order.paymentStatus,
+        order.fulfillmentType,
+        order.orderStatus,
+      )
     : []
   const currentIndex = order
-    ? currentStepIndex(order.orderStatus, order.paymentMethod)
+    ? currentStepIndex(
+        order.orderStatus,
+        order.paymentMethod,
+        order.paymentStatus,
+        order.fulfillmentType,
+      )
     : -1
 
   const isCancelled = order?.orderStatus === 'CANCELLED'
@@ -608,9 +675,30 @@ function TrackPageContent() {
                       )}
 
                       {order.fulfillmentType === 'PICKUP' && (
-                        <p className="mt-3 text-muted-foreground">
-                          Pick up from S.V. Bakery.
-                        </p>
+                        <>
+                          <div className="flex items-start gap-3 mt-3">
+                            <MapPin className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <div>
+                              <p className="font-medium text-foreground">Pickup Location</p>
+                              <p className="text-sm text-muted-foreground">
+                                S.V. Sweets &amp; Bakers
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                X42V+XP4, Radha Nagar, Lakshmi Nagar,
+                                Chromepet, Tambaram, Chennai 600044
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-3 rounded-lg border border-border bg-muted/50 p-3">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                              Pickup Instructions
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Please present your order number at the counter.
+                              Pay at the store if you selected Pay at Store.
+                            </p>
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
@@ -643,7 +731,9 @@ function TrackPageContent() {
                           <span className="font-medium">Payment:</span>{' '}
                           {order.paymentMethod === 'COD'
                             ? 'Cash on Delivery'
-                            : 'Online Payment'}
+                            : order.paymentMethod === 'PAY_AT_STORE'
+                              ? 'Pay at Store'
+                              : 'Online Payment'}
                         </p>
                       </div>
 

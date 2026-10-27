@@ -31,20 +31,24 @@ interface OrderDoc {
   };
   scheduledDate: string;
   scheduledTime: string;
-  paymentMethod: "COD" | "ONLINE";
+  paymentMethod: "COD" | "ONLINE" | "PAY_AT_STORE";
   paymentStatus: "PENDING" | "PAID" | "FAILED";
   razorpayOrderId?: string;
   razorpayOrderIds?: string[];
   razorpayPaymentId?: string;
   razorpayPaymentIds?: string[];
+  paidAt?: Date;
+  paidBy?: mongoose.Types.ObjectId;
   orderStatus:
     | "PLACED"
     | "PAYMENT_CONFIRMED"
     | "CONFIRMED"
     | "PREPARING"
     | "READY"
+    | "READY_FOR_PICKUP"
     | "OUT_FOR_DELIVERY"
     | "DELIVERED"
+    | "COLLECTED"
     | "CANCELLED";
   inventoryStatus?: "RESERVED" | "COMMITTED" | "RELEASED";
   items: Array<{
@@ -197,6 +201,9 @@ function isCollectedRevenue(o: OrderDoc): boolean {
   if (o.paymentMethod === "COD") {
     return o.orderStatus === "DELIVERED";
   }
+  if (o.paymentMethod === "PAY_AT_STORE") {
+    return o.paymentStatus === "PAID";
+  }
   return false;
 }
 
@@ -258,7 +265,7 @@ export async function getAnalytics(
           pendingOrders: [
             {
               $match: {
-                orderStatus: { $in: ["PLACED", "PAYMENT_CONFIRMED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] },
+                orderStatus: { $in: ["PLACED", "PAYMENT_CONFIRMED", "CONFIRMED", "PREPARING", "READY", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"] },
               },
             },
             { $count: "count" },
@@ -352,6 +359,12 @@ export async function getAnalytics(
                             { $eq: ["$orderStatus", "DELIVERED"] },
                           ],
                         },
+                        {
+                          $and: [
+                            { $eq: ["$paymentMethod", "PAY_AT_STORE"] },
+                            { $eq: ["$paymentStatus", "PAID"] },
+                          ],
+                        },
                       ],
                     },
                   ],
@@ -427,6 +440,12 @@ export async function getAnalytics(
                             { $eq: ["$orderStatus", "DELIVERED"] },
                           ],
                         },
+                        {
+                          $and: [
+                            { $eq: ["$paymentMethod", "PAY_AT_STORE"] },
+                            { $eq: ["$paymentStatus", "PAID"] },
+                          ],
+                        },
                       ],
                     },
                   ],
@@ -480,6 +499,12 @@ export async function getAnalytics(
                       $and: [
                         { $eq: ["$paymentMethod", "COD"] },
                         { $eq: ["$orderStatus", "DELIVERED"] },
+                      ],
+                    },
+                    {
+                      $and: [
+                        { $eq: ["$paymentMethod", "PAY_AT_STORE"] },
+                        { $eq: ["$paymentStatus", "PAID"] },
                       ],
                     },
                   ],
@@ -1016,11 +1041,16 @@ export async function exportAnalytics(
     payHeaderRow.getCell(5).value = "Pending COD";
     styleHeaderRow(payHeaderRow, 5);
 
-    const paymentMethods = ["COD", "ONLINE"];
+    const paymentMethods = ["COD", "ONLINE", "PAY_AT_STORE"];
     paymentMethods.forEach((pm, i) => {
       const stats = paymentMethodStats.get(pm) || { count: 0, amount: 0, pendingCod: 0 };
       const row = dashboardSheet.getRow(payRow.number + 2 + i);
-      row.getCell(1).value = pm === "COD" ? "Cash on Delivery" : "Online Payment";
+      row.getCell(1).value =
+        pm === "COD"
+          ? "Cash on Delivery"
+          : pm === "ONLINE"
+            ? "Online Payment"
+            : "Pay at Store";
       row.getCell(2).value = stats.count;
       row.getCell(3).value = stats.amount;
       row.getCell(3).numFmt = '"₹"#,##0.00';
@@ -1041,7 +1071,7 @@ export async function exportAnalytics(
     statusHeaderRow.getCell(2).value = "Orders";
     styleHeaderRow(statusHeaderRow, 2);
 
-    const sortedStatuses = ["PLACED", "PAYMENT_CONFIRMED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"] as const;
+    const sortedStatuses = ["PLACED", "PAYMENT_CONFIRMED", "CONFIRMED", "PREPARING", "READY", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "COLLECTED", "CANCELLED"] as const;
     sortedStatuses.forEach((s: string, i: number) => {
       const count = orderStatusStats.get(s) || 0;
       const row = dashboardSheet.getRow(statusRow.number + 2 + i);

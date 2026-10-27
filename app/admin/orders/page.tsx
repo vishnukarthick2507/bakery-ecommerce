@@ -10,9 +10,12 @@ type OrderStatus =
   | 'CONFIRMED'
   | 'PREPARING'
   | 'READY'
+  | 'READY_FOR_PICKUP'
   | 'OUT_FOR_DELIVERY'
   | 'DELIVERED'
+  | 'COLLECTED'
   | 'CANCELLED'
+  | 'RESCHEDULE_PROPOSED'
 
 type FulfillmentFilter = 'ALL' | 'DELIVERY' | 'PICKUP'
 
@@ -31,8 +34,18 @@ type Order = {
   fulfillmentType: 'DELIVERY' | 'PICKUP'
   scheduledDate: string
   scheduledTime: string
-  paymentMethod: 'COD' | 'ONLINE'
+  requestedSlot?: string
+  confirmedSlot?: string
+  proposedSlot?: {
+    time: string
+    note: string
+    status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED'
+    expiresAt?: string
+  }
+  paymentMethod: 'COD' | 'ONLINE' | 'PAY_AT_STORE'
   paymentStatus: 'PENDING' | 'PAID' | 'FAILED'
+  paidAt?: string
+  paidBy?: string
   inventoryStatus?: 'RESERVED' | 'COMMITTED' | 'RELEASED'
   reconciliationStatus?: 'NONE' | 'REVIEW_REQUIRED'
   reconciliationReason?: string
@@ -49,7 +62,7 @@ type Order = {
 }
 
 // Controlled progression — mirrors the transition
-// rules enforced by the backend.
+// rules enforced by the backend. Fulfilment-type aware.
 const nextStatusAction: Partial<
   Record<
     OrderStatus,
@@ -69,8 +82,12 @@ const nextStatusAction: Partial<
     label: 'Start Preparing',
   },
   PREPARING: {
-    status: 'READY',
-    label: 'Mark Ready',
+    status: 'READY_FOR_PICKUP',
+    label: 'Mark Ready for Pickup',
+  },
+  READY_FOR_PICKUP: {
+    status: 'COLLECTED',
+    label: 'Mark Collected',
   },
   READY: {
     status: 'OUT_FOR_DELIVERY',
@@ -88,6 +105,7 @@ const cancellableStatuses: OrderStatus[] = [
   'CONFIRMED',
   'PREPARING',
   'READY',
+  'READY_FOR_PICKUP',
 ]
 
 function formatStatus(status: OrderStatus) {
@@ -105,6 +123,11 @@ function AdminOrdersPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | OrderStatus>('ALL')
   const [fulfillmentFilter, setFulfillmentFilter] = useState<FulfillmentFilter>('ALL')
+  const [proposingOrder, setProposingOrder] = useState<string | null>(null)
+  const [proposeDate, setProposeDate] = useState('')
+  const [proposeTime, setProposeTime] = useState('')
+  const [proposeNote, setProposeNote] = useState('')
+  const [proposing, setProposing] = useState(false)
 
   async function fetchOrders() {
     try {
@@ -206,6 +229,63 @@ function AdminOrdersPage() {
     }
   }
 
+  async function proposeSlot(
+    orderNumber: string,
+    date: string,
+    time: string,
+    note: string,
+  ) {
+    setProposing(true)
+    setError('')
+
+    try {
+      // Find the order's internal ID from the orders list
+      const order = orders.find((o) => o.orderNumber === orderNumber)
+      if (!order) {
+        setError('Order not found')
+        return
+      }
+
+      const dateTime = new Date(`${date}T${time}:00`)
+
+      const response = await fetch(
+        `/api/admin/orders/${encodeURIComponent(order._id)}/propose-slot`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
+          },
+          body: JSON.stringify({
+            time: dateTime.toISOString(),
+            note: note.trim(),
+          }),
+        },
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to propose slot')
+      }
+
+      // Refresh orders to reflect the proposal
+      void fetchOrders()
+
+      // Close the form
+      setProposingOrder(null)
+      setProposeDate('')
+      setProposeTime('')
+      setProposeNote('')
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Unable to propose slot',
+      )
+    } finally {
+      setProposing(false)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-muted/20">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -268,8 +348,10 @@ function AdminOrdersPage() {
                 'CONFIRMED',
                 'PREPARING',
                 'READY',
+                'READY_FOR_PICKUP',
                 'OUT_FOR_DELIVERY',
                 'DELIVERED',
+                'COLLECTED',
                 'CANCELLED',
               ] as OrderStatus[]).map((status) => (
                 <option key={status} value={status}>
@@ -392,6 +474,17 @@ function AdminOrdersPage() {
                     <p className="mt-1 text-sm text-muted-foreground">
                       {order.scheduledDate} · {order.scheduledTime}
                     </p>
+
+                    {order.requestedSlot && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Requested: {new Date(order.requestedSlot).toLocaleString('en-IN')}
+                      </p>
+                    )}
+                    {order.confirmedSlot && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Confirmed: {new Date(order.confirmedSlot).toLocaleString('en-IN')}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -402,12 +495,20 @@ function AdminOrdersPage() {
                     <p className="mt-1 font-semibold text-primary">
                       {order.paymentMethod === 'COD'
                         ? 'Cash on Delivery'
-                        : 'Online (Razorpay)'}
+                        : order.paymentMethod === 'ONLINE'
+                          ? 'Online (Razorpay)'
+                          : 'Pay at Store'}
                     </p>
 
                     <p className="mt-1 text-sm text-muted-foreground">
                       {order.paymentStatus}
                     </p>
+
+                    {order.paymentMethod === 'PAY_AT_STORE' && order.paidAt && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Paid at: {new Date(order.paidAt).toLocaleString('en-IN')}
+                      </p>
+                    )}
 
                     {order.razorpayOrderId && (
                       <p className="mt-1 text-xs text-muted-foreground break-all">
@@ -425,6 +526,30 @@ function AdminOrdersPage() {
                       <p className="mt-1 text-xs text-destructive break-all">
                         Captured payment attempts: {order.razorpayPaymentIds.join(', ')}
                       </p>
+                    )}
+
+                    {order.proposedSlot && (
+                      <div className="mt-3 rounded-lg border border-border bg-muted/50 p-3">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                          Reschedule Proposal
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Status: {order.proposedSlot.status.charAt(0).toUpperCase() + order.proposedSlot.status.slice(1).toLowerCase()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Proposed: {new Date(order.proposedSlot.time).toLocaleString('en-IN')}
+                        </p>
+                        {order.proposedSlot.note && (
+                          <p className="text-xs text-muted-foreground">
+                            Note: {order.proposedSlot.note}
+                          </p>
+                        )}
+                        {order.proposedSlot.expiresAt && (
+                          <p className="text-xs text-muted-foreground">
+                            Expires: {new Date(order.proposedSlot.expiresAt).toLocaleString('en-IN')}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -493,8 +618,22 @@ function AdminOrdersPage() {
 
                   <div className="w-full sm:w-72">
                     {(() => {
-                      const action =
+                      // Determine the next action based on fulfilment type.
+                      let action =
                         nextStatusAction[order.orderStatus]
+
+                      if (order.orderStatus === 'PREPARING') {
+                        action =
+                          order.fulfillmentType === 'PICKUP'
+                            ? {
+                                status: 'READY_FOR_PICKUP' as OrderStatus,
+                                label: 'Mark Ready for Pickup',
+                              }
+                            : {
+                                status: 'READY' as OrderStatus,
+                                label: 'Mark Ready',
+                              }
+                      }
 
                       const canCancel =
                         cancellableStatuses.includes(
@@ -504,7 +643,11 @@ function AdminOrdersPage() {
                       const isUpdating =
                         updatingOrder === order.orderNumber
 
-                      if (!action && !canCancel) {
+                      const canMarkPaid =
+                        order.paymentMethod === 'PAY_AT_STORE' &&
+                        order.paymentStatus === 'PENDING'
+
+                      if (!action && !canCancel && !canMarkPaid) {
                         return (
                           <p className="text-sm text-muted-foreground">
                             No further actions available.
@@ -528,6 +671,152 @@ function AdminOrdersPage() {
                             >
                               {action.label}
                             </button>
+                          )}
+
+                          {canMarkPaid && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Mark order ${order.orderNumber} as paid? Payment will be collected at the store.`,
+                                  )
+                                ) {
+                                  void fetch(
+                                    `/api/orders/${encodeURIComponent(order.orderNumber)}/mark-paid`,
+                                    {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
+                                      },
+                                    },
+                                  )
+                                    .then(async (res) => {
+                                      if (!res.ok) {
+                                        const data = await res.json()
+                                        throw new Error(
+                                          data.message || 'Unable to mark order as paid',
+                                        )
+                                      }
+                                      return res.json()
+                                    })
+                                    .then((data) => {
+                                      setOrders((currentOrders) =>
+                                        currentOrders.map((o) =>
+                                          o.orderNumber === order.orderNumber
+                                            ? {
+                                                ...o,
+                                                paymentStatus: 'PAID',
+                                                paidAt: data.order?.paidAt,
+                                                paidBy: data.order?.paidBy,
+                                              }
+                                            : o,
+                                        ),
+                                      )
+                                    })
+                                    .catch((err) => {
+                                      setError(
+                                        err instanceof Error
+                                          ? err.message
+                                          : 'Unable to mark order as paid',
+                                      )
+                                    })
+                                }
+                              }}
+                              className="w-full rounded-lg border border-primary px-4 py-2.5 font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
+                            >
+                              Mark Paid
+                            </button>
+                          )}
+
+                          {/* Suggest another time */}
+                          {proposingOrder === order._id ? (
+                            <div className="flex flex-col gap-2">
+                              <label className="text-xs font-medium text-muted-foreground">
+                                New date & time
+                              </label>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <input
+                                  type="date"
+                                  value={proposeDate}
+                                  onChange={(e) => setProposeDate(e.target.value)}
+                                  className="text-xs rounded-lg border border-border px-2 py-2"
+                                />
+                                <input
+                                  type="time"
+                                  value={proposeTime}
+                                  onChange={(e) => setProposeTime(e.target.value)}
+                                  className="text-xs rounded-lg border border-border px-2 py-2"
+                                />
+                              </div>
+                              <label className="text-xs font-medium text-muted-foreground">
+                                Note (optional)
+                              </label>
+                              <textarea
+                                value={proposeNote}
+                                onChange={(e) => setProposeNote(e.target.value)}
+                                rows={2}
+                                className="text-xs rounded-lg border border-border px-2 py-2"
+                                placeholder="e.g. Requested slot unavailable"
+                              />
+                              <button
+                                type="button"
+                                disabled={proposing || !proposeDate || !proposeTime}
+                                onClick={() =>
+                                  proposeSlot(
+                                    order.orderNumber,
+                                    proposeDate,
+                                    proposeTime,
+                                    proposeNote,
+                                  )
+                                }
+                                className="w-full rounded-lg bg-primary px-2 py-2 text-xs text-primary-foreground disabled:opacity-60"
+                              >
+                                {proposing ? 'Proposing…' : 'Suggest Time'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setProposingOrder(null)
+                                  setProposeDate('')
+                                  setProposeTime('')
+                                  setProposeNote('')
+                                }}
+                                className="w-full rounded-lg border border-border px-2 py-2 text-xs text-muted-foreground hover:bg-muted"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => {
+                                setProposingOrder(order._id)
+                                setProposeDate('')
+                                setProposeTime('')
+                                setProposeNote('')
+                              }}
+                              className="w-full rounded-lg border border-primary px-2 py-2 text-xs text-primary hover:bg-primary/5 disabled:opacity-60"
+                            >
+                              Suggest Another Time
+                            </button>
+                          )}
+
+                          {/* WhatsApp click-to-chat */}
+                          {order.phone && (
+                            <a
+                              href={`https://wa.me/${order.phone}?text=${encodeURIComponent(
+                                `S.V. Bakery - Order ${order.orderNumber}: ${order.proposedSlot?.note || 'A new time has been suggested for your order.'} Please check your order page for details.`,
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full rounded-lg border border-primary px-2 py-2 text-xs text-primary hover:bg-primary/5 disabled:opacity-60"
+                            >
+                              Open WhatsApp
+                            </a>
                           )}
 
                           {canCancel && (

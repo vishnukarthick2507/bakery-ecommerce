@@ -6,14 +6,36 @@ export type OrderStatus =
   | "CONFIRMED"
   | "PREPARING"
   | "READY"
+  | "READY_FOR_PICKUP"
   | "OUT_FOR_DELIVERY"
   | "DELIVERED"
-  | "CANCELLED";
+  | "COLLECTED"
+  | "CANCELLED"
+  | "RESCHEDULE_PROPOSED";
 
-export type PaymentMethod = "COD" | "ONLINE";
+export type PaymentMethod = "COD" | "ONLINE" | "PAY_AT_STORE";
 
 export type FulfillmentType = "DELIVERY" | "PICKUP";
 export type InventoryStatus = "RESERVED" | "COMMITTED" | "RELEASED";
+
+export type ProposalStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED";
+
+export interface IProposedSlot {
+  time: Date;
+  note: string;
+  proposedBy: mongoose.Types.ObjectId;
+  proposedAt: Date;
+  status: ProposalStatus;
+  expiresAt: Date;
+}
+
+export interface ISlotHistoryEntry {
+  from: Date;
+  to: Date;
+  reason: string;
+  by: string;
+  at: Date;
+}
 
 export interface IOrderItem {
   productId: mongoose.Types.ObjectId;
@@ -49,6 +71,11 @@ export interface IOrder extends Document {
   };
   scheduledDate: string;
   scheduledTime: string;
+  requestedSlot?: Date;
+  confirmedSlot?: Date;
+  proposedSlot?: IProposedSlot;
+  slotHistory?: ISlotHistoryEntry[];
+  reschedulePreviousStatus?: OrderStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: "PENDING" | "PAID" | "FAILED";
   razorpayOrderId?: string;
@@ -60,6 +87,8 @@ export interface IOrder extends Document {
   subtotal: number;
   deliveryFee: number;
   totalAmount: number;
+  paidAt?: Date;
+  paidBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -198,7 +227,7 @@ const orderSchema = new Schema<IOrder>(
 
     paymentMethod: {
       type: String,
-      enum: ["COD", "ONLINE"],
+      enum: ["COD", "ONLINE", "PAY_AT_STORE"],
       required: true,
     },
 
@@ -229,6 +258,15 @@ const orderSchema = new Schema<IOrder>(
       default: [],
     },
 
+    paidAt: {
+      type: Date,
+    },
+
+    paidBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+    },
+
     orderStatus: {
       type: String,
       enum: [
@@ -237,11 +275,60 @@ const orderSchema = new Schema<IOrder>(
         "CONFIRMED",
         "PREPARING",
         "READY",
+        "READY_FOR_PICKUP",
         "OUT_FOR_DELIVERY",
         "DELIVERED",
+        "COLLECTED",
         "CANCELLED",
+        "RESCHEDULE_PROPOSED",
       ],
       default: "PLACED",
+    },
+
+    requestedSlot: {
+      type: Date,
+    },
+
+    confirmedSlot: {
+      type: Date,
+    },
+
+    proposedSlot: {
+      time: { type: Date },
+      note: { type: String, trim: true },
+      proposedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+      proposedAt: { type: Date },
+      status: {
+        type: String,
+        enum: ["PENDING", "ACCEPTED", "DECLINED", "EXPIRED"],
+      },
+      expiresAt: { type: Date },
+    },
+
+    slotHistory: [
+      {
+        from: { type: Date },
+        to: { type: Date },
+        reason: { type: String, trim: true },
+        by: { type: String, trim: true },
+        at: { type: Date },
+      },
+    ],
+
+    reschedulePreviousStatus: {
+      type: String,
+      enum: [
+        "PLACED",
+        "PAYMENT_CONFIRMED",
+        "CONFIRMED",
+        "PREPARING",
+        "READY",
+        "READY_FOR_PICKUP",
+        "OUT_FOR_DELIVERY",
+        "DELIVERED",
+        "COLLECTED",
+        "CANCELLED",
+      ],
     },
 
     items: {
