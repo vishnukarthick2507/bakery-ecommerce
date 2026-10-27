@@ -1,4 +1,10 @@
-pmOnFail: ignore
+packages:
+  - '.'
+  - 'backend'
+
+allowBuilds:
+  esbuild: true
+  mongodb-memory-server: true
 
 minimumReleaseAgeExclude:
   - '@next/*'
