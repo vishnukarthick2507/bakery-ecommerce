@@ -111,7 +111,7 @@ export function SiteHeader() {
           >
             <UserRoundIcon />
           </Link>
-          {adminVerified && isAdmin && (
+          {pathname === '/' && adminVerified && isAdmin && (
             <Link
               href="/admin"
               aria-label="Admin Dashboard"
@@ -163,7 +163,7 @@ export function SiteHeader() {
                   My account
                 </Link>
               </li>
-              {adminVerified && isAdmin && (
+              {pathname === '/' && adminVerified && isAdmin && (
                 <li>
                   <Link
                     href="/admin"
