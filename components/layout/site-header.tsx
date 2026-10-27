@@ -27,10 +27,57 @@ export function SiteHeader() {
   const pathname = usePathname()
   const { count, setOpen, hydrated } = useCart()
   const [menuOpen, setMenuOpen] = useState(false)
+  // `isAdmin` is only true when the backend confirms the current admin token
+  // is valid (GET /api/auth/verify). The mere presence of admin-token in
+  // localStorage is never treated as proof of admin authentication.
   const [isAdmin, setIsAdmin] = useState(false)
+  const [adminVerified, setAdminVerified] = useState(false)
 
   useEffect(() => {
-    setIsAdmin(typeof window !== 'undefined' && !!localStorage.getItem('admin-token'))
+    let cancelled = false
+
+    const verifyAdminSession = async () => {
+      const token =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('admin-token')
+          : null
+
+      if (!token) {
+        setAdminVerified(true)
+        setIsAdmin(false)
+        return
+      }
+
+      try {
+        const response = await fetch('/api/auth/verify', {
+          cache: 'no-store',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!cancelled && response.ok) {
+          const data = (await response.json()) as { valid?: boolean }
+          setIsAdmin(!!data.valid)
+        } else {
+          // Invalid / expired / tampered token: not an authenticated admin.
+          setIsAdmin(false)
+        }
+      } catch {
+        // Network or parse failure: fail closed, do not show admin link.
+        setIsAdmin(false)
+      } finally {
+        if (!cancelled) {
+          setAdminVerified(true)
+        }
+      }
+    }
+
+    verifyAdminSession()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
@@ -77,7 +124,7 @@ export function SiteHeader() {
           >
             <UserRoundIcon />
           </Link>
-          {isAdmin && (
+          {adminVerified && isAdmin && (
             <Link
               href="/admin"
               aria-label="Admin Dashboard"
@@ -129,7 +176,7 @@ export function SiteHeader() {
                   My account
                 </Link>
               </li>
-              {isAdmin && (
+              {adminVerified && isAdmin && (
                 <li>
                   <Link
                     href="/admin"
