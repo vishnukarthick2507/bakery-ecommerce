@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import dotenv from "dotenv";
 
@@ -24,9 +25,12 @@ const PORT = process.env.PORT || 5000;
 
 app.use(helmet());
 
+app.use(cookieParser());
+
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    credentials: true,
   }),
 );
 
@@ -50,6 +54,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/custom-cake-requests", customCakeRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", authRoutes);
 app.use("/api/admin", analyticsRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
 app.use("/api/admin/uploads", uploadRoutes);

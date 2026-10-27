@@ -146,9 +146,7 @@ export default function AnalyticsPage() {
 
       const response = await fetch(`/api/admin/analytics?${params}`, {
         cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-        },
+        credentials: 'include',
       })
 
       if (!response.ok) {
@@ -175,9 +173,7 @@ export default function AnalyticsPage() {
         `/api/admin/analytics/export?${params}`,
         {
           cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-          },
+          credentials: 'include',
         },
       )
 

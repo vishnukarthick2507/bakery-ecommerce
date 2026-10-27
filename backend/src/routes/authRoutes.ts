@@ -1,6 +1,11 @@
 import { Router } from "express";
 
-import { adminLogin, verifyToken } from "../controllers/authController.js";
+import {
+  adminLogin,
+  verifyToken,
+  adminMe,
+  adminLogout,
+} from "../controllers/authController.js";
 import {
   getCurrentCustomer,
   loginCustomer,
@@ -27,6 +32,10 @@ router.post("/login", adminLoginLimiter, adminLogin);
 
 // Verify token
 router.get("/verify", verifyToken);
+
+// Admin session status (reads httpOnly admin-token cookie)
+router.get("/me", adminMe);
+router.post("/logout", adminLogout);
 
 router.post("/register", customerRegisterLimiter, registerCustomer);
 router.post("/customer/login", customerLoginLimiter, loginCustomer);

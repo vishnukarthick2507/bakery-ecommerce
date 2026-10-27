@@ -23,16 +23,25 @@ export const authenticateAdmin = (
   next: NextFunction,
 ): void => {
   try {
-    const authHeader = req.headers.authorization;
+    // Prefer the httpOnly admin-token cookie (single source of truth).
+    // Fall back to Authorization: Bearer header for API clients.
+    let token: string | null = null;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (req.cookies && req.cookies["admin-token"]) {
+      token = req.cookies["admin-token"];
+    } else {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      }
+    }
+
+    if (!token) {
       res.status(401).json({
         message: "Authentication required",
       });
       return;
     }
-
-    const token = authHeader.substring(7);
 
     const decoded = jwt.verify(token, getJwtSecret()) as {
       adminId: string;

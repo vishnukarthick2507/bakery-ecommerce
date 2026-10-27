@@ -38,9 +38,7 @@ function AdminCustomersPage() {
       try {
         const response = await fetch('/api/orders', {
           cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-          },
+          credentials: 'include',
         })
 
         const data = await response.json()

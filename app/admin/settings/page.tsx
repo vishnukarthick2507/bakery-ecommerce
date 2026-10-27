@@ -92,9 +92,9 @@ function AdminSettingsPage() {
     try {
       const response = await fetch('/api/settings', {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
         },
         body: JSON.stringify({
           onlineOrdersEnabled: form.onlineOrdersEnabled,

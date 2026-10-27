@@ -137,9 +137,7 @@ function AdminOrdersPage() {
 
       const response = await fetch('/api/orders', {
         cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-        },
+        credentials: 'include',
       })
 
       const data = await response.json()
@@ -190,9 +188,9 @@ function AdminOrdersPage() {
         `/api/orders/${encodeURIComponent(orderNumber)}/status`,
         {
           method: 'PATCH',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify({ status }),
         },
@@ -253,9 +251,9 @@ function AdminOrdersPage() {
         `/api/admin/orders/${encodeURIComponent(order._id)}/propose-slot`,
         {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify({
             time: dateTime.toISOString(),
@@ -696,9 +694,9 @@ function AdminOrdersPage() {
                                     `/api/orders/${encodeURIComponent(order.orderNumber)}/mark-paid`,
                                     {
                                       method: 'POST',
+                                      credentials: 'include',
                                       headers: {
                                         'Content-Type': 'application/json',
-                                        Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
                                       },
                                     },
                                   )

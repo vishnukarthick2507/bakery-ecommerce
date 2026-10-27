@@ -42,9 +42,7 @@ function AdminCustomCakesPage() {
 
       const response = await fetch(`${API_URL}/api/custom-cake-requests`, {
         cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-        },
+        credentials: 'include',
       })
 
       const data = await response.json()
@@ -79,9 +77,9 @@ function AdminCustomCakesPage() {
         `${API_URL}/api/custom-cake-requests/${requestId}/status`,
         {
           method: 'PATCH',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify({ status }),
         },

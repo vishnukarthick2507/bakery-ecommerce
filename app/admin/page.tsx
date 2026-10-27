@@ -55,9 +55,15 @@ function AdminPage() {
   const [error, setError] = useState('')
   const [productsError, setProductsError] = useState('')
 
-  const handleLogout = () => {
-    localStorage.removeItem('admin-token')
-    localStorage.removeItem('admin-user')
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/admin/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } catch {
+      // Ignore logout errors; cookie is cleared client-side below anyway.
+    }
     document.cookie = 'admin-token=; path=/; max-age=0'
     window.location.href = '/admin/login'
   }
@@ -67,9 +73,7 @@ function AdminPage() {
       try {
         const response = await fetch('/api/orders', {
           cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-          },
+          credentials: 'include',
         })
 
         if (!response.ok) {
@@ -93,9 +97,7 @@ function AdminPage() {
       try {
         const response = await fetch('/api/products?includeInactive=true', {
           cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-          },
+          credentials: 'include',
         })
 
         if (!response.ok) {

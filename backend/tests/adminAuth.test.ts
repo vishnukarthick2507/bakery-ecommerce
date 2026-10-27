@@ -71,7 +71,8 @@ describe("Admin authentication API", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.message).toBe("Login successful");
-    expect(response.body.token).toEqual(expect.any(String));
+    expect(response.headers["set-cookie"]).toBeDefined();
+    expect(response.headers["set-cookie"][0]).toMatch(/^admin-token=/);
     expect(response.body.admin).toMatchObject({
       username: "testadmin",
       role: "ADMIN",

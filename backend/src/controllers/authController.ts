@@ -8,6 +8,41 @@ import { getJwtSecret } from "../config/jwt.js";
 
 const JWT_EXPIRES_IN = "7d";
 
+function setAdminTokenCookie(res: Response, token: string): void {
+  const isProduction = process.env.NODE_ENV === "production";
+  res.cookie("admin-token", token, {
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    secure: isProduction,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days, matches JWT_EXPIRES_IN
+  });
+}
+
+function clearAdminTokenCookie(res: Response): void {
+  res.clearCookie("admin-token", {
+    path: "/",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+}
+
+function getTokenFromRequest(req: Request): string | null {
+  // Prefer the httpOnly cookie (single source of truth).
+  const cookieToken = req.cookies?.["admin-token"];
+  if (cookieToken) {
+    return cookieToken;
+  }
+
+  // Fall back to Authorization: Bearer header for API clients.
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    return authHeader.substring(7);
+  }
+
+  return null;
+}
+
 const loginSchema = z.object({
   username: z.string().trim().min(1),
   password: z.string().trim().min(1),
@@ -71,9 +106,10 @@ export const adminLogin = async (
       { expiresIn: JWT_EXPIRES_IN },
     );
 
+    setAdminTokenCookie(res, token);
+
     res.status(200).json({
       message: "Login successful",
-      token,
       admin: {
         id: admin._id,
         username: admin.username,
@@ -101,16 +137,14 @@ export const verifyToken = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
+    const token = getTokenFromRequest(req);
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (!token) {
       res.status(401).json({
         message: "No token provided",
       });
       return;
     }
-
-    const token = authHeader.substring(7);
 
     const decoded = jwt.verify(token, getJwtSecret()) as {
       adminId: string;
@@ -141,4 +175,54 @@ export const verifyToken = async (
       message: "Invalid token",
     });
   }
+};
+
+/*
+||--------------------------------------------------------------------------
+|| ADMIN ME
+|| GET /api/admin/me
+||--------------------------------------------------------------------------
+|| Returns whether the current httpOnly cookie holds a valid admin session.
+|| Never exposes the JWT or sensitive admin data.
+*/
+export const adminMe = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const token = getTokenFromRequest(req);
+
+    if (!token) {
+      res.status(200).json({ isAdmin: false });
+      return;
+    }
+
+    const decoded = jwt.verify(token, getJwtSecret()) as {
+      adminId: string;
+      username: string;
+      role: string;
+    };
+
+    const admin = await Admin.findById(decoded.adminId).lean();
+
+    res.status(200).json({ isAdmin: !!admin });
+  } catch {
+    // Invalid / expired / tampered cookie: not an authenticated admin.
+    res.status(200).json({ isAdmin: false });
+  }
+};
+
+/*
+||--------------------------------------------------------------------------
+|| ADMIN LOGOUT
+|| POST /api/admin/logout
+||--------------------------------------------------------------------------
+|| Clears the httpOnly admin-token cookie.
+*/
+export const adminLogout = async (
+  _req: Request,
+  res: Response,
+): Promise<void> => {
+  clearAdminTokenCookie(res);
+  res.status(200).json({ message: "Logged out" });
 };

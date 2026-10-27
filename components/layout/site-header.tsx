@@ -27,9 +27,9 @@ export function SiteHeader() {
   const pathname = usePathname()
   const { count, setOpen, hydrated } = useCart()
   const [menuOpen, setMenuOpen] = useState(false)
-  // `isAdmin` is only true when the backend confirms the current admin token
-  // is valid (GET /api/auth/verify). The mere presence of admin-token in
-  // localStorage is never treated as proof of admin authentication.
+  // `isAdmin` is only true when the backend confirms the current httpOnly
+  // admin-token cookie is valid (GET /api/admin/me). localStorage is never
+  // inspected for admin authentication.
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminVerified, setAdminVerified] = useState(false)
 
@@ -37,30 +37,17 @@ export function SiteHeader() {
     let cancelled = false
 
     const verifyAdminSession = async () => {
-      const token =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('admin-token')
-          : null
-
-      if (!token) {
-        setAdminVerified(true)
-        setIsAdmin(false)
-        return
-      }
-
       try {
-        const response = await fetch('/api/auth/verify', {
+        const response = await fetch('/api/admin/me', {
           cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
         })
 
         if (!cancelled && response.ok) {
-          const data = (await response.json()) as { valid?: boolean }
-          setIsAdmin(!!data.valid)
+          const data = (await response.json()) as { isAdmin?: boolean }
+          setIsAdmin(!!data.isAdmin)
         } else {
-          // Invalid / expired / tampered token: not an authenticated admin.
+          // No valid session: not an authenticated admin.
           setIsAdmin(false)
         }
       } catch {

@@ -129,9 +129,7 @@ function AdminProductsPage() {
         '/api/products?includeInactive=true',
         {
           cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-          },
+          credentials: 'include',
         },
       )
 
@@ -223,9 +221,7 @@ function AdminProductsPage() {
   async function fetchUploadSignature() {
     const response = await fetch('/api/admin/uploads/signature', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-      },
+      credentials: 'include',
     })
 
     if (!response.ok) {
@@ -418,10 +414,10 @@ function AdminProductsPage() {
           method: editingProduct
             ? 'PATCH'
             : 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type':
               'application/json',
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify(payload),
         },
@@ -476,10 +472,10 @@ function AdminProductsPage() {
         `/api/products/${productId}`,
         {
           method: 'PATCH',
+          credentials: 'include',
           headers: {
             'Content-Type':
               'application/json',
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify({
             stock,
@@ -526,10 +522,10 @@ function AdminProductsPage() {
         `/api/products/${productId}`,
         {
           method: 'PATCH',
+          credentials: 'include',
           headers: {
             'Content-Type':
               'application/json',
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify({
             availability,
@@ -576,10 +572,10 @@ function AdminProductsPage() {
         `/api/products/${productId}`,
         {
           method: 'PATCH',
+          credentials: 'include',
           headers: {
             'Content-Type':
               'application/json',
-            Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
           },
           body: JSON.stringify(
             active

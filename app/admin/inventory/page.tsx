@@ -29,9 +29,7 @@ function AdminInventoryPage() {
       setError('')
       const response = await fetch('/api/products?includeInactive=true', {
         cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
-        },
+        credentials: 'include',
       })
       const data = await response.json()
       if (!response.ok) {
@@ -78,9 +76,9 @@ function AdminInventoryPage() {
       setMessage('')
       const response = await fetch(`/api/products/${encodeURIComponent(product._id)}`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
         },
         body: JSON.stringify({ stock: nextStock, availability }),
       })
