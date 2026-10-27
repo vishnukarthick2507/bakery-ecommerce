@@ -20,8 +20,6 @@ type CustomCakeRequest = {
   createdAt: string
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
 function formatStatus(status: CustomCakeRequest['status']) {
   return status
     .replaceAll('_', ' ')
@@ -40,7 +38,7 @@ function AdminCustomCakesPage() {
       setLoading(true)
       setError('')
 
-      const response = await fetch(`${API_URL}/api/custom-cake-requests`, {
+      const response = await fetch('/api/custom-cake-requests', {
         cache: 'no-store',
         credentials: 'include',
       })
@@ -74,7 +72,7 @@ function AdminCustomCakesPage() {
       setError('')
 
       const response = await fetch(
-        `${API_URL}/api/custom-cake-requests/${requestId}/status`,
+        `/api/custom-cake-requests/${requestId}/status`,
         {
           method: 'PATCH',
           credentials: 'include',
