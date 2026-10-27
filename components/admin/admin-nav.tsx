@@ -10,7 +10,7 @@ type NavItem = {
 }
 
 const adminNavItems: NavItem[] = [
-  { href: '/admin', label: 'Home' },
+  { href: '/admin', label: 'Dashboard' },
   { href: '/admin/orders', label: 'Orders' },
   { href: '/admin/products', label: 'Products' },
   { href: '/admin/inventory', label: 'Inventory' },
