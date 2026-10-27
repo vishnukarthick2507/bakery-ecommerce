@@ -58,6 +58,7 @@ function AdminPage() {
   const handleLogout = () => {
     localStorage.removeItem('admin-token')
     localStorage.removeItem('admin-user')
+    document.cookie = 'admin-token=; path=/; max-age=0'
     window.location.href = '/admin/login'
   }
 

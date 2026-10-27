@@ -39,6 +39,11 @@ export default function AdminLoginPage() {
       localStorage.setItem('admin-token', data.token)
       localStorage.setItem('admin-user', JSON.stringify(data.admin))
 
+      // Mirror the token into a cookie so Next.js middleware can verify the
+      // admin session server-side on direct /admin/* URL access. localStorage
+      // is invisible to server-side middleware.
+      document.cookie = `admin-token=${data.token}; path=/; max-age=604800; SameSite=Lax`
+
       router.push('/admin')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
