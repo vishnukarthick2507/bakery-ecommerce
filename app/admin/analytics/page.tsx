@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
+import AdminNav from '@/components/admin/admin-nav'
 
 type OrderStatus =
   | 'PLACED'
@@ -276,6 +277,8 @@ export default function AnalyticsPage() {
             </Link>
           </div>
         </div>
+
+        <AdminNav className="mt-6" />
 
         {/* Date Range Filters */}
         <section className="mt-6 rounded-xl border border-border bg-white p-6 shadow-sm">

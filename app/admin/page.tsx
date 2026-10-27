@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { withAdminAuth } from '@/components/admin/admin-auth'
+import AdminNav from '@/components/admin/admin-nav'
 
 type OrderStatus =
   | 'PLACED'
@@ -177,17 +178,6 @@ function AdminPage() {
       (product.stock <= 0 || product.availability === 'OUT_OF_STOCK'),
   ).length
 
-  const navLinks = [
-    { href: '/admin/analytics', label: 'Analytics', description: 'View business analytics and export reports.' },
-    { href: '/admin/orders', label: 'Orders', description: 'View and manage customer orders.' },
-    { href: '/admin/products', label: 'Products', description: 'Manage bakery products, prices, stock and availability.' },
-    { href: '/admin/inventory', label: 'Inventory', description: 'Review stock and product availability.' },
-    { href: '/admin/custom-cakes', label: 'Custom Cakes', description: 'View and manage custom cake requests.' },
-    { href: '/admin/payments', label: 'Payments', description: 'Review payment records linked to real orders.' },
-    { href: '/admin/customers', label: 'Customers', description: 'View customer information and orders.' },
-    { href: '/admin/settings', label: 'Settings', description: 'Control online ordering and fulfilment options.' },
-  ]
-
   return (
     <main className="min-h-screen bg-muted/20">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -223,6 +213,8 @@ function AdminPage() {
           </div>
         </div>
 
+        <AdminNav className="mt-6" />
+
         {/* Stats */}
         <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total Orders" value={loading || error ? '—' : totalOrders.toLocaleString('en-IN')} />
@@ -244,21 +236,6 @@ function AdminPage() {
             Inventory statistics unavailable: {productsError}
           </p>
         )}
-
-        {/* Navigation */}
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-xl border border-border bg-white p-6 shadow-sm transition hover:shadow-md"
-            >
-              <h2 className="text-xl font-semibold text-primary">{link.label}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{link.description}</p>
-              <p className="mt-4 text-sm font-medium text-primary">Manage {link.label.toLowerCase()} →</p>
-            </Link>
-          ))}
-        </section>
 
         {/* Recent Orders */}
         <section className="mt-8 rounded-xl border border-border bg-white shadow-sm">

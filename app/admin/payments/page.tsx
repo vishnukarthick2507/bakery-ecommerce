@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
+import AdminNav from '@/components/admin/admin-nav'
 
 type PaymentOrder = {
   orderNumber: string
@@ -81,6 +82,8 @@ function AdminPaymentsPage() {
             View Store
           </Link>
         </div>
+
+        <AdminNav className="mt-6" />
 
         {error && (
           <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">

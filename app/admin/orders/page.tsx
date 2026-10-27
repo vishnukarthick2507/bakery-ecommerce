@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
+import AdminNav from '@/components/admin/admin-nav'
 
 type OrderStatus =
   | 'PLACED'
@@ -327,6 +328,8 @@ function AdminOrdersPage() {
             View Store
           </Link>
         </div>
+
+        <AdminNav className="mt-6" />
 
         <div className="mt-8 grid gap-3 sm:grid-cols-3">
           <label className="grid gap-1.5 text-sm font-medium">

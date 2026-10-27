@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 import { withAdminAuth } from '@/components/admin/admin-auth'
+import AdminNav from '@/components/admin/admin-nav'
 
 type Availability =
   | 'AVAILABLE'
@@ -679,6 +680,8 @@ function AdminProductsPage() {
             </Link>
           </div>
         </div>
+
+        <AdminNav className="mt-6" />
 
         {/* Error */}
         {error && (
