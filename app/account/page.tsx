@@ -22,6 +22,7 @@ export default function AccountPage() {
       .then(async (response) => {
         if (!response.ok) throw new Error('Unable to load account.')
         const data = await response.json()
+        if (!data?.user) throw new Error('Unable to load account.')
         setProfile(data.user)
       })
       .catch((requestError: unknown) => {
