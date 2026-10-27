@@ -268,6 +268,12 @@ export default function AnalyticsPage() {
             >
               {exporting ? 'Exporting…' : 'Export to Excel'}
             </button>
+            <Link
+              href="/"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              View Store
+            </Link>
           </div>
         </div>
 

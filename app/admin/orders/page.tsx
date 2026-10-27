@@ -320,6 +320,12 @@ function AdminOrdersPage() {
           >
             {loading ? 'Refreshing...' : 'Refresh Orders'}
           </button>
+          <Link
+            href="/"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            View Store
+          </Link>
         </div>
 
         <div className="mt-8 grid gap-3 sm:grid-cols-3">

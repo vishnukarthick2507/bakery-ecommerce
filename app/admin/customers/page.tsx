@@ -121,6 +121,12 @@ function AdminCustomersPage() {
               className="h-11 rounded-lg border border-border bg-white px-3 font-normal outline-none focus:ring-2 focus:ring-primary"
             />
           </label>
+          <Link
+            href="/"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted ml-4"
+          >
+            View Store
+          </Link>
         </div>
 
         {error && (

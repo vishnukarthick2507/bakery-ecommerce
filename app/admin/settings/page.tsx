@@ -153,6 +153,12 @@ function AdminSettingsPage() {
           >
             ← Back to Dashboard
           </Link>
+          <Link
+            href="/"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted ml-2 inline-block"
+          >
+            View Store
+          </Link>
           <h1 className="mt-3 text-3xl font-bold text-primary">
             Ordering Settings
           </h1>

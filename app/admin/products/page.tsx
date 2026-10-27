@@ -671,6 +671,12 @@ function AdminProductsPage() {
             >
               + Add Product
             </button>
+            <Link
+              href="/"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              View Store
+            </Link>
           </div>
         </div>
 
