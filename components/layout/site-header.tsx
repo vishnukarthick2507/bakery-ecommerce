@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
-import { CakeSliceIcon, MenuIcon, ShoppingBagIcon, UserRoundIcon } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CakeSliceIcon, LayoutDashboardIcon, MenuIcon, ShoppingBagIcon, UserRoundIcon } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useCart } from '@/components/cart/cart-provider'
@@ -27,6 +27,45 @@ export function SiteHeader() {
   const pathname = usePathname()
   const { count, setOpen, hydrated } = useCart()
   const [menuOpen, setMenuOpen] = useState(false)
+  // `isAdmin` is only true when the backend confirms the current httpOnly
+  // admin-token cookie is valid (GET /api/admin/me). localStorage is never
+  // inspected for admin authentication.
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminVerified, setAdminVerified] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const verifyAdminSession = async () => {
+      try {
+        const response = await fetch('/api/admin/me', {
+          cache: 'no-store',
+          credentials: 'include',
+        })
+
+        if (!cancelled && response.ok) {
+          const data = (await response.json()) as { isAdmin?: boolean }
+          setIsAdmin(!!data.isAdmin)
+        } else {
+          // No valid session: not an authenticated admin.
+          setIsAdmin(false)
+        }
+      } catch {
+        // Network or parse failure: fail closed, do not show admin link.
+        setIsAdmin(false)
+      } finally {
+        if (!cancelled) {
+          setAdminVerified(true)
+        }
+      }
+    }
+
+    verifyAdminSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
 
@@ -72,6 +111,17 @@ export function SiteHeader() {
           >
             <UserRoundIcon />
           </Link>
+          {adminVerified && isAdmin && (
+            <Link
+              href="/admin"
+              aria-label="Admin Dashboard"
+              title="Admin Dashboard"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <LayoutDashboardIcon size={14} aria-hidden="true" />
+              Admin Dashboard
+            </Link>
+          )}
           <Button
             variant="outline"
             size="lg"
@@ -113,6 +163,18 @@ export function SiteHeader() {
                   My account
                 </Link>
               </li>
+              {adminVerified && isAdmin && (
+                <li>
+                  <Link
+                    href="/admin"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-lg px-3 py-3 text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  >
+                    <LayoutDashboardIcon size={18} className="mr-2" aria-hidden="true" />
+                    Admin Dashboard
+                  </Link>
+                </li>
+              )}
               {navLinks.map((link) => (
                 <li key={link.href}>
                   <Link
