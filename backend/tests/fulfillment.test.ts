@@ -759,8 +759,8 @@ describe("Fulfillment & PAY_AT_STORE", () => {
       const user = await createTestUser();
       const customerToken = makeCustomerToken(user._id.toString());
 
-      // Create an online order first
-      const orderRes = await createTestOrderViaAPI(null, {
+      // Create an online order first (authenticated customer required)
+      const orderRes = await createTestOrderViaAPI(customerToken, {
         ...baseDeliveryBody,
         items: [{ ...baseDeliveryBody.items[0], productId: product._id.toString() }],
         paymentMethod: "ONLINE",
@@ -793,8 +793,8 @@ describe("Fulfillment & PAY_AT_STORE", () => {
       const admin = await Admin.findOne({ username: "testadmin" });
       const adminToken = makeAdminToken(admin!._id.toString());
 
-      // Create an online order
-      const orderRes = await createTestOrderViaAPI(null, {
+      // Create an online order (authenticated customer required)
+      const orderRes = await createTestOrderViaAPI(customerToken, {
         ...baseDeliveryBody,
         items: [{ ...baseDeliveryBody.items[0], productId: product._id.toString() }],
         paymentMethod: "ONLINE",

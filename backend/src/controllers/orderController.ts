@@ -244,6 +244,15 @@ export const createOrder = async (
     return;
   }
 
+  // Online payments require an authenticated customer session (OTP verified).
+  // COD and PAY_AT_STORE remain available to guests per existing checkout rules.
+  if (data.paymentMethod === "ONLINE" && !req.customer) {
+    res.status(401).json({
+      message: "Customer authentication required for online payments. Please verify your identity.",
+    });
+    return;
+  }
+
   if (data.fulfillmentType === "DELIVERY" && !data.address) {
     res.status(400).json({
       message: "Delivery address is required for delivery orders",

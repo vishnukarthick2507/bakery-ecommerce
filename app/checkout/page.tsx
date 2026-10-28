@@ -139,34 +139,48 @@ export default function CheckoutPage() {
   const [otpVerified, setOtpVerified] = useState(false)
   const [otpSubmitting, setOtpSubmitting] = useState(false)
 
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL ||
+    'https://bakery-ecommerce-txuz.onrender.com'
+
+  async function safeJson(response: Response): Promise<any> {
+    const text = await response.text()
+    try {
+      return JSON.parse(text)
+    } catch {
+      return null
+    }
+  }
+
   useEffect(() => {
     const token = window.localStorage.getItem('customer-token')
     if (!token) return
-    void fetch('/api/auth/me', {
+    void fetch(`${apiUrl}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })
       .then(async (response) => {
         if (!response.ok) return
-        const data = await response.json()
+        const data = await safeJson(response)
+        if (!data?.user) return
         setCustomerName((current) => current || data.user.name)
         setCustomerEmail((current) => current || data.user.email)
         setPhone((current) => current || data.user.phone)
         setOtpVerified(true)
       })
       .catch(() => undefined)
-  }, [])
+  }, [apiUrl])
 
   useEffect(() => {
-    void fetch('/api/settings', { cache: 'no-store' })
+    void fetch(`${apiUrl}/api/settings`, { cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) return
-        const data = await response.json()
-        setSettings(data.settings ?? null)
+        const data = await safeJson(response)
+        setSettings(data?.settings ?? null)
       })
       .catch(() => undefined)
       .finally(() => setSettingsLoaded(true))
-  }, [])
+  }, [apiUrl])
 
   useEffect(() => {
     if (!settings || !settingsLoaded) return
@@ -225,11 +239,11 @@ export default function CheckoutPage() {
       },
     )
 
-    const data = await response.json()
+    const data = await safeJson(response)
 
     if (!response.ok) {
       throw new Error(
-        data.message ||
+        data?.message ||
           'Unable to start online payment.',
       )
     }
@@ -273,12 +287,11 @@ export default function CheckoutPage() {
             },
           )
 
-          const verifyData =
-            await verifyResponse.json()
+          const verifyData = await safeJson(verifyResponse)
 
           if (!verifyResponse.ok) {
             throw new Error(
-              verifyData.message ||
+              verifyData?.message ||
                 'Payment verification failed.',
             )
           }
@@ -346,7 +359,7 @@ export default function CheckoutPage() {
     setIsSubmitting(true)
 
     try {
-      const response = await fetch('/api/auth/otp/send', {
+      const response = await fetch(`${apiUrl}/api/auth/otp/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -355,10 +368,10 @@ export default function CheckoutPage() {
         }),
       })
 
-      const data = await response.json()
+      const data = await safeJson(response)
 
       if (!response.ok) {
-        throw new Error(data.message || 'Unable to send OTP')
+        throw new Error(data?.message || 'Unable to send OTP')
       }
 
       setOtpStep('verify')
@@ -374,7 +387,7 @@ export default function CheckoutPage() {
     setIsSubmitting(true)
 
     try {
-      const response = await fetch('/api/auth/otp/verify', {
+      const response = await fetch(`${apiUrl}/api/auth/otp/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -384,16 +397,21 @@ export default function CheckoutPage() {
         }),
       })
 
-      const data = await response.json()
+      const data = await safeJson(response)
 
       if (!response.ok) {
-        throw new Error(data.message || 'Invalid or expired OTP')
+        throw new Error(data?.message || 'Invalid or expired OTP')
+      }
+
+      // Store the customer session token after successful server verification
+      if (data?.token) {
+        window.localStorage.setItem('customer-token', data.token)
       }
 
       // Pre-fill customer details from verified session
-      setCustomerName(data.user.name || '')
-      setCustomerEmail(data.user.email || '')
-      setPhone(data.user.phone || '')
+      setCustomerName(data?.user.name || '')
+      setCustomerEmail(data?.user.email || '')
+      setPhone(data?.user.phone || '')
       setOtpVerified(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid or expired OTP')
@@ -490,12 +508,12 @@ export default function CheckoutPage() {
     try {
       const apiUrl =
         process.env.NEXT_PUBLIC_API_URL ||
-        'http://localhost:5000'
+        'https://bakery-ecommerce-txuz.onrender.com'
 
       let orderNumber =
         payment === 'online'
-          ? pendingOnlineOrder
-          : null
+          ? (pendingOnlineOrder ?? '')
+          : ''
 
       if (!orderNumber) {
         orderIdempotencyKey.current ??=
@@ -565,14 +583,11 @@ export default function CheckoutPage() {
           },
         )
 
-        const data: {
-          message?: string
-          order: { orderNumber: string }
-        } = await response.json()
+        const data = await safeJson(response)
 
-        if (!response.ok) {
+        if (!response.ok || !data?.order?.orderNumber) {
           throw new Error(
-            data.message ||
+            data?.message ||
               'Unable to create your order.',
           )
         }
@@ -790,111 +805,114 @@ export default function CheckoutPage() {
               )}
             </div>
           )}
-            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold text-primary mb-1">
-                Customer details
-              </h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                We&apos;ll use this to confirm your order.
-              </p>
+            {/* Step: Customer details */}
+            {otpVerified && (
+              <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-primary mb-1">
+                  Customer details
+                </h2>
+                <p className="text-sm text-muted-foreground mb-6">
+                  We&apos;ll use this to confirm your order.
+                </p>
 
-              <div className="mt-5 grid gap-4">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">
-                    Full name
-                  </label>
-                  {fieldErrors.customerName && (
-                    <p className="mb-1 text-xs text-destructive">
-                      {fieldErrors.customerName}
-                    </p>
-                  )}
-                  <input
-                    type="text"
-                    placeholder="Enter your name"
-                    value={customerName}
-                    onChange={(e) => {
-                      setCustomerName(e.target.value)
-                      clearFieldError('customerName')
-                    }}
-                    onBlur={() => clearFieldError('customerName')}
-                    className={cn(
-                      'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
-                      fieldErrors.customerName
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-primary',
+                <div className="mt-5 grid gap-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-foreground">
+                      Full name
+                    </label>
+                    {fieldErrors.customerName && (
+                      <p className="mb-1 text-xs text-destructive">
+                        {fieldErrors.customerName}
+                      </p>
                     )}
-                  />
+                    <input
+                      type="text"
+                      placeholder="Enter your name"
+                      value={customerName}
+                      onChange={(e) => {
+                        setCustomerName(e.target.value)
+                        clearFieldError('customerName')
+                      }}
+                      onBlur={() => clearFieldError('customerName')}
+                      className={cn(
+                        'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                        fieldErrors.customerName
+                          ? 'border-destructive focus:ring-destructive'
+                          : 'border-border focus:ring-primary',
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-foreground">
+                      Email address
+                    </label>
+                    {fieldErrors.customerEmail && (
+                      <p className="mb-1 text-xs text-destructive">
+                        {fieldErrors.customerEmail}
+                      </p>
+                    )}
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      maxLength={254}
+                      placeholder="Enter your email address"
+                      value={customerEmail}
+                      onChange={(e) => {
+                        setCustomerEmail(e.target.value)
+                        clearFieldError('customerEmail')
+                      }}
+                      onBlur={() => clearFieldError('customerEmail')}
+                      className={cn(
+                        'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                        fieldErrors.customerEmail
+                          ? 'border-destructive focus:ring-destructive'
+                          : 'border-border focus:ring-primary',
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-foreground">
+                      Phone number
+                    </label>
+                    {fieldErrors.phone && (
+                      <p className="mb-1 text-xs text-destructive">
+                        {fieldErrors.phone}
+                      </p>
+                    )}
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      pattern="[6-9][0-9]{9}"
+                      placeholder="Enter your phone number"
+                      value={phone}
+                      onChange={(e) => {
+                        setPhone(e.target.value)
+                        clearFieldError('phone')
+                      }}
+                      onBlur={() => clearFieldError('phone')}
+                      className={cn(
+                        'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                        fieldErrors.phone
+                          ? 'border-destructive focus:ring-destructive'
+                          : 'border-border focus:ring-primary',
+                      )}
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">
-                    Email address
-                  </label>
-                  {fieldErrors.customerEmail && (
-                    <p className="mb-1 text-xs text-destructive">
-                      {fieldErrors.customerEmail}
-                    </p>
-                  )}
-                  <input
-                    type="email"
-                    autoComplete="email"
-                    maxLength={254}
-                    placeholder="Enter your email address"
-                    value={customerEmail}
-                    onChange={(e) => {
-                      setCustomerEmail(e.target.value)
-                      clearFieldError('customerEmail')
-                    }}
-                    onBlur={() => clearFieldError('customerEmail')}
-                    className={cn(
-                      'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
-                      fieldErrors.customerEmail
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-primary',
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">
-                    Phone number
-                  </label>
-                  {fieldErrors.phone && (
-                    <p className="mb-1 text-xs text-destructive">
-                      {fieldErrors.phone}
-                    </p>
-                  )}
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    maxLength={10}
-                    pattern="[6-9][0-9]{9}"
-                    placeholder="Enter your phone number"
-                    value={phone}
-                    onChange={(e) => {
-                      setPhone(e.target.value)
-                      clearFieldError('phone')
-                    }}
-                    onBlur={() => clearFieldError('phone')}
-                    className={cn(
-                      'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
-                      fieldErrors.phone
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-primary',
-                    )}
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveStep('fulfilment')}
+                  disabled={!otpVerified || isSubmitting}
+                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                >
+                  Continue <span aria-hidden="true">›</span>
+                </button>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setActiveStep('fulfilment')}
-                disabled={isSubmitting}
-                className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
-              >
-                Continue <span aria-hidden="true">›</span>
-              </button>
-            </div>
+            )}
 
           {/* Step: Fulfilment */}
           {activeStep === 'fulfilment' && (

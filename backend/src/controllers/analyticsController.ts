@@ -191,6 +191,11 @@ function buildDateFilter(
                       OR COD + DELIVERED + NOT CANCELLED
    Pending COD = COD + not DELIVERED + not CANCELLED
    Cancelled orders never count as collected revenue
+   Gross sales = completed sales only:
+   - Cancelled orders excluded
+   - ONLINE orders require paymentStatus === PAID
+   - PAY_AT_STORE orders require paymentStatus === PAID
+   - COD orders count (payment collected on delivery)
    --------------------------------------------------------------- */
 
 function isCollectedRevenue(o: OrderDoc): boolean {
@@ -205,6 +210,13 @@ function isCollectedRevenue(o: OrderDoc): boolean {
     return o.paymentStatus === "PAID";
   }
   return false;
+}
+
+function isCompletedSale(o: OrderDoc): boolean {
+  if (o.orderStatus === "CANCELLED") return false;
+  if (o.paymentMethod === "ONLINE" && o.paymentStatus !== "PAID") return false;
+  if (o.paymentMethod === "PAY_AT_STORE" && o.paymentStatus !== "PAID") return false;
+  return true;
 }
 
 function isPendingCod(o: OrderDoc): boolean {
@@ -255,7 +267,16 @@ export async function getAnalytics(
         $facet: {
           totalOrders: [{ $count: "count" }],
           grossSales: [
-            { $match: { orderStatus: { $ne: "CANCELLED" } } },
+            {
+              $match: {
+                orderStatus: { $ne: "CANCELLED" },
+                $or: [
+                  { paymentMethod: "ONLINE", paymentStatus: "PAID" },
+                  { paymentMethod: "COD" },
+                  { paymentMethod: "PAY_AT_STORE", paymentStatus: "PAID" },
+                ],
+              },
+            },
             { $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
           ],
           cancelledOrders: [
@@ -758,7 +779,7 @@ export async function exportAnalytics(
     const pendingCodOrders = orders.filter(isPendingCod);
     const nonCancelledOrders = orders.filter(isNonCancelled);
 
-    const grossSales = nonCancelledOrders.reduce(
+    const grossSales = nonCancelledOrders.filter(isCompletedSale).reduce(
       (sum: number, o: OrderDoc) => sum + o.totalAmount,
       0,
     );
