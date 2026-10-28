@@ -9,20 +9,22 @@ const userSchema = new Schema(
     },
     email: {
       type: String,
-      required: true,
+      required: false,
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true,
     },
     phone: {
       type: String,
-      required: true,
+      required: false,
       unique: true,
+      sparse: true,
       trim: true,
     },
     passwordHash: {
       type: String,
-      required: true,
+      required: false,
       select: false,
     },
     active: {

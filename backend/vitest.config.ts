@@ -8,6 +8,5 @@ export default defineConfig({
     restoreMocks: true,
     fileParallelism: false,
     maxWorkers: 1,
-    minWorkers: 1,
   },
 });

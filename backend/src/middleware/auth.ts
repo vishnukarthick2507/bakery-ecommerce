@@ -116,8 +116,8 @@ async function resolveCustomerToken(
     req.customer = {
       id: customer._id.toString(),
       name: customer.name,
-      email: customer.email,
-      phone: customer.phone,
+      email: customer.email ?? "",
+      phone: customer.phone ?? "",
     };
     next();
   } catch {

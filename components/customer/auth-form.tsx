@@ -7,111 +7,73 @@ import { cn } from '@/lib/utils'
 
 type AuthMode = 'login' | 'register'
 
+type OtpStep = 'enter' | 'verify'
+
 export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter()
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  const [step, setStep] = useState<OtpStep>('enter')
+  const [identifier, setIdentifier] = useState('')
+  const [otp, setOtp] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'email' | 'phone' | 'password' | 'confirmPassword', string>>>({})
 
-  const clearFieldError = (field: keyof typeof fieldErrors) => {
-    setFieldErrors((prev) => {
-      const next = { ...prev }
-      delete next[field]
-      return next
-    })
-  }
+  const purpose = mode === 'login' ? 'LOGIN' : 'REGISTER'
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSendOtp(event: React.FormEvent) {
     event.preventDefault()
     setError('')
-    setFieldErrors({})
-
-    const nextFieldErrors: Partial<Record<'name' | 'email' | 'phone' | 'password' | 'confirmPassword', string>> = {}
-    let hasError = false
-
-    if (mode === 'register') {
-      if (!name.trim() || name.trim().length < 2) {
-        nextFieldErrors.name = 'Please enter your full name.'
-        hasError = true
-      } else {
-        clearFieldError('name')
-      }
-
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-        nextFieldErrors.email = 'Enter a valid email address.'
-        hasError = true
-      } else {
-        clearFieldError('email')
-      }
-
-      if (!/^[6-9]\d{9}$/.test(phone)) {
-        nextFieldErrors.phone = 'Enter a valid 10-digit Indian mobile number.'
-        hasError = true
-      } else {
-        clearFieldError('phone')
-      }
-
-      if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-        nextFieldErrors.password = 'Password must be at least 8 characters with a letter and a number.'
-        hasError = true
-      } else {
-        clearFieldError('password')
-      }
-
-      if (password !== confirmPassword) {
-        nextFieldErrors.confirmPassword = 'Passwords do not match.'
-        hasError = true
-      } else {
-        clearFieldError('confirmPassword')
-      }
-    } else {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-        nextFieldErrors.email = 'Enter a valid email address.'
-        hasError = true
-      } else {
-        clearFieldError('email')
-      }
-
-      if (!password) {
-        nextFieldErrors.password = 'Please enter your password.'
-        hasError = true
-      } else {
-        clearFieldError('password')
-      }
-    }
-
-    if (hasError) {
-      setFieldErrors(nextFieldErrors)
-      return
-    }
-
     setSubmitting(true)
+
     try {
-      const response = await fetch(
-        `/api/auth/${mode === 'register' ? 'register' : 'customer/login'}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...(mode === 'register' ? { name: name.trim(), phone } : {}),
-            email: email.trim().toLowerCase(),
-            password,
-          }),
-        },
-      )
+      const response = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: identifier.trim().toLowerCase(),
+          purpose,
+        }),
+      })
+
       const data = await response.json()
+
       if (!response.ok) {
-        throw new Error(data.message || 'Unable to authenticate.')
+        throw new Error(data.message || 'Unable to send OTP')
       }
+
+      setStep('verify')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send OTP')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleVerifyOtp(event: React.FormEvent) {
+    event.preventDefault()
+    setError('')
+    setSubmitting(true)
+
+    try {
+      const response = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: identifier.trim().toLowerCase(),
+          otp: otp.trim(),
+          purpose,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Invalid or expired OTP')
+      }
+
       window.localStorage.setItem('customer-token', data.token)
       router.push('/account')
-    } catch (authError) {
-      setError(authError instanceof Error ? authError.message : 'Unable to authenticate.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid or expired OTP')
     } finally {
       setSubmitting(false)
     }
@@ -122,7 +84,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       <section className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
         <p className="text-sm font-semibold text-primary">S.V. Bakery</p>
         <h1 className="mt-2 text-3xl font-semibold text-primary">
-          {mode === 'register' ? 'Create your account' : 'Customer sign in'}
+          {mode === 'login' ? 'Customer sign in' : 'Create your account'}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {mode === 'register'
@@ -136,181 +98,79 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
-          {mode === 'register' && (
-            <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">
-                Full name
-              </label>
-              {fieldErrors.name && (
-                <p className="mb-2 text-xs text-destructive">
-                  {fieldErrors.name}
-                </p>
-              )}
-              <input
-                autoComplete="name"
-                required
-                minLength={2}
-                maxLength={100}
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value)
-                  clearFieldError('name')
-                }}
-                placeholder="Priya"
-                className={cn(
-                  'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
-                  fieldErrors.name
-                    ? 'border-destructive focus:ring-destructive'
-                    : 'border-border focus:ring-primary',
-                )}
-              />
-            </div>
-          )}
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-foreground">
-              Email
-            </label>
-            {fieldErrors.email && (
-              <p className="mb-2 text-xs text-destructive">
-                {fieldErrors.email}
+        <form onSubmit={step === 'enter' ? handleSendOtp : handleVerifyOtp} className="mt-6 space-y-5">
+          {/* Step 1: Enter email or phone */}
+          {step === 'enter' && (
+            <>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-foreground">
+                  Email or phone number
+                </label>
+                <input
+                  type="text"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  value={identifier}
+                  onChange={(event) => setIdentifier(event.target.value)}
+                  placeholder="you@example.com or 9840916058"
+                  className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
+                />
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                We&apos;ll send a 6-digit code to verify your identity.
               </p>
-            )}
-            <input
-              type="email"
-              autoComplete="email"
-              required
-              maxLength={254}
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value)
-                clearFieldError('email')
-              }}
-              placeholder="priya@example.com"
-              className={cn(
-                'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
-                fieldErrors.email
-                  ? 'border-destructive focus:ring-destructive'
-                  : 'border-border focus:ring-primary',
-              )}
-            />
-          </div>
-
-          {mode === 'register' && (
-            <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">
-                Indian mobile number
-              </label>
-              {fieldErrors.phone && (
-                <p className="mb-2 text-xs text-destructive">
-                  {fieldErrors.phone}
-                </p>
-              )}
-              <input
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel-national"
-                required
-                minLength={10}
-                maxLength={10}
-                pattern="[6-9][0-9]{9}"
-                value={phone}
-                onChange={(event) => {
-                  setPhone(event.target.value)
-                  clearFieldError('phone')
-                }}
-                placeholder="9840916058"
-                className={cn(
-                  'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
-                  fieldErrors.phone
-                    ? 'border-destructive focus:ring-destructive'
-                    : 'border-border focus:ring-primary',
-                )}
-              />
-            </div>
+              <button
+                type="submit"
+                disabled={submitting || !identifier.trim()}
+                className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
+              >
+                {submitting ? 'Sending…' : 'Send OTP'}
+              </button>
+            </>
           )}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-foreground">
-              Password
-            </label>
-            {fieldErrors.password && (
-              <p className="mb-2 text-xs text-destructive">
-                {fieldErrors.password}
+          {/* Step 2: Verify OTP */}
+          {step === 'verify' && (
+            <>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-foreground">
+                  Enter 6-digit code
+                </label>
+                <input
+                  type="text"
+                  autoComplete="otp"
+                  required
+                  maxLength={6}
+                  value={otp}
+                  onChange={(event) => setOtp(event.target.value)}
+                  placeholder="123456"
+                  className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 text-center text-lg font-mono"
+                />
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Code sent to {identifier}
               </p>
-            )}
-            <input
-              type="password"
-              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-              required
-              minLength={mode === 'register' ? 8 : undefined}
-              maxLength={72}
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value)
-                clearFieldError('password')
-              }}
-              placeholder="••••••••"
-              className={cn(
-                'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
-                fieldErrors.password
-                  ? 'border-destructive focus:ring-destructive'
-                  : 'border-border focus:ring-primary',
-              )}
-            />
-          </div>
-
-          {mode === 'register' && (
-            <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">
-                Confirm password
-              </label>
-              {fieldErrors.confirmPassword && (
-                <p className="mb-2 text-xs text-destructive">
-                  {fieldErrors.confirmPassword}
-                </p>
-              )}
-              <input
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                maxLength={72}
-                value={confirmPassword}
-                onChange={(event) => {
-                  setConfirmPassword(event.target.value)
-                  clearFieldError('confirmPassword')
-                }}
-                placeholder="••••••••"
-                className={cn(
-                  'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
-                  fieldErrors.confirmPassword
-                    ? 'border-destructive focus:ring-destructive'
-                    : 'border-border focus:ring-primary',
-                )}
-              />
-            </div>
+              <button
+                type="submit"
+                disabled={submitting || otp.trim().length !== 6}
+                className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
+              >
+                {submitting ? 'Verifying…' : 'Verify & Continue'}
+              </button>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Didn&apos;t receive the code?
+                <button
+                  type="button"
+                  onClick={() => setStep('enter')}
+                  className="text-primary font-medium hover:underline"
+                >
+                  Resend OTP
+                </button>
+              </p>
+            </>
           )}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
-          >
-            {submitting ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Sign in'}
-          </button>
         </form>
-
-        <p className="mt-6 text-sm text-muted-foreground">
-          {mode === 'register' ? 'Already have an account?' : 'New to S.V. Bakery?'}{' '}
-          <Link
-            className="font-medium text-primary underline-offset-4 hover:underline"
-            href={mode === 'register' ? '/account/login' : '/account/register'}
-          >
-            {mode === 'register' ? 'Sign in' : 'Create an account'}
-          </Link>
-        </p>
       </section>
     </main>
   )
