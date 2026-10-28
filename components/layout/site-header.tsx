@@ -43,6 +43,7 @@ export function SiteHeader() {
           <MenuIcon />
         </Button>
         <Logo />
+
         <nav aria-label="Main" className="ml-6 hidden lg:block">
           <ul className="flex items-center gap-1">
             {navLinks.map((link) => (
@@ -59,78 +60,78 @@ export function SiteHeader() {
                 </Link>
               </li>
             ))}
-            </ul>
-          </nav>
+          </ul>
+        </nav>
 
-          <div className="ml-auto flex items-center gap-1 sm:gap-2">
-            <Link
-              href="/account"
-              aria-label="Customer account"
-              title="Customer account"
-              className={cn(buttonVariants({ variant: 'outline', size: 'icon-lg' }), 'hidden sm:inline-flex')}
-            >
-              <UserRoundIcon />
-            </Link>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => setOpen(true)}
-              className="relative hidden md:inline-flex"
-              aria-label={`Open cart, ${count} items`}
-            >
-              <ShoppingBagIcon data-icon="inline-start" />
-              Cart
-              {hydrated && count > 0 && (
-                <span className="ml-1 flex min-w-5 items-center justify-center rounded-full bg-caramel px-1.5 text-xs font-semibold text-caramel-foreground">
-                  {count}
-                </span>
-              )}
-            </Button>
-            <Link
-              href="/products"
-              className={cn(buttonVariants({ variant: 'caramel', size: 'lg' }), 'hidden md:inline-flex')}
-            >
-              Order now
-            </Link>
-          </div>
+        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <Link
+            href="/account"
+            aria-label="Customer account"
+            title="Customer account"
+            className={cn(buttonVariants({ variant: 'outline', size: 'icon-lg' }), 'hidden sm:inline-flex')}
+          >
+            <UserRoundIcon />
+          </Link>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setOpen(true)}
+            className="relative hidden md:inline-flex"
+            aria-label={`Open cart, ${count} items`}
+          >
+            <ShoppingBagIcon data-icon="inline-start" />
+            Cart
+            {hydrated && count > 0 && (
+              <span className="ml-1 flex min-w-5 items-center justify-center rounded-full bg-caramel px-1.5 text-xs font-semibold text-caramel-foreground">
+                {count}
+              </span>
+            )}
+          </Button>
+          <Link
+            href="/products"
+            className={cn(buttonVariants({ variant: 'caramel', size: 'lg' }), 'hidden md:inline-flex')}
+          >
+            Order now
+          </Link>
         </div>
+      </div>
 
-        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-          <SheetContent side="left" className="w-80">
-            <SheetHeader>
-              <SheetTitle className="sr-only">Menu</SheetTitle>
-              <Logo />
-            </SheetHeader>
-            <nav aria-label="Mobile" className="px-4">
-              <ul className="flex flex-col gap-1">
-                <li>
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+        <SheetContent side="left" className="w-80">
+          <SheetHeader>
+            <SheetTitle className="sr-only">Menu</SheetTitle>
+            <Logo />
+          </SheetHeader>
+          <nav aria-label="Mobile" className="px-4">
+            <ul className="flex flex-col gap-1">
+              <li>
+                <Link
+                  href="/account"
+                  onClick={() => setMenuOpen(false)}
+                  className="block rounded-lg px-3 py-3 text-base font-medium hover:bg-secondary"
+                >
+                  My account
+                </Link>
+              </li>
+              {navLinks.map((link) => (
+                <li key={link.href}>
                   <Link
-                    href="/account"
+                    href={link.href}
                     onClick={() => setMenuOpen(false)}
-                    className="block rounded-lg px-3 py-3 text-base font-medium hover:bg-secondary"
+                    aria-current={isActive(link.href) ? 'page' : undefined}
+                    className={cn(
+                      'block rounded-lg px-3 py-3 text-base font-medium hover:bg-secondary',
+                      isActive(link.href) && 'bg-secondary text-primary',
+                    )}
                   >
-                    My account
+                    {link.label}
                   </Link>
                 </li>
-                {navLinks.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      onClick={() => setMenuOpen(false)}
-                      aria-current={isActive(link.href) ? 'page' : undefined}
-                      className={cn(
-                        'block rounded-lg px-3 py-3 text-base font-medium hover:bg-secondary',
-                        isActive(link.href) && 'bg-secondary text-primary',
-                      )}
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              </nav>
-            </SheetContent>
-          </Sheet>
-        </header>
-      )
-    }
+              ))}
+            </ul>
+          </nav>
+        </SheetContent>
+      </Sheet>
+    </header>
+  )
+}

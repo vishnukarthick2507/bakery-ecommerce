@@ -56,11 +56,12 @@ export function basePrice(product: Product) {
 }
 
 async function fetchBackendProducts(): Promise<Product[]> {
-  const baseUrl = apiBaseUrl()
-
   let response: Response
   try {
-    response = await fetch(`${baseUrl}/api/products`, { cache: 'no-store' })
+    // Use a relative path so the request is proxied through Next.js's
+    // server-side rewrite (/api/:path* -> backend URL) instead of a
+    // cross-origin browser fetch to the absolute backend URL.
+    response = await fetch('/api/products', { cache: 'no-store' })
   } catch {
     throw new ApiError('Unable to reach the product API.')
   }

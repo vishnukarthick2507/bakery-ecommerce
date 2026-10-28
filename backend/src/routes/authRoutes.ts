@@ -11,16 +11,12 @@ import {
   loginCustomer,
   logoutCustomer,
   registerCustomer,
-  sendOtp,
-  verifyOtp,
 } from "../controllers/customerAuthController.js";
 import { authenticateCustomer } from "../middleware/auth.js";
 import {
   adminLoginLimiter,
   customerLoginLimiter,
   customerRegisterLimiter,
-  otpSendLimiter,
-  otpVerifyLimiter,
 } from "../middleware/rateLimit.js";
 
 const router = Router();
@@ -40,10 +36,6 @@ router.get("/verify", verifyToken);
 // Admin session status (reads httpOnly admin-token cookie)
 router.get("/me", adminMe);
 router.post("/logout", adminLogout);
-
-// OTP send and verify (customer authentication)
-router.post("/otp/send", otpSendLimiter, sendOtp);
-router.post("/otp/verify", otpVerifyLimiter, verifyOtp);
 
 router.post("/register", customerRegisterLimiter, registerCustomer);
 router.post("/customer/login", customerLoginLimiter, loginCustomer);

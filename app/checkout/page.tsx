@@ -132,13 +132,6 @@ export default function CheckoutPage() {
 
   const [activeStep, setActiveStep] = useState<Step>('details')
 
-  // OTP verification state
-  const [otpStep, setOtpStep] = useState<'enter' | 'verify'>('enter')
-  const [otpIdentifier, setOtpIdentifier] = useState('')
-  const [otpCode, setOtpCode] = useState('')
-  const [otpVerified, setOtpVerified] = useState(false)
-  const [otpSubmitting, setOtpSubmitting] = useState(false)
-
   const apiUrl =
     process.env.NEXT_PUBLIC_API_URL ||
     'https://bakery-ecommerce-txuz.onrender.com'
@@ -166,7 +159,6 @@ export default function CheckoutPage() {
         setCustomerName((current) => current || data.user.name)
         setCustomerEmail((current) => current || data.user.email)
         setPhone((current) => current || data.user.phone)
-        setOtpVerified(true)
       })
       .catch(() => undefined)
   }, [apiUrl])
@@ -351,73 +343,6 @@ export default function CheckoutPage() {
     razorpay.open()
 
     return true
-  }
-
-  // OTP verification functions
-  async function handleSendOtp() {
-    setError('')
-    setIsSubmitting(true)
-
-    try {
-      const response = await fetch(`${apiUrl}/api/auth/otp/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: otpIdentifier.trim().toLowerCase(),
-          purpose: 'LOGIN',
-        }),
-      })
-
-      const data = await safeJson(response)
-
-      if (!response.ok) {
-        throw new Error(data?.message || 'Unable to send OTP')
-      }
-
-      setOtpStep('verify')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to send OTP')
-    } finally {
-      setOtpSubmitting(false)
-    }
-  }
-
-  async function handleVerifyOtp() {
-    setError('')
-    setIsSubmitting(true)
-
-    try {
-      const response = await fetch(`${apiUrl}/api/auth/otp/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: otpIdentifier.trim().toLowerCase(),
-          otp: otpCode.trim(),
-          purpose: 'LOGIN',
-        }),
-      })
-
-      const data = await safeJson(response)
-
-      if (!response.ok) {
-        throw new Error(data?.message || 'Invalid or expired OTP')
-      }
-
-      // Store the customer session token after successful server verification
-      if (data?.token) {
-        window.localStorage.setItem('customer-token', data.token)
-      }
-
-      // Pre-fill customer details from verified session
-      setCustomerName(data?.user.name || '')
-      setCustomerEmail(data?.user.email || '')
-      setPhone(data?.user.phone || '')
-      setOtpVerified(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid or expired OTP')
-    } finally {
-      setOtpSubmitting(false)
-    }
   }
 
   const handlePlaceOrder = async () => {
@@ -720,93 +645,8 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          {/* Step: Customer OTP Verification */}
-          {!otpVerified && (
-            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold text-primary mb-1">
-                Customer Verification
-              </h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Verify your identity to access your account and place orders.
-              </p>
-
-              {otpStep === 'enter' && (
-                <div className="mt-5 grid gap-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-foreground">
-                      Email or phone
-                    </label>
-                    <input
-                      type="text"
-                      autoComplete="email"
-                      required
-                      maxLength={254}
-                      value={otpIdentifier}
-                      onChange={(event) =>
-                        setOtpIdentifier(event.target.value)
-                      }
-                      placeholder="you@example.com or 9840916058"
-                      className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
-                    />
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    We&apos;ll send a 6-digit code to verify your identity.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleSendOtp}
-                    disabled={otpSubmitting || !otpIdentifier.trim()}
-                    className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
-                  >
-                    {otpSubmitting ? 'Sending…' : 'Send OTP'}
-                  </button>
-                </div>
-              )}
-
-              {otpStep === 'verify' && (
-                <div className="mt-5 grid gap-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-foreground">
-                      Enter 6-digit code
-                    </label>
-                    <input
-                      type="text"
-                      autoComplete="otp"
-                      required
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={(event) => setOtpCode(event.target.value)}
-                      placeholder="123456"
-                      className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 text-center text-lg font-mono"
-                    />
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Code sent to {otpIdentifier}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleVerifyOtp}
-                    disabled={otpSubmitting || otpCode.trim().length !== 6}
-                    className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
-                  >
-                    {otpSubmitting ? 'Verifying…' : 'Verify & Continue'}
-                  </button>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Didn&apos;t receive the code?
-                    <button
-                      type="button"
-                      onClick={() => setOtpStep('enter')}
-                      className="text-primary font-medium hover:underline"
-                    >
-                      Resend OTP
-                    </button>
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
             {/* Step: Customer details */}
-            {otpVerified && (
+            {activeStep === 'details' && (
               <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
                 <h2 className="text-xl font-semibold text-primary mb-1">
                   Customer details
@@ -906,7 +746,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setActiveStep('fulfilment')}
-                  disabled={!otpVerified || isSubmitting}
+                  disabled={isSubmitting}
                   className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >
                   Continue <span aria-hidden="true">›</span>

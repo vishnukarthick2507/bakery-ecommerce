@@ -156,65 +156,95 @@ describe("OTP service", () => {
     });
   });
 
-  describe("User creation via OTP verify (integration)", () => {
+  describe("Customer password authentication (integration)", () => {
     beforeAll(async () => {
       process.env.JWT_SECRET = "test-jwt-secret-that-is-at-least-32-chars-long";
     });
 
-    async function registerWithOtp(
-      identifier: string,
-      purpose: "LOGIN" | "REGISTER" = "REGISTER"
-    ) {
-      const { otp } = await createOtpSession(identifier, purpose);
+    async function registerCustomer(data: {
+      name: string;
+      email: string;
+      phone: string;
+      password: string;
+    }) {
       return request(app)
-        .post("/api/auth/otp/verify")
-        .send({ identifier, otp, purpose });
+        .post("/api/auth/register")
+        .send(data);
     }
 
-    it("allows multiple phone-only registrations with distinct phone numbers", async () => {
-      const r1 = await registerWithOtp("9840916058");
-      expect(r1.status).toBe(200);
-      expect(r1.body.user.email).toBeUndefined();
-      expect(r1.body.user.phone).toBe("9840916058");
+    async function loginCustomer(email: string, password: string) {
+      return request(app)
+        .post("/api/auth/customer/login")
+        .send({ email, password });
+    }
 
-      const r2 = await registerWithOtp("9840916059");
-      expect(r2.status).toBe(200);
-      expect(r2.body.user.email).toBeUndefined();
-      expect(r2.body.user.phone).toBe("9840916059");
+    it("registers a customer with name, email, phone, and password", async () => {
+      const res = await registerCustomer({
+        name: "Alice",
+        email: "alice@example.com",
+        phone: "9840916058",
+        password: "Password1",
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.token).toBeDefined();
+      expect(res.body.user.email).toBe("alice@example.com");
+      expect(res.body.user.phone).toBe("9840916058");
     });
 
-    it("allows multiple email-only registrations with distinct email addresses", async () => {
-      const r1 = await registerWithOtp("alice@example.com");
-      expect(r1.status).toBe(200);
-      expect(r1.body.user.email).toBe("alice@example.com");
-      expect(r1.body.user.phone).toBeUndefined();
-
-      const r2 = await registerWithOtp("bob@example.com");
-      expect(r2.status).toBe(200);
-      expect(r2.body.user.email).toBe("bob@example.com");
-      expect(r2.body.user.phone).toBeUndefined();
+    it("authenticates a customer with correct email and password", async () => {
+      await registerCustomer({
+        name: "Bob",
+        email: "bob@example.com",
+        phone: "9840916059",
+        password: "Secret22",
+      });
+      const res = await loginCustomer("bob@example.com", "Secret22");
+      expect(res.status).toBe(200);
+      expect(res.body.token).toBeDefined();
+      expect(res.body.user.email).toBe("bob@example.com");
     });
 
-    it("does not create a duplicate account for an existing email", async () => {
-      const r1 = await registerWithOtp("alice@example.com");
-      expect(r1.status).toBe(200);
-      const userId = r1.body.user.id;
-
-      const r2 = await registerWithOtp("alice@example.com");
-      expect(r2.status).toBe(200);
-      expect(r2.body.user.id).toBe(userId);
-      expect(r2.body.user.email).toBe("alice@example.com");
+    it("rejects login with incorrect password", async () => {
+      await registerCustomer({
+        name: "Eve",
+        email: "eve@example.com",
+        phone: "9840916063",
+        password: "Correct77",
+      });
+      const res = await loginCustomer("eve@example.com", "Wrong88");
+      expect(res.status).toBe(401);
     });
 
-    it("does not create a duplicate account for an existing phone number", async () => {
-      const r1 = await registerWithOtp("9840916058");
-      expect(r1.status).toBe(200);
-      const userId = r1.body.user.id;
+    it("rejects duplicate email registration", async () => {
+      await registerCustomer({
+        name: "Carol",
+        email: "carol@example.com",
+        phone: "9840916060",
+        password: "Password3",
+      });
+      const res = await registerCustomer({
+        name: "Carol2",
+        email: "carol@example.com",
+        phone: "9840916061",
+        password: "Password4",
+      });
+      expect(res.status).toBe(409);
+    });
 
-      const r2 = await registerWithOtp("9840916058");
-      expect(r2.status).toBe(200);
-      expect(r2.body.user.id).toBe(userId);
-      expect(r2.body.user.phone).toBe("9840916058");
+    it("rejects duplicate phone registration", async () => {
+      await registerCustomer({
+        name: "Dan",
+        email: "dan@example.com",
+        phone: "9840916062",
+        password: "Password5",
+      });
+      const res = await registerCustomer({
+        name: "Dan2",
+        email: "dan2@example.com",
+        phone: "9840916062",
+        password: "Password6",
+      });
+      expect(res.status).toBe(409);
     });
   });
 });

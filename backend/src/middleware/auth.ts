@@ -116,11 +116,15 @@ async function resolveCustomerToken(
     req.customer = {
       id: customer._id.toString(),
       name: customer.name,
-      email: customer.email ?? "",
-      phone: customer.phone ?? "",
+      email: customer.email,
+      phone: customer.phone,
     };
     next();
-  } catch {
+  } catch (error) {
+    console.error(
+      "Customer token verification failed:",
+      error instanceof Error ? error.message : String(error),
+    );
     res.status(401).json({ message: "Invalid or expired customer token" });
   }
 }
