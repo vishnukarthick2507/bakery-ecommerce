@@ -42,8 +42,8 @@ router.get("/me", adminMe);
 router.post("/logout", adminLogout);
 
 // OTP send and verify (customer authentication)
-router.post("/auth/otp/send", otpSendLimiter, sendOtp);
-router.post("/auth/otp/verify", otpVerifyLimiter, verifyOtp);
+router.post("/otp/send", otpSendLimiter, sendOtp);
+router.post("/otp/verify", otpVerifyLimiter, verifyOtp);
 
 router.post("/register", customerRegisterLimiter, registerCustomer);
 router.post("/customer/login", customerLoginLimiter, loginCustomer);

@@ -167,7 +167,7 @@ describe("OTP service", () => {
     ) {
       const { otp } = await createOtpSession(identifier, purpose);
       return request(app)
-        .post("/api/auth/auth/otp/verify")
+        .post("/api/auth/otp/verify")
         .send({ identifier, otp, purpose });
     }
 
