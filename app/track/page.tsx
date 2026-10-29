@@ -257,14 +257,11 @@ function TrackPageContent() {
     setOrder(null)
 
     try {
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
       const token = getCustomerToken()
 
       let response = token
         ? await fetch(
-            `${apiUrl}/api/orders/${encodeURIComponent(trimmed)}`,
+            `/api/orders/${encodeURIComponent(trimmed)}`,
             {
               cache: 'no-store',
               headers: customerAuthHeaders(),
@@ -279,7 +276,7 @@ function TrackPageContent() {
           )
         }
 
-        response = await fetch(`${apiUrl}/api/orders/track`, {
+        response = await fetch('/api/orders/track', {
           method: 'POST',
           cache: 'no-store',
           headers: { 'Content-Type': 'application/json' },
