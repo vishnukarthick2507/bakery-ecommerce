@@ -2,7 +2,7 @@
 const backendUrl =
   process.env.BACKEND_INTERNAL_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:5000'
+  'https://bakery-ecommerce-txuz.onrender.com'
 
 const nextConfig = {
   images: {
