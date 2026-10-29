@@ -138,10 +138,6 @@ export default function CheckoutPage() {
 
   const [activeStep, setActiveStep] = useState<Step>('details')
 
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    'https://bakery-ecommerce-txuz.onrender.com'
-
   async function safeJson(response: Response): Promise<any> {
     const text = await response.text()
     try {
@@ -177,7 +173,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     const token = window.localStorage.getItem('customer-token')
     if (!token) return
-    void fetch(`${apiUrl}/api/auth/me`, {
+    void fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })
@@ -190,10 +186,10 @@ export default function CheckoutPage() {
         setPhone((current) => current || data.user.phone)
       })
       .catch(() => undefined)
-  }, [apiUrl])
+  }, [])
 
   useEffect(() => {
-    void fetch(`${apiUrl}/api/settings`, { cache: 'no-store' })
+    void fetch('/api/settings', { cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) return
         const data = await safeJson(response)
@@ -207,7 +203,7 @@ export default function CheckoutPage() {
       })
       .catch(() => undefined)
       .finally(() => setSettingsLoaded(true))
-  }, [apiUrl])
+  }, [])
 
   useEffect(() => {
     if (!settings || !settingsLoaded) return
@@ -252,10 +248,9 @@ export default function CheckoutPage() {
 
   const startOnlinePayment = async (
     orderNumber: string,
-    apiUrl: string,
   ): Promise<boolean> => {
     const response = await fetch(
-      `${apiUrl}/api/payments/create-order`,
+      '/api/payments/create-order',
       {
         method: 'POST',
         headers: {
@@ -303,7 +298,7 @@ export default function CheckoutPage() {
       ) => {
         try {
           const verifyResponse = await fetch(
-            `${apiUrl}/api/payments/verify`,
+            '/api/payments/verify',
             {
               method: 'POST',
               headers: {
@@ -384,8 +379,11 @@ export default function CheckoutPage() {
     setError('')
     setFieldErrors({})
 
-    if (!settings?.onlineOrdersEnabled) {
-      setError('')
+    if (closed) {
+      setError(
+        settings?.closedMessage ||
+          'Online ordering is currently closed. Please check back soon.',
+      )
       return
     }
 
@@ -466,10 +464,6 @@ export default function CheckoutPage() {
     setIsSubmitting(true)
 
     try {
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL ||
-        'https://bakery-ecommerce-txuz.onrender.com'
-
       let orderNumber =
         payment === 'online'
           ? (pendingOnlineOrder ?? '')
@@ -484,7 +478,7 @@ export default function CheckoutPage() {
           orderIdempotencyKey.current,
         )
         const response = await fetch(
-          `${apiUrl}/api/orders`,
+          '/api/orders',
           {
             method: 'POST',
             headers: {
@@ -578,10 +572,7 @@ export default function CheckoutPage() {
 
       // Returns true when the Razorpay modal opened; its
       // callbacks own the isSubmitting state from here.
-      const opened = await startOnlinePayment(
-        orderNumber,
-        apiUrl,
-      )
+      const opened = await startOnlinePayment(orderNumber)
 
       if (!opened) {
         setIsSubmitting(false)
