@@ -4,6 +4,10 @@ import { Section, SectionHeading } from '@/components/section-heading'
 import type { Category } from '@/lib/types'
 
 export function CategoriesSection({ categories }: { categories: Category[] }) {
+  // Render nothing when there are no categories so the homepage doesn't
+  // show an empty "Shop by category" heading with a large gap below it.
+  if (!categories?.length) return null;
+
   return (
     <Section labelledBy="categories-title">
       <SectionHeading id="categories-title" title="Shop by category" href="/products" hrefLabel="All products" />

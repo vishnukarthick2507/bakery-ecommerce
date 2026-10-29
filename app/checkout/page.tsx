@@ -117,12 +117,18 @@ export default function CheckoutPage() {
     deliveryEnabled: boolean
     pickupEnabled: boolean
     closedMessage: string
+    reopenAt: string | null
   } | null>(null)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  // True only after settings have loaded and online ordering is disabled.
+  // While settings are loading (settings === null) we do not treat the store
+  // as closed; the buttons stay enabled and the backend enforces the real state.
+  const closed = settingsLoaded && settings && !settings.onlineOrdersEnabled
 
   // An ONLINE order that is created but not yet paid, so retries
   // reuse the same order instead of creating duplicates.
@@ -168,7 +174,13 @@ export default function CheckoutPage() {
       .then(async (response) => {
         if (!response.ok) return
         const data = await safeJson(response)
-        setSettings(data?.settings ?? null)
+        setSettings({
+          onlineOrdersEnabled: data?.settings?.onlineOrdersEnabled ?? false,
+          deliveryEnabled: data?.settings?.deliveryEnabled ?? false,
+          pickupEnabled: data?.settings?.pickupEnabled ?? false,
+          closedMessage: data?.settings?.closedMessage || '',
+          reopenAt: data?.settings?.reopenAt ?? null,
+        })
       })
       .catch(() => undefined)
       .finally(() => setSettingsLoaded(true))
@@ -350,10 +362,7 @@ export default function CheckoutPage() {
     setFieldErrors({})
 
     if (!settings?.onlineOrdersEnabled) {
-      setError(
-        settings?.closedMessage ||
-          'Online ordering is currently closed. Please check back soon.',
-      )
+      setError('')
       return
     }
 
@@ -638,10 +647,19 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          {!settings?.onlineOrdersEnabled && (
+          {closed && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
               {settings?.closedMessage ||
                 'Online ordering is currently closed. Please check back soon.'}
+              {settings?.reopenAt && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  We plan to reopen at{' '}
+                  {new Date(settings.reopenAt).toLocaleString('en-IN')}.
+                </p>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                You can still browse products and track existing orders.
+              </p>
             </div>
           )}
 
@@ -1199,7 +1217,7 @@ export default function CheckoutPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={isSubmitting}
+                  disabled={closed || isSubmitting}
                   onClick={handlePlaceOrder}
                   className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >
@@ -1289,7 +1307,7 @@ export default function CheckoutPage() {
 
           <button
             type="button"
-            disabled={isSubmitting}
+            disabled={closed || isSubmitting}
             onClick={handlePlaceOrder}
             className="mt-6 w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
           >
