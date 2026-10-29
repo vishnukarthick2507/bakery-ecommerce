@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
@@ -188,6 +188,7 @@ export const verifyToken = async (
 export const adminMe = async (
   req: Request,
   res: Response,
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const token = getTokenFromRequest(req);
@@ -198,10 +199,22 @@ export const adminMe = async (
     }
 
     const decoded = jwt.verify(token, getJwtSecret()) as {
-      adminId: string;
-      username: string;
-      role: string;
+      adminId?: string;
+      username?: string;
+      role?: string;
+      customerId?: string;
+      accountType?: string;
+      tokenVersion?: number;
     };
+
+    // A customer JWT carries customerId (not adminId) and accountType
+    // "CUSTOMER". It is not an admin session, so delegate to the customer
+    // /me handler (getCurrentCustomer) which returns { user }. Without this
+    // the customer profile request wrongly returns { isAdmin: false } and the
+    // frontend clears a valid customer session, causing a login redirect loop.
+    if (!decoded.adminId || decoded.accountType === "CUSTOMER") {
+      return next();
+    }
 
     const admin = await Admin.findById(decoded.adminId).lean();
 

@@ -131,4 +131,34 @@ describe("Customer password-based authentication", () => {
       expect(res.status).toBe(401);
     });
   });
+
+  describe("GET /api/auth/me", () => {
+    it("returns the customer profile for a valid customer token", async () => {
+      await request(app).post("/api/auth/register").send(registerPayload);
+
+      const login = await request(app)
+        .post("/api/auth/customer/login")
+        .send({ email: "priya@example.com", password: "Secure1password" });
+      expect(login.status).toBe(200);
+      const token = login.body.token;
+
+      const res = await request(app)
+        .get("/api/auth/me")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.user).toMatchObject({
+        name: "Priya Customer",
+        email: "priya@example.com",
+        phone: "9840916058",
+      });
+      expect(res.body.user.passwordHash).toBeUndefined();
+    });
+
+    it("returns { isAdmin: false } with no token (admin fallback unchanged)", async () => {
+      const res = await request(app).get("/api/auth/me");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ isAdmin: false });
+    });
+  });
 });

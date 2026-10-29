@@ -20,15 +20,27 @@ export default function AccountPage() {
 
     fetch('/api/auth/me', { headers: customerAuthHeaders(), cache: 'no-store' })
       .then(async (response) => {
-        if (!response.ok) throw new Error('Unable to load account.')
+        if (!response.ok) {
+          // A 401/403 means the customer session is genuinely invalid: clear it
+          // and send the user back to login. Any other status (e.g. 5xx) is a
+          // transient server error: keep the valid session and surface the error.
+          if (response.status === 401 || response.status === 403) {
+            clearCustomerSession()
+            router.replace('/account/login')
+          }
+          throw new Error('Unable to load account.')
+        }
         const data = await response.json()
-        if (!data?.user) throw new Error('Unable to load account.')
+        if (!data?.user) {
+          // Unexpected response shape: keep the valid customer session rather
+          // than clearing it over a temporary/server formatting issue.
+          throw new Error('Unable to load account.')
+        }
         setProfile(data.user)
       })
       .catch((requestError: unknown) => {
-        clearCustomerSession()
+        // Network or transient errors must not clear a valid customer session.
         setError(requestError instanceof Error ? requestError.message : 'Unable to load account.')
-        router.replace('/account/login')
       })
       .finally(() => setLoading(false))
   }, [router])
