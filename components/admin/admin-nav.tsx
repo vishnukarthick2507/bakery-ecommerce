@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { LogOutIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type NavItem = {
@@ -28,6 +30,22 @@ const activeLink = 'rounded-lg border border-primary bg-primary px-4 py-2 text-s
 
 export default function AdminNav({ className }: { className?: string } = {}) {
   const pathname = usePathname()
+  const router = useRouter()
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  async function handleLogout() {
+    setLoggingOut(true)
+    try {
+      // Clears the httpOnly admin-token cookie on the server.
+      await fetch('/api/admin/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } finally {
+      setLoggingOut(false)
+      router.replace('/admin/login')
+    }
+  }
 
   return (
     <nav
@@ -52,6 +70,23 @@ export default function AdminNav({ className }: { className?: string } = {}) {
       >
         {viewStoreItem.label}
       </Link>
+      <button
+        type="button"
+        onClick={handleLogout}
+        disabled={loggingOut}
+        className={cn(
+          inactiveLink,
+          'flex items-center gap-2',
+          loggingOut ? 'opacity-60 cursor-not-allowed' : 'hover:bg-destructive/10 hover:text-destructive',
+        )}
+      >
+        {loggingOut ? 'Signing out…' : (
+          <>
+            <LogOutIcon className="size-4 shrink-0" aria-hidden="true" />
+            Logout
+          </>
+        )}
+      </button>
     </nav>
   )
 }
