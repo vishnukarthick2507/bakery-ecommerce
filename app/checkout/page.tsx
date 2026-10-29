@@ -151,6 +151,29 @@ export default function CheckoutPage() {
     }
   }
 
+  // Validate the customer phone number (required for all checkouts, guest or logged-in).
+  function validatePhone(phone: string): string | null {
+    if (!phone.trim()) return 'Please enter your phone number.'
+    if (!/^[6-9]\d{9}$/.test(phone.trim())) {
+      return 'Enter a valid 10-digit Indian mobile number.'
+    }
+    return null
+  }
+
+  // Today's date in the store's configured timezone (Asia/Kolkata, UTC+5:30),
+  // used as the minimum selectable delivery/pickup date.
+  function getTodayInIST(): string {
+    const now = new Date()
+    const kolkataOffsetMinutes = 5 * 60 + 30
+    const kolkataTime = new Date(now.getTime() + kolkataOffsetMinutes * 60 * 1000)
+    return kolkataTime.toISOString().split('T')[0]!
+  }
+
+  // True when the selected date is earlier than today in IST.
+  function isPastDate(dateString: string): boolean {
+    return dateString < getTodayInIST()
+  }
+
   useEffect(() => {
     const token = window.localStorage.getItem('customer-token')
     if (!token) return
@@ -418,6 +441,9 @@ export default function CheckoutPage() {
 
     if (!scheduledDate) {
       nextFieldErrors.scheduledDate = 'Please select your order date.'
+      hasError = true
+    } else if (isPastDate(scheduledDate)) {
+      nextFieldErrors.scheduledDate = 'Please select today or a future date.'
       hasError = true
     } else {
       clearFieldError('scheduledDate')
@@ -763,7 +789,16 @@ export default function CheckoutPage() {
 
                 <button
                   type="button"
-                  onClick={() => setActiveStep('fulfilment')}
+                  onClick={() => {
+                    const phoneError = validatePhone(phone)
+                    if (phoneError) {
+                      setFieldErrors({ phone: phoneError })
+                      setActiveStep('details')
+                      return
+                    }
+                    clearFieldError('phone')
+                    setActiveStep('fulfilment')
+                  }}
                   disabled={isSubmitting}
                   className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >
@@ -964,6 +999,7 @@ export default function CheckoutPage() {
                   )}
                   <input
                     type="date"
+                    min={getTodayInIST()}
                     value={scheduledDate}
                     onChange={(e) => {
                       setScheduledDate(e.target.value)
@@ -1016,7 +1052,24 @@ export default function CheckoutPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveStep('payment')}
+                  onClick={() => {
+                    if (!scheduledDate) {
+                      setFieldErrors({
+                        scheduledDate: 'Please select your order date.',
+                      })
+                      setActiveStep('schedule')
+                      return
+                    }
+                    if (isPastDate(scheduledDate)) {
+                      setFieldErrors({
+                        scheduledDate: 'Please select today or a future date.',
+                      })
+                      setActiveStep('schedule')
+                      return
+                    }
+                    clearFieldError('scheduledDate')
+                    setActiveStep('payment')
+                  }}
                   disabled={isSubmitting}
                   className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >

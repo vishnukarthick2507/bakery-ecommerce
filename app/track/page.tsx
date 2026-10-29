@@ -328,6 +328,25 @@ function TrackPageContent() {
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+
+    const trimmed = orderNumber.trim()
+    if (!trimmed) {
+      setError('Please enter your order number.')
+      setOrder(null)
+      return
+    }
+
+    if (!isAuthenticated) {
+      const effectivePhone = guestPhone.trim()
+      if (!/^[6-9]\d{9}$/.test(effectivePhone)) {
+        setError(
+          'Enter the 10-digit phone number used at checkout to track a guest order.',
+        )
+        setOrder(null)
+        return
+      }
+    }
+
     fetchOrder(orderNumber)
   }
 
