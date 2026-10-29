@@ -73,4 +73,30 @@ describe("Admin token verification API", () => {
     });
     expect(response.body.admin).not.toHaveProperty("password");
   });
+
+  it("verifies a token received via the login set-cookie header", async () => {
+    const loginResponse = await request(app)
+      .post("/api/auth/login")
+      .send({
+        username: "testadmin",
+        password: "CorrectPassword123",
+      });
+
+    expect(loginResponse.status).toBe(200);
+    const setCookie = loginResponse.headers["set-cookie"];
+    expect(setCookie).toBeDefined();
+
+    // Extract just the "name=value" pair, dropping cookie attributes
+    // (Path, HttpOnly, SameSite, etc.) that a browser would not resend.
+    const cookieValue = Array.isArray(setCookie)
+      ? setCookie[0].split(";")[0]
+      : setCookie.split(";")[0];
+
+    const verifyResponse = await request(app)
+      .get("/api/auth/verify")
+      .set("Cookie", cookieValue);
+
+    expect(verifyResponse.status).toBe(200);
+    expect(verifyResponse.body.valid).toBe(true);
+  });
 });

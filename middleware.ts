@@ -4,11 +4,12 @@ import type { NextRequest } from 'next/server'
 /**
  * Server-side route protection for /admin/*.
  *
- * The admin token lives in localStorage (invisible to server middleware), so
- * the login page also mirrors it into an `admin-token` cookie. This middleware
- * reads that cookie and verifies it against the existing backend
- * /api/auth/verify endpoint (which validates the JWT signature and confirms
- * the admin exists in MongoDB).
+ * The admin login endpoint sets an httpOnly `admin-token` cookie on the
+ * response. The browser stores this cookie (the login page sends
+ * credentials: 'include' so Set-Cookie is honoured), and it is sent on
+ * subsequent same-origin requests. This middleware reads that cookie and
+ * verifies it against the existing backend /api/auth/verify endpoint
+ * (which validates the JWT signature and confirms the admin exists in MongoDB).
  *
  * /admin/login remains publicly accessible.
  * All other /admin/* routes require a valid, server-verified admin session.
@@ -31,7 +32,9 @@ export async function middleware(request: NextRequest) {
 
     try {
       const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+        process.env.BACKEND_INTERNAL_URL ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        'http://localhost:5000'
 
       const response = await fetch(`${apiUrl}/api/auth/verify`, {
         cache: 'no-store',
