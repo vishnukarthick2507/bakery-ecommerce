@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
       const apiUrl =
         process.env.BACKEND_INTERNAL_URL ||
         process.env.NEXT_PUBLIC_API_URL ||
-        'https://bakery-ecommerce-txuz.onrender.com'
+        'https://bakery-ecommerce-staging.onrender.com'
 
       const response = await fetch(`${apiUrl}/api/auth/verify`, {
         cache: 'no-store',

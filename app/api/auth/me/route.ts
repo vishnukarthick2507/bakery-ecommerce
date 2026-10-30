@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const backendUrl =
   process.env.BACKEND_INTERNAL_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  'https://bakery-ecommerce-txuz.onrender.com'
+  'https://bakery-ecommerce-staging.onrender.com'
 
 export async function GET(req: NextRequest) {
   const authorization = req.headers.get('authorization')
