@@ -18,7 +18,11 @@ export default function AccountPage() {
       return
     }
 
-    fetch('/api/auth/me', { headers: customerAuthHeaders(), cache: 'no-store' })
+    fetch('/api/auth/me', {
+      headers: customerAuthHeaders(),
+      credentials: 'include',
+      cache: 'no-store',
+    })
       .then(async (response) => {
         if (!response.ok) {
           // A 401/403 means the customer session is genuinely invalid: clear it
@@ -48,7 +52,7 @@ export default function AccountPage() {
   async function logout() {
     const headers = customerAuthHeaders()
     try {
-      await fetch('/api/auth/logout', { method: 'POST', headers })
+      await fetch('/api/auth/logout', { method: 'POST', headers, credentials: 'include' })
     } finally {
       clearCustomerSession()
       router.replace('/account/login')

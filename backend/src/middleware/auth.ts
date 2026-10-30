@@ -75,9 +75,18 @@ async function resolveCustomerToken(
   required: boolean,
   next: NextFunction,
 ): Promise<void> {
-  const authHeader = req.headers.authorization;
+  // Prefer the Authorization: Bearer header; fall back to the httpOnly
+  // customer-token cookie so browser-sent customer cookies are honoured.
+  let token: string | null = null;
 
-  if (!authHeader) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7);
+  } else if (req.cookies && req.cookies["customer-token"]) {
+    token = req.cookies["customer-token"];
+  }
+
+  if (!token) {
     if (required) {
       res.status(401).json({ message: "Authentication required" });
       return;
@@ -87,11 +96,7 @@ async function resolveCustomerToken(
   }
 
   try {
-    if (!authHeader.startsWith("Bearer ")) {
-      throw new Error("Invalid authorization header");
-    }
-
-    const decoded = jwt.verify(authHeader.substring(7), getJwtSecret()) as {
+    const decoded = jwt.verify(token, getJwtSecret()) as {
       customerId?: string;
       accountType?: string;
       tokenVersion?: number;

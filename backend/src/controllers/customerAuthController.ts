@@ -46,6 +46,28 @@ function publicCustomer(user: {
   };
 }
 
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
+function setCustomerTokenCookie(res: Response, token: string): void {
+  res.cookie("customer-token", token, {
+    httpOnly: true,
+    path: "/",
+    sameSite: isProduction() ? "none" : "lax",
+    secure: isProduction(),
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days, matches JWT expiry
+  });
+}
+
+function clearCustomerTokenCookie(res: Response): void {
+  res.clearCookie("customer-token", {
+    path: "/",
+    sameSite: isProduction() ? "none" : "lax",
+    secure: isProduction(),
+  });
+}
+
 export const registerCustomer = async (
   req: AuthRequest,
   res: Response,
@@ -71,8 +93,10 @@ export const registerCustomer = async (
       passwordHash: await bcrypt.hash(password, 12),
       active: true,
     });
+    const token = createCustomerToken(user._id.toString(), user.tokenVersion ?? 0);
+    setCustomerTokenCookie(res, token);
     res.status(201).json({
-      token: createCustomerToken(user._id.toString(), user.tokenVersion ?? 0),
+      token,
       user: publicCustomer(user),
     });
   } catch (error) {
@@ -103,8 +127,10 @@ export const loginCustomer = async (
       return;
     }
 
+    const token = createCustomerToken(user._id.toString(), user.tokenVersion ?? 0);
+    setCustomerTokenCookie(res, token);
     res.status(200).json({
-      token: createCustomerToken(user._id.toString(), user.tokenVersion ?? 0),
+      token,
       user: publicCustomer(user),
     });
   } catch (error) {
@@ -152,5 +178,6 @@ export const logoutCustomer = async (
     { _id: req.customer.id },
     { $inc: { tokenVersion: 1 } },
   );
+  clearCustomerTokenCookie(res);
   res.status(200).json({ message: "Logged out" });
 };

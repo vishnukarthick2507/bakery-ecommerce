@@ -96,6 +96,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         `/api/auth/${mode === 'register' ? 'register' : 'customer/login'}`,
         {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...(mode === 'register' ? { name: name.trim(), phone } : {}),
