@@ -28,16 +28,17 @@ function clearAdminTokenCookie(res: Response): void {
 }
 
 function getTokenFromRequest(req: Request): string | null {
-  // Prefer the httpOnly cookie (single source of truth).
-  const cookieToken = req.cookies?.["admin-token"];
-  if (cookieToken) {
-    return cookieToken;
-  }
-
-  // Fall back to Authorization: Bearer header for API clients.
+  // Prefer the Authorization: Bearer header so a customer JWT sent in the
+  // header takes precedence over a stale admin-token cookie. Fall back to
+  // the httpOnly admin-token cookie for browser-based admin sessions.
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     return authHeader.substring(7);
+  }
+
+  const cookieToken = req.cookies?.["admin-token"];
+  if (cookieToken) {
+    return cookieToken;
   }
 
   return null;
