@@ -12,7 +12,7 @@ export interface AuthRequest extends Request {
   customer?: {
     id: string;
     name: string;
-    email: string;
+    email: string | null | undefined;
     phone: string;
   };
 }

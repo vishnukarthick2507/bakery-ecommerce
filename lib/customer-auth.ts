@@ -1,7 +1,7 @@
 export type CustomerProfile = {
   id: string
   name: string
-  email: string
+  email?: string | null
   phone: string
   createdAt: string
   updatedAt: string
@@ -22,7 +22,7 @@ export type CustomerOrder = {
   orderNumber: string
   userId?: string
   customerName: string
-  customer?: { name: string; email: string; phone: string }
+  customer?: { name: string; email?: string | null; phone: string }
   phone: string
   fulfillmentType: 'DELIVERY' | 'PICKUP'
   address?: { addressLine: string; city: string; pincode: string }

@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, afterAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { OtpSession } from "../src/models/OtpSession.js";
+import { User } from "../src/models/User.js";
 import {
   createOtpSession,
   generateOtp,
@@ -245,6 +246,234 @@ describe("OTP service", () => {
         password: "Password6",
       });
       expect(res.status).toBe(409);
+    });
+  });
+
+  describe("Customer phone OTP authentication (integration)", () => {
+    beforeAll(async () => {
+      process.env.JWT_SECRET = "test-jwt-secret-that-is-at-least-32-chars-long";
+    });
+
+    async function registerCustomer(data: {
+      name: string;
+      email: string;
+      phone: string;
+      password: string;
+    }) {
+      return request(app).post("/api/auth/register").send(data);
+    }
+
+    async function sendOtpRequest(phone: string, purpose: "LOGIN" | "REGISTER" = "LOGIN") {
+      return request(app).post("/api/auth/otp/send").send({ phone, purpose, identifier: phone });
+    }
+
+    async function verifyOtpRequest(
+      phone: string,
+      otp: string,
+      purpose: "LOGIN" | "REGISTER" = "LOGIN",
+      name?: string,
+    ) {
+      return request(app)
+        .post("/api/auth/otp/verify")
+        .send({ phone, otp, purpose, identifier: phone, ...(name ? { name } : {}) });
+    }
+
+    it("sends an OTP and returns it in development mode", async () => {
+      const res = await sendOtpRequest("9840916058", "REGISTER");
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("OTP sent successfully");
+      expect(res.body.otp).toMatch(/^\d{6}$/);
+    });
+
+    it("normalizes +91 country code", async () => {
+      const res = await sendOtpRequest("+919840916058", "REGISTER");
+      expect(res.status).toBe(200);
+      expect(res.body.otp).toMatch(/^\d{6}$/);
+    });
+
+    it("normalizes phone with spaces and dashes", async () => {
+      const res = await sendOtpRequest("+91 98409-16058", "REGISTER");
+      expect(res.status).toBe(200);
+      expect(res.body.otp).toMatch(/^\d{6}$/);
+    });
+
+    it("rejects invalid phone format", async () => {
+      const res = await sendOtpRequest("123", "REGISTER");
+      expect(res.status).toBe(400);
+    });
+
+    it("verifies OTP and logs in an existing customer, preserving their _id", async () => {
+      await registerCustomer({
+        name: "Existing User",
+        email: "existing@example.com",
+        phone: "9840916058",
+        password: "Password1",
+      });
+
+      const sendRes = await sendOtpRequest("9840916058", "LOGIN");
+      expect(sendRes.status).toBe(200);
+      const otp = sendRes.body.otp;
+
+      const verifyRes = await verifyOtpRequest("9840916058", otp, "LOGIN");
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.token).toBeDefined();
+      expect(verifyRes.body.user.phone).toBe("9840916058");
+      // Existing customer retains email and existing _id
+      expect(verifyRes.body.user.email).toBe("existing@example.com");
+      expect(verifyRes.body.user.id).toBeDefined();
+    });
+
+    it("creates a new phone-only customer via OTP registration with email omitted", async () => {
+      const sendRes = await sendOtpRequest("9840916059", "REGISTER");
+      expect(sendRes.status).toBe(200);
+      const otp = sendRes.body.otp;
+
+      const verifyRes = await verifyOtpRequest("9840916059", otp, "REGISTER", "Priya");
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.token).toBeDefined();
+      expect(verifyRes.body.user.phone).toBe("9840916059");
+      expect(verifyRes.body.user.email).toBeUndefined();
+      expect(verifyRes.body.user.id).toBeDefined();
+      expect(verifyRes.body.user.name).toBe("Priya");
+    });
+
+    it("prevents duplicate phone accounts by rejecting REGISTER with existing phone", async () => {
+      const r1 = await sendOtpRequest("9840916060", "REGISTER");
+      expect(r1.status).toBe(200);
+      const v1 = await verifyOtpRequest("9840916060", r1.body.otp, "REGISTER", "Alice");
+      expect(v1.status).toBe(200);
+      expect(v1.body.token).toBeDefined();
+      const firstId = v1.body.user.id;
+
+      const r2 = await sendOtpRequest("9840916060", "REGISTER");
+      expect(r2.status).toBe(200);
+      const v2 = await verifyOtpRequest("9840916060", r2.body.otp, "REGISTER", "Bob");
+      expect(v2.status).toBe(409);
+      expect(v2.body.message).toContain("already exists");
+      expect(v2.body.token).toBeUndefined();
+      // Confirm no second account was created
+      const count = await User.countDocuments({ phone: "9840916060" });
+      expect(count).toBe(1);
+    });
+
+    it("rejects LOGIN OTP for an inactive customer", async () => {
+      await registerCustomer({
+        name: "Inactive User",
+        email: "inactive@example.com",
+        phone: "9840916075",
+        password: "Password1",
+      });
+      await User.updateOne({ phone: "9840916075" }, { $set: { active: false } });
+
+      const sendRes = await sendOtpRequest("9840916075", "LOGIN");
+      expect(sendRes.status).toBe(200);
+      const otp = sendRes.body.otp;
+
+      const verifyRes = await verifyOtpRequest("9840916075", otp, "LOGIN");
+      expect(verifyRes.status).toBe(403);
+      expect(verifyRes.body.message).toContain("inactive");
+      expect(verifyRes.body.token).toBeUndefined();
+      // Confirm no customer authentication cookie is issued for inactive accounts
+      const setCookie = verifyRes.headers["set-cookie"];
+      expect(setCookie).toBeUndefined();
+    });
+
+    it("rejects LOGIN OTP for an unknown phone without creating an account", async () => {
+      const sendRes = await sendOtpRequest("9840916070", "LOGIN");
+      expect(sendRes.status).toBe(200);
+      const otp = sendRes.body.otp;
+
+      const verifyRes = await verifyOtpRequest("9840916070", otp, "LOGIN");
+      expect(verifyRes.status).toBe(404);
+      expect(verifyRes.body.message).toContain("No account found");
+      expect(verifyRes.body.token).toBeUndefined();
+
+      // Confirm no account was created
+      const user = await User.findOne({ phone: "9840916070" });
+      expect(user).toBeNull();
+    });
+
+    it("requires a name for phone-only REGISTER", async () => {
+      const sendRes = await sendOtpRequest("9840916072", "REGISTER");
+      expect(sendRes.status).toBe(200);
+      const otp = sendRes.body.otp;
+
+      const res = await request(app)
+        .post("/api/auth/otp/verify")
+        .send({ phone: "9840916072", otp, purpose: "REGISTER" });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain("Name");
+    });
+
+    it("rejects an invalid name (too short) for phone-only REGISTER", async () => {
+      const sendRes = await sendOtpRequest("9840916073", "REGISTER");
+      expect(sendRes.status).toBe(200);
+      const otp = sendRes.body.otp;
+
+      const res = await request(app)
+        .post("/api/auth/otp/verify")
+        .send({ phone: "9840916073", otp, purpose: "REGISTER", name: "A", identifier: "9840916073" });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Invalid request");
+      expect(res.body.errors).toBeDefined();
+      expect(res.body.errors.fieldErrors.name).toBeDefined();
+    });
+
+    it("returns 501 in production mode without creating an OTP session", async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = "production";
+      try {
+        const res = await request(app)
+          .post("/api/auth/otp/send")
+          .send({ phone: "9840916074", purpose: "REGISTER", identifier: "9840916074" });
+        expect(res.status).toBe(501);
+        expect(res.body.message).toContain("SMS delivery is not configured");
+
+        // Confirm no OTP session was created
+        const session = await OtpSession.findOne({ identifier: "9840916074" });
+        expect(session).toBeNull();
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
+    it("rejects an incorrect OTP", async () => {
+      await sendOtpRequest("9840916061", "LOGIN");
+      const res = await verifyOtpRequest("9840916061", "000000", "LOGIN");
+      expect(res.status).toBe(401);
+      expect(res.body.message).toBe("Invalid or expired OTP");
+    });
+
+    it("rejects an expired OTP", async () => {
+      await OtpSession.create({
+        identifier: "9840916062",
+        otpHash: hashOtp("123456", "salt"),
+        otpSalt: "salt",
+        purpose: "LOGIN",
+        attempts: 0,
+        consumed: false,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      const res = await verifyOtpRequest("9840916062", "123456", "LOGIN");
+      expect(res.status).toBe(401);
+    });
+
+    it("invalidates the session after 3 incorrect attempts", async () => {
+      await sendOtpRequest("9840916063", "LOGIN");
+
+      await verifyOtpRequest("9840916063", "000000", "LOGIN");
+      await verifyOtpRequest("9840916063", "111111", "LOGIN");
+      await verifyOtpRequest("9840916063", "222222", "LOGIN");
+
+      const blocked = await verifyOtpRequest("9840916063", "333333", "LOGIN");
+      expect(blocked.status).toBe(401);
+
+      const session = await OtpSession.findOne({
+        identifier: "9840916063",
+        purpose: "LOGIN",
+      });
+      expect(session?.consumed).toBe(true);
     });
   });
 });

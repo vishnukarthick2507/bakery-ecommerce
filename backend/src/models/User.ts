@@ -9,8 +9,8 @@ const userSchema = new Schema(
     },
     email: {
       type: String,
-      required: true,
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true,
     },
@@ -22,7 +22,6 @@ const userSchema = new Schema(
     },
     passwordHash: {
       type: String,
-      required: true,
       select: false,
     },
     active: {

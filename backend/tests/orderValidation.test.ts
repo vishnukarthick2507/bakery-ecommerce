@@ -4,10 +4,12 @@ import express from "express";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
 import { randomUUID } from "crypto";
+import jwt from "jsonwebtoken";
 
 import { Order } from "../src/models/Order.js";
 import { Product } from "../src/models/Product.js";
 import { Settings } from "../src/models/Settings.js";
+import { User } from "../src/models/User.js";
 import orderRoutes from "../src/routes/orderRoutes.js";
 
 process.env.JWT_SECRET = "test-jwt-secret-that-is-at-least-32-chars-long";
@@ -173,6 +175,64 @@ describe("Order validation", () => {
 
       expect(res.status).toBe(201);
       expect(res.body.order.orderNumber).toBeDefined();
+    });
+
+    it("rejects guest order with missing email", async () => {
+      const { email: _email, ...payloadWithoutEmail } = baseOrderPayload;
+      const res = await postOrder(payloadWithoutEmail);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain(
+        "Guest checkout requires a name, valid email, and valid phone number",
+      );
+    });
+  });
+
+  describe("POST /api/orders - authenticated phone-only customer checkout", () => {
+    let customerToken: string;
+    let customerId: string;
+
+    beforeEach(async () => {
+      // Create a phone-only customer with no email and no passwordHash
+      const user = await User.create({
+        name: "Phone Customer",
+        phone: "9840916099",
+        active: true,
+      });
+      customerId = user._id.toString();
+
+      // Sign a JWT using the same mechanism as customerAuthController.createCustomerToken
+      customerToken = jwt.sign(
+        {
+          customerId,
+          accountType: "CUSTOMER",
+          tokenVersion: user.tokenVersion ?? 0,
+        },
+        process.env.JWT_SECRET!,
+        { expiresIn: "7d" },
+      );
+    });
+
+    it("allows an authenticated phone-only customer to create an order without email", async () => {
+      const { email: _email, ...payloadWithoutEmail } = baseOrderPayload;
+      const res = await request(app)
+        .post("/api/orders")
+        .set("Idempotency-Key", randomUUID())
+        .set("Authorization", `Bearer ${customerToken}`)
+        .send(payloadWithoutEmail);
+
+      expect(res.status).toBe(201);
+      expect(res.body.order.orderNumber).toBeDefined();
+
+      // Verify the order is associated with the same customer's MongoDB _id
+      const order = await Order.findOne({
+        orderNumber: res.body.order.orderNumber,
+      });
+      expect(order).toBeDefined();
+      expect(order?.userId?.toString()).toBe(customerId);
+
+      // Verify the customer snapshot does not contain a fabricated or empty email
+      expect(order?.customer.email).toBeUndefined();
     });
   });
 

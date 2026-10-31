@@ -182,7 +182,7 @@ export default function CheckoutPage() {
         const data = await safeJson(response)
         if (!data?.user) return
         setCustomerName((current) => current || data.user.name)
-        setCustomerEmail((current) => current || data.user.email)
+        setCustomerEmail((current) => current || data.user.email || '')
         setPhone((current) => current || data.user.phone)
       })
       .catch(() => undefined)
@@ -397,7 +397,13 @@ export default function CheckoutPage() {
       clearFieldError('customerName')
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+    // Email is required for guest checkout; optional for authenticated
+    // customers (e.g. phone-only OTP customers may not have an email).
+    const isAuthenticated = !!window.localStorage.getItem('customer-token')
+    if (
+      !isAuthenticated &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())
+    ) {
       nextFieldErrors.customerEmail = 'Enter a valid email address.'
       hasError = true
     } else {
@@ -488,7 +494,9 @@ export default function CheckoutPage() {
             },
             body: JSON.stringify({
               customerName: customerName.trim(),
-              email: customerEmail.trim().toLowerCase(),
+              ...(customerEmail.trim()
+                ? { email: customerEmail.trim().toLowerCase() }
+                : {}),
               phone: phone.trim(),
 
               fulfillmentType:
