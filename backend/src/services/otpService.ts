@@ -39,7 +39,7 @@ export function generateSalt(): string {
 
 export async function createOtpSession(
   identifier: string,
-  purpose: "LOGIN" | "REGISTER",
+  purpose: "LOGIN" | "REGISTER" | "AUTH",
   otp?: string,
 ): Promise<{ otp: string }> {
   const resolvedOtp = otp ?? generateOtp();
@@ -69,7 +69,7 @@ export async function createOtpSession(
 export async function verifyOtp(
   identifier: string,
   otp: string,
-  purpose: "LOGIN" | "REGISTER"
+  purpose: "LOGIN" | "REGISTER" | "AUTH",
 ): Promise<boolean> {
   const normId = identifier.toLowerCase().trim();
 

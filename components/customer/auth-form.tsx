@@ -3,11 +3,12 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 type AuthMode = 'login' | 'register'
 type AuthMethod = 'password' | 'phone-otp'
-type OtpStep = 'send' | 'verify'
+type OtpStep = 'send' | 'verify' | 'register'
 
 export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter()
@@ -18,11 +19,9 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   // ---- OTP flow state ----
   const [otpStep, setOtpStep] = useState<OtpStep>('send')
   const [otp, setOtp] = useState('')
-
-  // ---- Form state (shared with password flow) ----
+  const [phone, setPhone] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -41,6 +40,9 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     setAuthMethod(method)
     setOtpStep('send')
     setOtp('')
+    setPhone('')
+    setName('')
+    setEmail('')
     setError('')
     setFieldErrors({})
   }
@@ -181,15 +183,13 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       return
     }
 
-    const purpose = mode.toUpperCase() as 'LOGIN' | 'REGISTER'
-
     setSubmitting(true)
     try {
       const response = await fetch('/api/auth/otp/send', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: cleanPhone(phone), purpose }),
+        body: JSON.stringify({ phone: cleanPhone(phone) }),
       })
       const data = await response.json()
       if (!response.ok) {
@@ -197,10 +197,12 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       }
       setOtp('')
       setOtpStep('verify')
+      toast.success('OTP sent to your mobile number.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to send OTP.'
       setFieldErrors({ phone: msg })
       setError(msg)
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
@@ -217,27 +219,32 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       return
     }
 
-    const purpose = mode.toUpperCase() as 'LOGIN' | 'REGISTER'
-
     setSubmitting(true)
     try {
-      const body: Record<string, unknown> = { phone: cleanPhone(phone), otp: otp.trim(), purpose }
-      if (mode === 'register') {
-        body.name = name.trim()
-      }
-
       const response = await fetch('/api/auth/otp/verify', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ phone: cleanPhone(phone), otp: otp.trim() }),
       })
       const data = await response.json()
       if (!response.ok) {
         throw new Error(otpErrorMessage(response.status, data.message))
       }
-      window.localStorage.setItem('customer-token', data.token)
+
+      if (data.status === 'registration_required') {
+        // New customer: proceed to registration form. Phone is verified by the
+        // backend and carried in the registration token cookie.
+        setOtpStep('register')
+        setName('')
+        setEmail('')
+        toast.success('OTP verified. Please complete your registration.')
+        return
+      }
+
+      // Existing customer: authenticated via OTP, httpOnly cookie set by backend.
       router.push('/account')
+      toast.success('Welcome back!')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to verify OTP.'
       if (msg.includes('already exists') || msg.includes('No account found')) {
@@ -248,6 +255,56 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         setFieldErrors({ phone: msg })
       }
       setError(msg)
+      toast.error(msg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleCompleteRegistration(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setFieldErrors({})
+
+    if (!name.trim() || name.trim().length < 2) {
+      setFieldErrors({ name: 'Please enter your full name.' })
+      setError('Please enter your full name.')
+      return
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setFieldErrors({ email: 'Enter a valid email address.' })
+      setError('Enter a valid email address.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const response = await fetch('/api/auth/otp/register-complete', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to create account.')
+      }
+
+      router.push('/account')
+      toast.success('Account created successfully!')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unable to create account.'
+      if (msg.includes('already exists')) {
+        setFieldErrors({ email: msg })
+      } else {
+        setFieldErrors({ phone: msg })
+      }
+      setError(msg)
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
@@ -468,41 +525,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
             </button>
           </form>
         ) : (
-          // ---- Phone OTP form ----
+          // ---- Phone OTP form (unified: no LOGIN/REGISTER choice) ----
           <form className="mt-6 space-y-5">
             {otpStep === 'send' ? (
               <>
-                {mode === 'register' && (
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-foreground">
-                      Full name
-                    </label>
-                    {fieldErrors.name && (
-                      <p className="mb-2 text-xs text-destructive">
-                        {fieldErrors.name}
-                      </p>
-                    )}
-                    <input
-                      autoComplete="name"
-                      required
-                      minLength={2}
-                      maxLength={100}
-                      value={name}
-                      onChange={(event) => {
-                        setName(event.target.value)
-                        clearFieldError('name')
-                      }}
-                      placeholder="Priya"
-                      className={cn(
-                        'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
-                        fieldErrors.name
-                          ? 'border-destructive focus:ring-destructive'
-                          : 'border-border focus:ring-primary',
-                      )}
-                    />
-                  </div>
-                )}
-
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
                     Indian mobile number
@@ -537,7 +563,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={handleSendOtp}
-                  disabled={submitting}
+                  disabled={submitting || !isValidOtpPhone(phone)}
                   className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
                 >
                   {submitting ? 'Sending…' : 'Send OTP'}
@@ -547,8 +573,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   A 6-digit code will be sent to your mobile number.
                 </p>
               </>
-            ) : (
-              // OTP verify step
+            ) : otpStep === 'verify' ? (
               <>
                 <div className="bg-muted/50 rounded-lg p-4">
                   <p className="text-sm text-muted-foreground">
@@ -591,7 +616,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={handleVerifyOtp}
-                  disabled={submitting}
+                  disabled={submitting || otp.trim().length !== 6}
                   className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
                 >
                   {submitting ? 'Verifying…' : 'Verify OTP'}
@@ -614,6 +639,94 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   Resend OTP
                 </button>
               </>
+            ) : (
+              // Registration step (new customer after OTP verification)
+              <form onSubmit={handleCompleteRegistration} className="mt-6 space-y-5">
+                <div className="bg-muted/50 rounded-lg p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Phone verified: <span className="font-medium">{cleanPhone(phone) || phone}</span>. Please complete your profile.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Full name
+                  </label>
+                  {fieldErrors.name && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.name}
+                    </p>
+                  )}
+                  <input
+                    autoComplete="name"
+                    required
+                    minLength={2}
+                    maxLength={100}
+                    value={name}
+                    onChange={(event) => {
+                      setName(event.target.value)
+                      clearFieldError('name')
+                    }}
+                    placeholder="Priya"
+                    className={cn(
+                      'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      fieldErrors.name
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-primary',
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Email address
+                  </label>
+                  {fieldErrors.email && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.email}
+                    </p>
+                  )}
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    required
+                    maxLength={254}
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value)
+                      clearFieldError('email')
+                    }}
+                    placeholder="priya@example.com"
+                    className={cn(
+                      'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      fieldErrors.email
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-primary',
+                    )}
+                  />
+                </div>
+
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Your phone number is verified and cannot be changed here. To
+                  use a different phone, restart OTP verification.
+                </p>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
+                >
+                  {submitting ? 'Creating account…' : 'Create account'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setOtpStep('send')}
+                  className="w-full rounded-lg border border-border px-5 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                >
+                  ← Use a different phone number
+                </button>
+              </form>
             )}
           </form>
         )}

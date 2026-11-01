@@ -19,7 +19,7 @@ const otpSessionSchema = new Schema(
     },
     purpose: {
       type: String,
-      enum: ["LOGIN", "REGISTER"],
+      enum: ["LOGIN", "REGISTER", "AUTH"],
       required: true,
     },
     attempts: {

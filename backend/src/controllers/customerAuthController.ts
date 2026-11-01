@@ -16,14 +16,18 @@ const PHONE_PATTERN = /^[6-9]\d{9}$/;
 
 const otpSendSchema = z.object({
   phone: z.string().trim().min(1),
-  purpose: z.enum(["LOGIN", "REGISTER"]),
+  purpose: z.enum(["LOGIN", "REGISTER", "AUTH"]).optional(),
 });
 
 const otpVerifySchema = z.object({
   phone: z.string().trim().min(1),
   otp: z.string().length(6, "OTP must be a 6-digit code"),
-  purpose: z.enum(["LOGIN", "REGISTER"]),
-  name: z.string().trim().min(2).max(100).optional(),
+  purpose: z.enum(["LOGIN", "REGISTER", "AUTH"]).optional(),
+});
+
+const registrationCompleteSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
 });
 
 function normalizePhone(phone: string): string {
@@ -99,6 +103,36 @@ function clearCustomerTokenCookie(res: Response): void {
     path: "/",
     sameSite: isProduction() ? "none" : "lax",
     secure: isProduction(),
+  });
+}
+
+const REGISTRATION_TOKEN_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+
+function createRegistrationToken(phone: string): string {
+  return jwt.sign(
+    { phone, purpose: "REGISTRATION", accountType: "REGISTRATION" },
+    getJwtSecret(),
+    { expiresIn: "10m" },
+  );
+}
+
+function setRegistrationTokenCookie(res: Response, token: string): void {
+  const isProd = process.env.NODE_ENV === "production";
+  res.cookie("otp-registration-token", token, {
+    httpOnly: true,
+    path: "/",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
+    maxAge: REGISTRATION_TOKEN_EXPIRY_MS,
+  });
+}
+
+function clearRegistrationTokenCookie(res: Response): void {
+  const isProd = process.env.NODE_ENV === "production";
+  res.clearCookie("otp-registration-token", {
+    path: "/",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
   });
 }
 
@@ -241,7 +275,7 @@ export const sendOtp = async (
     return;
   }
 
-  const { phone: rawPhone, purpose } = parsed.data;
+  const { phone: rawPhone } = parsed.data;
   const phone = normalizePhone(rawPhone);
 
   if (!isValidIndianPhone(phone)) {
@@ -262,7 +296,7 @@ export const sendOtp = async (
         return;
       }
 
-      await createOtpSession(phone, purpose, otp);
+      await createOtpSession(phone, "AUTH", otp);
 
       // Never expose the OTP in production.
       res.status(200).json({ message: "OTP sent successfully" });
@@ -274,7 +308,7 @@ export const sendOtp = async (
   }
 
   try {
-    const { otp } = await createOtpSession(phone, purpose);
+    const { otp } = await createOtpSession(phone, "AUTH");
 
     // Development/test mode: expose OTP for testing without an SMS provider.
     // Never expose the OTP in production.
@@ -305,7 +339,7 @@ export const verifyOtp = async (
     return;
   }
 
-  const { phone: rawPhone, otp, purpose, name } = parsed.data;
+  const { phone: rawPhone, otp } = parsed.data;
   const phone = normalizePhone(rawPhone);
 
   if (!isValidIndianPhone(phone)) {
@@ -314,21 +348,18 @@ export const verifyOtp = async (
   }
 
   try {
-    const isValid = await verifyOtpCode(phone, otp, purpose);
+    const isValid = await verifyOtpCode(phone, otp, "AUTH");
 
     if (!isValid) {
       res.status(401).json({ message: "Invalid or expired OTP" });
       return;
     }
 
-    if (purpose === "LOGIN") {
-      // LOGIN must only authenticate an existing customer. Never create an account.
-      const user = await User.findOne({ phone }).lean();
-      if (!user) {
-        res.status(404).json({ message: "No account found for this phone number" });
-        return;
-      }
+    // Check if customer already exists for this verified phone.
+    const user = await User.findOne({ phone }).lean();
 
+    if (user) {
+      // Existing customer: automatically authenticate and issue session.
       if (!user.active) {
         res.status(403).json({ message: "This account is inactive. Please contact support." });
         return;
@@ -345,22 +376,98 @@ export const verifyOtp = async (
       return;
     }
 
-    // REGISTER: reject if a customer already exists for this phone.
-    const existing = await User.findOne({ phone }).lean();
-    if (existing) {
-      res.status(409).json({ message: "An account with this phone number already exists" });
-      return;
-    }
+    // New customer: issue a signed registration token and require registration.
+    // Never trust a phone number from the request body; the verified identity
+    // comes from the registration token cookie set below.
+    const regToken = createRegistrationToken(phone);
+    setRegistrationTokenCookie(res, regToken);
 
-    // REGISTER requires a valid name.
-    if (!name || name.trim().length < 2 || name.trim().length > 100) {
-      res.status(400).json({ message: "Name must be between 2 and 100 characters" });
-      return;
-    }
+    res.status(200).json({
+      message: "OTP verified successfully",
+      status: "registration_required",
+      phone,
+    });
+  } catch (error) {
+    console.error("OTP verification failed:", error);
+    res.status(500).json({ message: "Unable to verify OTP" });
+  }
+};
 
-    // New phone-only customer: email and passwordHash omitted.
+/*
+||--------------------------------------------------------------------------
+|| REGISTRATION COMPLETE
+|| POST /api/auth/otp/register-complete
+||--------------------------------------------------------------------------
+|| Completes phone-only customer registration after OTP verification.
+|| The verified phone identity comes exclusively from the signed
+|| otp-registration-token httpOnly cookie - never from the request body.
+|| Rate limited: 10 registrations per identifier/IP per 15 minutes.
+*/
+export const completeRegistration = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  const token = req.cookies?.["otp-registration-token"];
+  if (!token) {
+    res.status(401).json({
+      message: "Registration session expired or missing. Please request OTP again.",
+    });
+    return;
+  }
+
+  let decoded: {
+    phone?: string;
+    purpose?: string;
+    accountType?: string;
+  };
+  try {
+    decoded = jwt.verify(token, getJwtSecret()) as {
+      phone?: string;
+      purpose?: string;
+      accountType?: string;
+    };
+  } catch {
+    res.status(401).json({
+      message: "Invalid or expired registration session. Please request OTP again.",
+    });
+    return;
+  }
+
+  if (
+    decoded.accountType !== "REGISTRATION" ||
+    decoded.purpose !== "REGISTRATION" ||
+    !decoded.phone
+  ) {
+    res.status(401).json({ message: "Invalid registration session." });
+    return;
+  }
+
+  const phone = decoded.phone;
+
+  const parsed = registrationCompleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      message: "Invalid registration details",
+      errors: parsed.error.flatten(),
+    });
+    return;
+  }
+
+  const { name, email } = parsed.data;
+
+  // Prevent duplicate phone and email accounts, including concurrent attempts.
+  const existing = await User.findOne({ $or: [{ email }, { phone }] }).lean();
+  if (existing) {
+    res.status(409).json({
+      message: "An account with that email or phone number already exists",
+    });
+    return;
+  }
+
+  try {
     const created = await User.create({
       name: name.trim(),
+      email,
       phone,
       active: true,
     });
@@ -371,16 +478,29 @@ export const verifyOtp = async (
       return;
     }
 
-    const token = createCustomerToken(user._id.toString(), user.tokenVersion ?? 0);
-    setCustomerTokenCookie(res, token);
+    // Issue the normal customer JWT and httpOnly customer-token cookie.
+    const customerToken = createCustomerToken(
+      user._id.toString(),
+      user.tokenVersion ?? 0,
+    );
+    setCustomerTokenCookie(res, customerToken);
+
+    // Clear the registration token cookie - single use only.
+    clearRegistrationTokenCookie(res);
 
     res.status(200).json({
-      message: "OTP verified successfully",
-      token,
+      message: "Account created successfully",
+      token: customerToken,
       user: publicCustomer(user),
     });
   } catch (error) {
-    console.error("OTP verification failed:", error);
-    res.status(500).json({ message: "Unable to verify OTP" });
+    if (error && typeof error === "object" && "code" in error && error.code === 11000) {
+      res.status(409).json({
+        message: "An account with that email or phone number already exists",
+      });
+      return;
+    }
+    console.error("Customer registration failed:", error);
+    res.status(500).json({ message: "Unable to create customer account" });
   }
 };
