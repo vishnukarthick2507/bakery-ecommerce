@@ -11,12 +11,17 @@ import {
   loginCustomer,
   logoutCustomer,
   registerCustomer,
+  sendOtp,
+  verifyOtp,
+  completeRegistration,
 } from "../controllers/customerAuthController.js";
 import { authenticateCustomer } from "../middleware/auth.js";
 import {
   adminLoginLimiter,
   customerLoginLimiter,
   customerRegisterLimiter,
+  otpSendLimiter,
+  otpVerifyLimiter,
 } from "../middleware/rateLimit.js";
 
 const router = Router();
@@ -39,6 +44,9 @@ router.post("/logout", adminLogout);
 
 router.post("/register", customerRegisterLimiter, registerCustomer);
 router.post("/customer/login", customerLoginLimiter, loginCustomer);
+router.post("/otp/send", otpSendLimiter, sendOtp);
+router.post("/otp/verify", otpVerifyLimiter, verifyOtp);
+router.post("/otp/register-complete", completeRegistration);
 router.get("/me", authenticateCustomer, getCurrentCustomer);
 router.post("/logout", authenticateCustomer, logoutCustomer);
 

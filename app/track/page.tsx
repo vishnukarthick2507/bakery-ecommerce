@@ -257,14 +257,11 @@ function TrackPageContent() {
     setOrder(null)
 
     try {
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
       const token = getCustomerToken()
 
       let response = token
         ? await fetch(
-            `${apiUrl}/api/orders/${encodeURIComponent(trimmed)}`,
+            `/api/orders/${encodeURIComponent(trimmed)}`,
             {
               cache: 'no-store',
               headers: customerAuthHeaders(),
@@ -279,7 +276,7 @@ function TrackPageContent() {
           )
         }
 
-        response = await fetch(`${apiUrl}/api/orders/track`, {
+        response = await fetch('/api/orders/track', {
           method: 'POST',
           cache: 'no-store',
           headers: { 'Content-Type': 'application/json' },
@@ -328,6 +325,25 @@ function TrackPageContent() {
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+
+    const trimmed = orderNumber.trim()
+    if (!trimmed) {
+      setError('Please enter your order number.')
+      setOrder(null)
+      return
+    }
+
+    if (!isAuthenticated) {
+      const effectivePhone = guestPhone.trim()
+      if (!/^[6-9]\d{9}$/.test(effectivePhone)) {
+        setError(
+          'Enter the 10-digit phone number used at checkout to track a guest order.',
+        )
+        setOrder(null)
+        return
+      }
+    }
+
     fetchOrder(orderNumber)
   }
 

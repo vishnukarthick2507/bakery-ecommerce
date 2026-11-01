@@ -117,12 +117,18 @@ export default function CheckoutPage() {
     deliveryEnabled: boolean
     pickupEnabled: boolean
     closedMessage: string
+    reopenAt: string | null
   } | null>(null)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  // True only after settings have loaded and online ordering is disabled.
+  // While settings are loading (settings === null) we do not treat the store
+  // as closed; the buttons stay enabled and the backend enforces the real state.
+  const closed = settingsLoaded && settings && !settings.onlineOrdersEnabled
 
   // An ONLINE order that is created but not yet paid, so retries
   // reuse the same order instead of creating duplicates.
@@ -131,10 +137,6 @@ export default function CheckoutPage() {
   const orderIdempotencyKey = useRef<string | null>(null)
 
   const [activeStep, setActiveStep] = useState<Step>('details')
-
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    'https://bakery-ecommerce-txuz.onrender.com'
 
   async function safeJson(response: Response): Promise<any> {
     const text = await response.text()
@@ -145,10 +147,33 @@ export default function CheckoutPage() {
     }
   }
 
+  // Validate the customer phone number (required for all checkouts, guest or logged-in).
+  function validatePhone(phone: string): string | null {
+    if (!phone.trim()) return 'Please enter your phone number.'
+    if (!/^[6-9]\d{9}$/.test(phone.trim())) {
+      return 'Enter a valid 10-digit Indian mobile number.'
+    }
+    return null
+  }
+
+  // Today's date in the store's configured timezone (Asia/Kolkata, UTC+5:30),
+  // used as the minimum selectable delivery/pickup date.
+  function getTodayInIST(): string {
+    const now = new Date()
+    const kolkataOffsetMinutes = 5 * 60 + 30
+    const kolkataTime = new Date(now.getTime() + kolkataOffsetMinutes * 60 * 1000)
+    return kolkataTime.toISOString().split('T')[0]!
+  }
+
+  // True when the selected date is earlier than today in IST.
+  function isPastDate(dateString: string): boolean {
+    return dateString < getTodayInIST()
+  }
+
   useEffect(() => {
     const token = window.localStorage.getItem('customer-token')
     if (!token) return
-    void fetch(`${apiUrl}/api/auth/me`, {
+    void fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })
@@ -157,22 +182,28 @@ export default function CheckoutPage() {
         const data = await safeJson(response)
         if (!data?.user) return
         setCustomerName((current) => current || data.user.name)
-        setCustomerEmail((current) => current || data.user.email)
+        setCustomerEmail((current) => current || data.user.email || '')
         setPhone((current) => current || data.user.phone)
       })
       .catch(() => undefined)
-  }, [apiUrl])
+  }, [])
 
   useEffect(() => {
-    void fetch(`${apiUrl}/api/settings`, { cache: 'no-store' })
+    void fetch('/api/settings', { cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) return
         const data = await safeJson(response)
-        setSettings(data?.settings ?? null)
+        setSettings({
+          onlineOrdersEnabled: data?.settings?.onlineOrdersEnabled ?? false,
+          deliveryEnabled: data?.settings?.deliveryEnabled ?? false,
+          pickupEnabled: data?.settings?.pickupEnabled ?? false,
+          closedMessage: data?.settings?.closedMessage || '',
+          reopenAt: data?.settings?.reopenAt ?? null,
+        })
       })
       .catch(() => undefined)
       .finally(() => setSettingsLoaded(true))
-  }, [apiUrl])
+  }, [])
 
   useEffect(() => {
     if (!settings || !settingsLoaded) return
@@ -217,10 +248,9 @@ export default function CheckoutPage() {
 
   const startOnlinePayment = async (
     orderNumber: string,
-    apiUrl: string,
   ): Promise<boolean> => {
     const response = await fetch(
-      `${apiUrl}/api/payments/create-order`,
+      '/api/payments/create-order',
       {
         method: 'POST',
         headers: {
@@ -268,7 +298,7 @@ export default function CheckoutPage() {
       ) => {
         try {
           const verifyResponse = await fetch(
-            `${apiUrl}/api/payments/verify`,
+            '/api/payments/verify',
             {
               method: 'POST',
               headers: {
@@ -349,7 +379,7 @@ export default function CheckoutPage() {
     setError('')
     setFieldErrors({})
 
-    if (!settings?.onlineOrdersEnabled) {
+    if (closed) {
       setError(
         settings?.closedMessage ||
           'Online ordering is currently closed. Please check back soon.',
@@ -367,7 +397,13 @@ export default function CheckoutPage() {
       clearFieldError('customerName')
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+    // Email is required for guest checkout; optional for authenticated
+    // customers (e.g. phone-only OTP customers may not have an email).
+    const isAuthenticated = !!window.localStorage.getItem('customer-token')
+    if (
+      !isAuthenticated &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())
+    ) {
       nextFieldErrors.customerEmail = 'Enter a valid email address.'
       hasError = true
     } else {
@@ -410,6 +446,9 @@ export default function CheckoutPage() {
     if (!scheduledDate) {
       nextFieldErrors.scheduledDate = 'Please select your order date.'
       hasError = true
+    } else if (isPastDate(scheduledDate)) {
+      nextFieldErrors.scheduledDate = 'Please select today or a future date.'
+      hasError = true
     } else {
       clearFieldError('scheduledDate')
     }
@@ -431,10 +470,6 @@ export default function CheckoutPage() {
     setIsSubmitting(true)
 
     try {
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL ||
-        'https://bakery-ecommerce-txuz.onrender.com'
-
       let orderNumber =
         payment === 'online'
           ? (pendingOnlineOrder ?? '')
@@ -449,7 +484,7 @@ export default function CheckoutPage() {
           orderIdempotencyKey.current,
         )
         const response = await fetch(
-          `${apiUrl}/api/orders`,
+          '/api/orders',
           {
             method: 'POST',
             headers: {
@@ -459,7 +494,9 @@ export default function CheckoutPage() {
             },
             body: JSON.stringify({
               customerName: customerName.trim(),
-              email: customerEmail.trim().toLowerCase(),
+              ...(customerEmail.trim()
+                ? { email: customerEmail.trim().toLowerCase() }
+                : {}),
               phone: phone.trim(),
 
               fulfillmentType:
@@ -543,10 +580,7 @@ export default function CheckoutPage() {
 
       // Returns true when the Razorpay modal opened; its
       // callbacks own the isSubmitting state from here.
-      const opened = await startOnlinePayment(
-        orderNumber,
-        apiUrl,
-      )
+      const opened = await startOnlinePayment(orderNumber)
 
       if (!opened) {
         setIsSubmitting(false)
@@ -638,10 +672,19 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          {!settings?.onlineOrdersEnabled && (
+          {closed && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
               {settings?.closedMessage ||
                 'Online ordering is currently closed. Please check back soon.'}
+              {settings?.reopenAt && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  We plan to reopen at{' '}
+                  {new Date(settings.reopenAt).toLocaleString('en-IN')}.
+                </p>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                You can still browse products and track existing orders.
+              </p>
             </div>
           )}
 
@@ -745,7 +788,16 @@ export default function CheckoutPage() {
 
                 <button
                   type="button"
-                  onClick={() => setActiveStep('fulfilment')}
+                  onClick={() => {
+                    const phoneError = validatePhone(phone)
+                    if (phoneError) {
+                      setFieldErrors({ phone: phoneError })
+                      setActiveStep('details')
+                      return
+                    }
+                    clearFieldError('phone')
+                    setActiveStep('fulfilment')
+                  }}
                   disabled={isSubmitting}
                   className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >
@@ -946,6 +998,7 @@ export default function CheckoutPage() {
                   )}
                   <input
                     type="date"
+                    min={getTodayInIST()}
                     value={scheduledDate}
                     onChange={(e) => {
                       setScheduledDate(e.target.value)
@@ -998,7 +1051,24 @@ export default function CheckoutPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveStep('payment')}
+                  onClick={() => {
+                    if (!scheduledDate) {
+                      setFieldErrors({
+                        scheduledDate: 'Please select your order date.',
+                      })
+                      setActiveStep('schedule')
+                      return
+                    }
+                    if (isPastDate(scheduledDate)) {
+                      setFieldErrors({
+                        scheduledDate: 'Please select today or a future date.',
+                      })
+                      setActiveStep('schedule')
+                      return
+                    }
+                    clearFieldError('scheduledDate')
+                    setActiveStep('payment')
+                  }}
                   disabled={isSubmitting}
                   className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >
@@ -1199,7 +1269,7 @@ export default function CheckoutPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={isSubmitting}
+                  disabled={closed || isSubmitting}
                   onClick={handlePlaceOrder}
                   className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >
@@ -1289,7 +1359,7 @@ export default function CheckoutPage() {
 
           <button
             type="button"
-            disabled={isSubmitting}
+            disabled={closed || isSubmitting}
             onClick={handlePlaceOrder}
             className="mt-6 w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
           >

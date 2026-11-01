@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import type { Product } from '@/lib/types'
 import { ProductCard } from './product-card'
 
-const gridClass = 'grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+const gridClass = 'grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4'
 
 export function ProductGrid({ products, className }: { products: Product[]; className?: string }) {
   return (

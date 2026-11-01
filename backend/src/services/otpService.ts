@@ -39,11 +39,12 @@ export function generateSalt(): string {
 
 export async function createOtpSession(
   identifier: string,
-  purpose: "LOGIN" | "REGISTER"
+  purpose: "LOGIN" | "REGISTER" | "AUTH",
+  otp?: string,
 ): Promise<{ otp: string }> {
-  const otp = generateOtp();
+  const resolvedOtp = otp ?? generateOtp();
   const salt = generateSalt();
-  const otpHash = hashOtp(otp, salt);
+  const otpHash = hashOtp(resolvedOtp, salt);
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
   // Invalidate any existing unconsumed OTP sessions for this identifier
@@ -62,13 +63,13 @@ export async function createOtpSession(
     expiresAt,
   });
 
-  return { otp };
+  return { otp: resolvedOtp };
 }
 
 export async function verifyOtp(
   identifier: string,
   otp: string,
-  purpose: "LOGIN" | "REGISTER"
+  purpose: "LOGIN" | "REGISTER" | "AUTH",
 ): Promise<boolean> {
   const normId = identifier.toLowerCase().trim();
 
