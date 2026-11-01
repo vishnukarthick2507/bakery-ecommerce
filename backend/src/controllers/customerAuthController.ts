@@ -5,7 +5,12 @@ import { z } from "zod";
 import type { AuthRequest } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { getJwtSecret } from "../config/jwt.js";
-import { createOtpSession, verifyOtp as verifyOtpCode } from "../services/otpService.js";
+import {
+  createOtpSession,
+  generateOtp,
+  verifyOtp as verifyOtpCode,
+} from "../services/otpService.js";
+import { sendOtpSms } from "../services/smsService.js";
 
 const PHONE_PATTERN = /^[6-9]\d{9}$/;
 
@@ -244,10 +249,27 @@ export const sendOtp = async (
     return;
   }
 
-  // No SMS provider is integrated. In production, fail closed instead of
-  // claiming an OTP was sent when no delivery path exists.
   if (process.env.NODE_ENV === "production") {
-    res.status(501).json({ message: "SMS delivery is not configured in production" });
+    // Production: deliver the OTP via the 2Factor SMS provider before creating
+    // an OTP session. Fail closed if SMS submission fails - no session and no
+    // success response is returned when delivery fails.
+    try {
+      const otp = generateOtp();
+
+      const smsSent = await sendOtpSms(phone, otp);
+      if (!smsSent) {
+        res.status(502).json({ message: "Unable to send OTP. Please try again later." });
+        return;
+      }
+
+      await createOtpSession(phone, purpose, otp);
+
+      // Never expose the OTP in production.
+      res.status(200).json({ message: "OTP sent successfully" });
+    } catch (error) {
+      console.error("OTP send failed:", error);
+      res.status(500).json({ message: "Unable to send OTP" });
+    }
     return;
   }
 

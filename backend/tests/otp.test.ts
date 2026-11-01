@@ -419,21 +419,83 @@ describe("OTP service", () => {
       expect(res.body.errors.fieldErrors.name).toBeDefined();
     });
 
-    it("returns 501 in production mode without creating an OTP session", async () => {
+    it("returns 502 in production mode when TWOFACTOR_API_KEY is missing, without creating an OTP session", async () => {
       const originalNodeEnv = process.env.NODE_ENV;
+      const originalApiKey = process.env.TWOFACTOR_API_KEY;
       process.env.NODE_ENV = "production";
+      delete process.env.TWOFACTOR_API_KEY;
       try {
         const res = await request(app)
           .post("/api/auth/otp/send")
-          .send({ phone: "9840916074", purpose: "REGISTER", identifier: "9840916074" });
-        expect(res.status).toBe(501);
-        expect(res.body.message).toContain("SMS delivery is not configured");
+          .send({ phone: "9840916080", purpose: "REGISTER", identifier: "9840916080" });
+        expect(res.status).toBe(502);
+        expect(res.body.message).toContain("Unable to send OTP");
 
         // Confirm no OTP session was created
-        const session = await OtpSession.findOne({ identifier: "9840916074" });
+        const session = await OtpSession.findOne({ identifier: "9840916080" });
         expect(session).toBeNull();
       } finally {
         process.env.NODE_ENV = originalNodeEnv;
+        if (originalApiKey === undefined) delete process.env.TWOFACTOR_API_KEY;
+        else process.env.TWOFACTOR_API_KEY = originalApiKey;
+      }
+    });
+
+    it("returns 200 in production mode when SMS is submitted successfully, without exposing the OTP, and creates a session", async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalApiKey = process.env.TWOFACTOR_API_KEY;
+      process.env.NODE_ENV = "production";
+      process.env.TWOFACTOR_API_KEY = "test-api-key";
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ Status: "Success" }), { status: 200 })
+      );
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+      try {
+        const res = await request(app)
+          .post("/api/auth/otp/send")
+          .send({ phone: "9840916081", purpose: "REGISTER", identifier: "9840916081" });
+        expect(res.status).toBe(200);
+        expect(res.body.message).toContain("OTP sent successfully");
+        expect(res.body.otp).toBeUndefined();
+
+        // Confirm an OTP session was created and is unconsumed
+        const session = await OtpSession.findOne({ identifier: "9840916081" });
+        expect(session).not.toBeNull();
+        expect(session?.consumed).toBe(false);
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+        if (originalApiKey === undefined) delete process.env.TWOFACTOR_API_KEY;
+        else process.env.TWOFACTOR_API_KEY = originalApiKey;
+        globalThis.fetch = originalFetch;
+        vi.restoreAllMocks();
+      }
+    });
+
+    it("returns 502 in production mode when SMS submission fails, without creating an OTP session", async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalApiKey = process.env.TWOFACTOR_API_KEY;
+      process.env.NODE_ENV = "production";
+      process.env.TWOFACTOR_API_KEY = "test-api-key";
+      const fetchMock = vi.fn().mockResolvedValue(new Response("Unauthorized", { status: 401 }));
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+      try {
+        const res = await request(app)
+          .post("/api/auth/otp/send")
+          .send({ phone: "9840916082", purpose: "REGISTER", identifier: "9840916082" });
+        expect(res.status).toBe(502);
+        expect(res.body.message).toContain("Unable to send OTP");
+
+        // Confirm no OTP session was created
+        const session = await OtpSession.findOne({ identifier: "9840916082" });
+        expect(session).toBeNull();
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+        if (originalApiKey === undefined) delete process.env.TWOFACTOR_API_KEY;
+        else process.env.TWOFACTOR_API_KEY = originalApiKey;
+        globalThis.fetch = originalFetch;
+        vi.restoreAllMocks();
       }
     });
 
