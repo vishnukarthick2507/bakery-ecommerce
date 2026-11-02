@@ -13,10 +13,10 @@ import { cn } from '@/lib/utils'
 export function Logo({ className }: { className?: string }) {
   return (
     <Link href="/" className={cn('flex items-center gap-2', className)}>
-      <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+      <span className="flex size-10 items-center justify-center rounded-2xl bg-caramel text-caramel-foreground shadow-sm">
         <CakeSliceIcon className="size-5" aria-hidden="true" />
       </span>
-      <span className="font-heading text-lg leading-none font-bold text-primary sm:text-xl">
+      <span className="font-heading text-lg leading-none font-bold text-primary sm:text-xl tracking-tight">
         {siteConfig.name}
       </span>
     </Link>
@@ -31,12 +31,12 @@ export function SiteHeader() {
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
         <Button
           variant="ghost"
           size="icon-lg"
-          className="lg:hidden"
+          className="lg:hidden text-primary hover:text-primary/80"
           onClick={() => setMenuOpen(true)}
           aria-label="Open menu"
         >
@@ -45,15 +45,16 @@ export function SiteHeader() {
         <Logo />
 
         <nav aria-label="Main" className="ml-6 hidden lg:block">
-          <ul className="flex items-center gap-1">
+          <ul className="flex items-center gap-2">
             {navLinks.map((link) => (
               <li key={link.href}>
                 <Link
                   href={link.href}
                   aria-current={isActive(link.href) ? 'page' : undefined}
                   className={cn(
-                    'rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
-                    isActive(link.href) && 'bg-secondary text-foreground',
+                    'rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-cream hover:text-primary hover:border-caramel/20 border-transparent',
+                    isActive(link.href)
+                      && 'bg-cream text-primary border-caramel/50 font-semibold',
                   )}
                 >
                   {link.label}
@@ -68,7 +69,7 @@ export function SiteHeader() {
             href="/account"
             aria-label="Customer account"
             title="Customer account"
-            className={cn(buttonVariants({ variant: 'outline', size: 'icon-lg' }), 'hidden sm:inline-flex')}
+            className={cn(buttonVariants({ variant: 'outline', size: 'icon-lg' }), 'hidden sm:inline-flex text-primary hover:text-primary')}
           >
             <UserRoundIcon />
           </Link>
@@ -82,7 +83,7 @@ export function SiteHeader() {
             <ShoppingBagIcon data-icon="inline-start" />
             Cart
             {hydrated && count > 0 && (
-              <span className="ml-1 flex min-w-5 items-center justify-center rounded-full bg-caramel px-1.5 text-xs font-semibold text-caramel-foreground">
+              <span className="ml-1.5 flex min-w-5 items-center justify-center rounded-full bg-caramel px-1.5 text-xs font-semibold text-caramel-foreground shadow-sm">
                 {count}
               </span>
             )}
@@ -97,8 +98,8 @@ export function SiteHeader() {
       </div>
 
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="left" className="w-80">
-          <SheetHeader>
+        <SheetContent side="left" className="w-80 border-l border-border">
+          <SheetHeader className="pb-4">
             <SheetTitle className="sr-only">Menu</SheetTitle>
             <Logo />
           </SheetHeader>
@@ -108,7 +109,7 @@ export function SiteHeader() {
                 <Link
                   href="/account"
                   onClick={() => setMenuOpen(false)}
-                  className="block rounded-lg px-3 py-3 text-base font-medium hover:bg-secondary"
+                  className="block rounded-xl px-4 py-3 text-base font-medium text-primary transition-colors hover:bg-cream hover:text-primary"
                 >
                   My account
                 </Link>
@@ -120,8 +121,10 @@ export function SiteHeader() {
                     onClick={() => setMenuOpen(false)}
                     aria-current={isActive(link.href) ? 'page' : undefined}
                     className={cn(
-                      'block rounded-lg px-3 py-3 text-base font-medium hover:bg-secondary',
-                      isActive(link.href) && 'bg-secondary text-primary',
+                      'block rounded-xl px-4 py-3 text-base font-medium transition-all border-transparent',
+                      'text-muted-foreground hover:text-primary hover:bg-cream hover:border-caramel/20',
+                      isActive(link.href)
+                        && 'bg-cream text-primary border-caramel/50 font-semibold',
                     )}
                   >
                     {link.label}

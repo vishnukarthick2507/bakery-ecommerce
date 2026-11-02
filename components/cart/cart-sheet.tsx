@@ -29,14 +29,14 @@ export function CartSheet() {
           <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-border" aria-hidden="true" />
         )}
         <SheetHeader className="border-b border-border px-5 py-4">
-          <SheetTitle className="font-heading text-xl text-primary">Your cart</SheetTitle>
+          <SheetTitle className="font-heading text-xl text-primary tracking-tight">Your cart</SheetTitle>
           <SheetDescription>
             {count === 0 ? 'No items yet' : `${count} ${count === 1 ? 'item' : 'items'}`}
           </SheetDescription>
         </SheetHeader>
 
         {pricing.lines.length === 0 ? (
-          <div className="flex flex-1 items-center py-8">
+          <div className="flex flex-1 items-center py-10">
             <CartEmpty onNavigate={close} />
           </div>
         ) : (
@@ -46,7 +46,7 @@ export function CartSheet() {
                 <CartLine key={`${line.item.productId}-${line.item.variantId}`} line={line} onNavigate={close} />
               ))}
             </ul>
-            <SheetFooter className="gap-3 border-t border-border px-5 py-4">
+            <SheetFooter className="gap-3 border-t border-border px-5 py-5">
               <p className="text-xs text-muted-foreground">
                 Delivery is currently free on all orders.
               </p>
@@ -61,7 +61,7 @@ export function CartSheet() {
                 <span className="font-medium">Subtotal</span>
                 <span className="text-lg font-bold text-primary">{formatPrice(pricing.subtotal)}</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <Link href="/cart" onClick={close} className={buttonVariants({ variant: 'outline', size: 'xl' })}>
                   View cart
                 </Link>

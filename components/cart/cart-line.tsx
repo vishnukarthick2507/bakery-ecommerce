@@ -14,9 +14,9 @@ export function CartLine({ line, onNavigate }: { line: PricedLine; onNavigate?: 
   const { product, variant, item, lineTotal } = line
 
   return (
-    <li className="flex gap-4 py-4 border-b border-border last:border-0">
-      <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-        <Image src={product.image || '/placeholder.svg'} alt={product.name} fill sizes="64px" className="object-cover" />
+    <li className="flex gap-4 py-5 border-b border-border last:border-0">
+      <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-muted">
+        <Image src={product.image || '/placeholder.svg'} alt={product.name} fill sizes="80px" className="object-cover object-center" />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
@@ -40,28 +40,28 @@ export function CartLine({ line, onNavigate }: { line: PricedLine; onNavigate?: 
             Only {product.stock} available. Reduce the quantity to continue.
           </p>
         )}
-        <div className="mt-2 flex items-end gap-4">
-          <div className="flex items-center rounded-lg border" role="group" aria-label={`Quantity for ${product.name}`}>
+        <div className="mt-3 flex items-end gap-4">
+          <div className="flex items-center rounded-xl border border-border bg-background" role="group" aria-label={`Quantity for ${product.name}`}>
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon"
               onClick={() => updateQuantity(item.productId, item.variantId, item.quantity - 1)}
               disabled={item.quantity <= 1}
               aria-label="Decrease quantity"
             >
-              <MinusIcon />
+              <MinusIcon className="size-3.5" />
             </Button>
-            <span className="w-8 text-center text-sm font-medium tabular-nums" aria-live="polite">
+            <span className="w-9 text-center text-sm font-medium tabular-nums" aria-live="polite">
               {item.quantity}
             </span>
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon"
               disabled={item.quantity >= Math.min(CART_MAX_QTY, product.stock)}
               onClick={() => updateQuantity(item.productId, item.variantId, item.quantity + 1)}
               aria-label="Increase quantity"
             >
-              <PlusIcon />
+              <PlusIcon className="size-3.5" />
             </Button>
           </div>
           <Button
@@ -70,7 +70,7 @@ export function CartLine({ line, onNavigate }: { line: PricedLine; onNavigate?: 
             onClick={() => removeItem(item.productId, item.variantId)}
             aria-label={`Remove ${product.name} from cart`}
           >
-            <Trash2Icon data-icon="inline-start" />
+            <Trash2Icon className="size-3.5" data-icon="inline-start" />
             Remove
           </Button>
         </div>

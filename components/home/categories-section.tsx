@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { Section, SectionHeading } from '@/components/section-heading'
+import { cn } from '@/lib/utils'
 import type { Category } from '@/lib/types'
 
 export function CategoriesSection({ categories }: { categories: Category[] }) {
@@ -18,13 +19,15 @@ export function CategoriesSection({ categories }: { categories: Category[] }) {
               href={`/products?category=${c.slug}`}
               className="group flex flex-col items-center gap-3 rounded-2xl border bg-card p-3 text-center shadow-sm transition-shadow hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none sm:p-4"
             >
-              <span className="relative aspect-square w-full overflow-hidden rounded-xl bg-cream">
+              <span className="relative aspect-square w-full overflow-hidden rounded-2xl bg-cream border border-border">
                 <Image
                   src={c.image || '/placeholder.svg'}
-                  alt=""
+                  alt={c.name}
                   fill
                   sizes="(min-width: 1024px) 15vw, 30vw"
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  className={cn(
+                    'object-cover object-center transition-transform duration-300 group-hover:scale-105',
+                  )}
                 />
               </span>
               <span className="flex flex-col gap-0.5">

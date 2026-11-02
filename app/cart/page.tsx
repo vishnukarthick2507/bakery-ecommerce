@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useCart } from '@/components/cart/cart-provider'
 import { formatPrice } from '@/lib/format'
 
@@ -16,7 +17,7 @@ export default function CartPage() {
   if (!hydrated) {
     return (
       <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6">
-        <div className="rounded-xl border border-border p-10 text-center">
+        <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
           <p className="text-muted-foreground">
             Loading your cart…
           </p>
@@ -27,23 +28,23 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-        <div className="rounded-xl border border-border p-10 text-center shadow-sm">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted text-3xl">
+      <main className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
+        <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-cream text-primary-foreground text-4xl">
             🛒
           </div>
 
-          <h1 className="mt-6 text-3xl font-semibold text-primary">
+          <h1 className="mt-8 text-3xl font-semibold text-primary tracking-tight">
             Your cart is empty
           </h1>
 
-          <p className="mt-3 text-muted-foreground">
-            Add some delicious items from S.V. Bakery before checking out.
+          <p className="mt-4 text-muted-foreground leading-relaxed">
+            Add some delicious bakes from S.V. Sweets &amp; Bakers before checking out.
           </p>
 
           <Link
             href="/products"
-            className="mt-7 inline-flex rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:opacity-90"
+            className="mt-8 inline-flex items-center justify-center rounded-xl bg-caramel px-8 py-3.5 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 transition-colors"
           >
             Browse Products
           </Link>
@@ -53,30 +54,30 @@ export default function CartPage() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-10">
         <Link
           href="/products"
-          className="text-sm text-muted-foreground hover:underline"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
         >
-          ← Continue Shopping
+          <span>←</span> Continue Shopping
         </Link>
 
-        <h1 className="mt-3 text-3xl font-semibold text-primary">
+        <h1 className="mt-4 text-3xl font-semibold text-primary tracking-tight">
           Your Cart
         </h1>
 
-        <p className="mt-2 text-muted-foreground">
+        <p className="mt-3 text-muted-foreground">
           {items.length}{' '}
           {items.length === 1 ? 'item' : 'items'} in your cart.
         </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-10 lg:grid-cols-[1fr_380px]">
         {/* Cart items */}
-        <section className="rounded-xl border border-border shadow-sm">
-          <div className="border-b border-border px-6 py-5">
+        <section className="rounded-[2rem] border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-8 py-6">
             <h2 className="text-xl font-semibold text-primary">
               Cart Items
             </h2>
@@ -91,21 +92,20 @@ export default function CartPage() {
               return (
                 <div
                   key={`${line.item.productId}-${line.item.variantId}`}
-                  className="p-6"
+                  className="p-8"
                 >
-                  <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                  <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
                     {/* Product image */}
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
                       {product.image ? (
-                        <img
+                        <Image
                           src={product.image}
                           alt={product.name}
-                          className="h-full w-full object-cover"
+                          fill
+                          className="object-cover object-center"
                         />
                       ) : (
-                        <span className="text-2xl">
-                          🍰
-                        </span>
+                        <span className="text-3xl">🍰</span>
                       )}
                     </div>
 
@@ -118,7 +118,7 @@ export default function CartPage() {
                         {product.name}
                       </Link>
 
-                      <p className="mt-1 text-sm text-muted-foreground">
+                      <p className="mt-1.5 text-sm text-muted-foreground">
                         {product.category}
                       </p>
 
@@ -139,13 +139,13 @@ export default function CartPage() {
                           )
                         }
                         disabled={quantity <= 1}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg border text-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-lg hover:bg-cream disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         aria-label={`Decrease ${product.name} quantity`}
                       >
                         −
                       </button>
 
-                      <span className="flex h-9 min-w-10 items-center justify-center rounded-lg border px-3 font-medium">
+                      <span className="flex h-10 min-w-10 items-center justify-center rounded-lg border border-border px-3 font-medium tabular-nums">
                         {quantity}
                       </span>
 
@@ -159,7 +159,7 @@ export default function CartPage() {
                           )
                         }
                         disabled={quantity >= 20}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg border text-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-lg hover:bg-cream disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         aria-label={`Increase ${product.name} quantity`}
                       >
                         +
@@ -167,7 +167,7 @@ export default function CartPage() {
                     </div>
 
                     {/* Price and remove */}
-                    <div className="text-left sm:text-right">
+                    <div className="text-left sm:text-right flex flex-col sm:flex-row sm:items-end gap-2">
                       <p className="font-semibold text-primary">
                         {formatPrice(line.lineTotal)}
                       </p>
@@ -180,7 +180,7 @@ export default function CartPage() {
                             line.item.variantId,
                           )
                         }
-                        className="mt-2 text-sm text-destructive hover:underline"
+                        className="text-sm font-medium text-destructive hover:text-destructive/80 transition-colors"
                       >
                         Remove
                       </button>
@@ -193,18 +193,18 @@ export default function CartPage() {
         </section>
 
         {/* Order summary */}
-        <aside className="h-fit rounded-xl border border-border p-6 shadow-sm lg:sticky lg:top-6">
+        <aside className="h-fit rounded-[2rem] border border-border p-8 shadow-sm bg-card lg:sticky lg:top-24">
           <h2 className="text-xl font-semibold text-primary">
             Order Summary
           </h2>
 
-          <div className="mt-6 space-y-4">
+          <div className="mt-8 space-y-5">
             <div className="flex justify-between gap-4 text-sm">
               <span className="text-muted-foreground">
                 Subtotal
               </span>
 
-              <span className="font-medium">
+              <span className="font-medium text-foreground">
                 {formatPrice(pricing.subtotal)}
               </span>
             </div>
@@ -221,9 +221,9 @@ export default function CartPage() {
               </div>
             )}
 
-            <div className="border-t border-border pt-4">
+            <div className="pt-5 border-t border-border">
               <div className="flex justify-between gap-4">
-                <span className="font-semibold">
+                <span className="font-semibold text-foreground">
                   Total
                 </span>
 
@@ -232,18 +232,22 @@ export default function CartPage() {
                 </span>
               </div>
             </div>
+
+            <p className="mt-4 text-xs text-muted-foreground">
+              Delivery is free on all orders.
+            </p>
           </div>
 
           <Link
             href="/checkout"
-            className="mt-6 flex w-full items-center justify-center rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:opacity-90"
+            className="mt-8 flex w-full items-center justify-center rounded-xl bg-caramel px-8 py-4 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 transition-colors"
           >
             Proceed to Checkout
           </Link>
 
           <Link
             href="/products"
-            className="mt-3 flex w-full items-center justify-center rounded-lg border border-border px-6 py-3 font-medium hover:bg-muted"
+            className="mt-4 flex w-full items-center justify-center rounded-xl border border-border px-8 py-3.5 font-medium text-foreground hover:bg-cream transition-colors"
           >
             Continue Shopping
           </Link>

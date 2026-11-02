@@ -32,7 +32,7 @@ export function ProductCard({ product, priority }: { product: Product; priority?
   return (
     <Card
       className={cn(
-        'group/card relative h-full overflow-hidden border border-border bg-card p-0 shadow-sm transition-shadow duration-200 hover:shadow-lg',
+        'group/card relative h-full overflow-hidden border border-border bg-card shadow-sm transition-shadow duration-200 hover:shadow-md',
         product.availability === 'SOLD_OUT' && 'border-border/50',
       )}
     >
@@ -44,18 +44,21 @@ export function ProductCard({ product, priority }: { product: Product; priority?
           priority={priority}
           sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
           className={cn(
-            'object-cover transition-transform duration-300 group-hover/card:scale-105',
+            'object-cover object-center transition-transform duration-300 group-hover/card:scale-105',
             product.availability === 'SOLD_OUT' && 'opacity-60 grayscale-[40%]',
           )}
+          onError={(e) => {
+            ;(e.target as HTMLImageElement).src = '/placeholder.svg'
+          }}
         />
         <div className="absolute inset-x-2 top-2 flex items-start justify-between gap-2">
           <AvailabilityBadge product={product} className="h-auto max-w-[80%] py-1 whitespace-normal text-left" />
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-3 sm:p-4">
+      <div className="flex flex-1 flex-col gap-2.5 p-3 sm:p-4">
         {product.reviewCount > 0 && (
-          <Rating value={product.rating} count={product.reviewCount} className="text-xs sm:text-sm" />
+          <Rating value={product.rating} count={product.reviewCount} className="text-xs sm:text-xs" />
         )}
         <h3 className="font-sans text-sm leading-snug font-semibold sm:text-base line-clamp-2">
           <Link href={href} className="outline-none after:absolute after:inset-0 focus-visible:underline text-foreground hover:text-primary transition-colors">

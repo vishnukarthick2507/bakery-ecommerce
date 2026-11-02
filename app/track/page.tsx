@@ -205,8 +205,8 @@ function currentStepIndex(
 export default function TrackPage() {
   return (
     <Suspense fallback={
-      <div className="mx-auto max-w-5xl px-4 py-12">
-        <div className="rounded-xl border border-border p-10 text-center">
+      <div className="mx-auto max-w-5xl px-4 py-20 sm:px-6">
+        <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
           <p className="text-muted-foreground">Loading order…</p>
         </div>
       </div>
@@ -368,11 +368,11 @@ function TrackPageContent() {
 
   return (
     <>
-      <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
-        <div className="mb-8">
+      <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6">
+        <div className="mb-10">
           <Link
             href="/"
-            className="text-sm text-muted-foreground hover:underline"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
           >
             <ArrowLeftIcon className="size-4 shrink-0" aria-hidden="true" />
             <span>Back to home</span>
@@ -380,19 +380,19 @@ function TrackPageContent() {
 
           {order ? (
             <>
-              <h1 className="mt-3 text-3xl font-semibold text-primary">
+              <h1 className="mt-4 text-3xl font-semibold text-primary tracking-tight">
                 Order Confirmed
               </h1>
-              <p className="mt-2 text-muted-foreground">
+              <p className="mt-3 text-muted-foreground">
                 Your S.V. Bakery order has been placed successfully.
               </p>
             </>
           ) : (
             <>
-              <h1 className="mt-3 text-3xl font-semibold text-primary">
+              <h1 className="mt-4 text-3xl font-semibold text-primary tracking-tight">
                 Track Your Order
               </h1>
-              <p className="mt-2 text-muted-foreground">
+              <p className="mt-3 text-muted-foreground">
                 Check the latest status of your S.V. Bakery order.
               </p>
             </>
@@ -401,7 +401,7 @@ function TrackPageContent() {
 
         {/* Order lookup */}
         {!order && (
-          <section className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+          <section className="rounded-[2rem] border border-border bg-card p-8 sm:p-10 shadow-sm">
             <h2 className="text-xl font-semibold text-primary mb-1">
               Track Order
             </h2>
@@ -411,7 +411,7 @@ function TrackPageContent() {
 
             <form
               onSubmit={handleSubmit}
-              className="mt-6 flex flex-col gap-3 sm:flex-row"
+              className="mt-8 flex flex-col gap-4 sm:flex-row"
             >
               <input
                 value={orderNumber}
@@ -420,7 +420,7 @@ function TrackPageContent() {
                 }
                 type="text"
                 placeholder="e.g. SV-44171646-7698"
-                className="flex-1 rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                className="flex-1 rounded-xl border border-border bg-background px-4 py-3.5 outline-none focus:ring-2 focus:ring-caramel"
               />
 
               <input
@@ -437,20 +437,20 @@ function TrackPageContent() {
                     ? 'Guest order phone (optional)'
                     : 'Checkout phone number'
                 }
-                className="flex-1 rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                className="flex-1 rounded-xl border border-border bg-background px-4 py-3.5 outline-none focus:ring-2 focus:ring-caramel"
               />
 
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60 hover:opacity-90"
+                className="rounded-xl bg-caramel px-8 py-4 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? 'Loading…' : 'Track Order'}
               </button>
             </form>
 
             {error && (
-              <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                 {error}
               </div>
             )}
@@ -459,26 +459,26 @@ function TrackPageContent() {
 
         {/* Order confirmed & tracking */}
         {order && (
-          <section className="mt-8 space-y-8">
+          <section className="mt-10 space-y-10">
             {/* Order header */}
-            <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+            <div className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                     Order Number
                   </p>
                   <h2 className="mt-1 text-2xl font-bold text-primary">
                     {order.orderNumber}
                   </h2>
                 </div>
-                <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium">
+                <div className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium">
                   <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
                   <span>{formatStatus(order.orderStatus)}</span>
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-3">
-                <div className="rounded-lg border border-border p-4">
+              <div className="mt-8 grid gap-5 md:grid-cols-3">
+                <div className="rounded-xl border border-border p-4">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
                     Payment
                   </p>
@@ -491,7 +491,7 @@ function TrackPageContent() {
                     {formatPaymentStatus(order.paymentStatus)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border p-4">
+                <div className="rounded-xl border border-border p-4">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
                     Fulfilment
                   </p>
@@ -501,7 +501,7 @@ function TrackPageContent() {
                       : 'Pickup'}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border p-4">
+                <div className="rounded-xl border border-border p-4">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
                     Total
                   </p>
@@ -513,7 +513,7 @@ function TrackPageContent() {
             </div>
 
             {isCancelled ? (
-              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 sm:p-8 shadow-sm">
+              <div className="rounded-[2rem] border border-destructive/30 bg-destructive/5 p-6 sm:p-8 shadow-sm">
                 <div className="flex flex-col items-center gap-3 text-center">
                   <div className="flex size-16 items-center justify-center rounded-full bg-destructive/10">
                     <XIcon className="size-8 text-destructive" aria-hidden="true" />
@@ -527,11 +527,11 @@ function TrackPageContent() {
               </div>
             ) : (
               <>
-                <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                <div className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
                   <h2 className="text-xl font-semibold text-primary mb-1">
                     Order Status
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground mb-6">
+                  <p className="mt-1 text-sm text-muted-foreground mb-8">
                     Here&apos;s where your order stands.
                   </p>
 
@@ -540,7 +540,7 @@ function TrackPageContent() {
                     {/* Connector line - short, centered between nodes */}
                     {steps.length > 1 && (
                       <div
-                        className="absolute left-[20px] top-[44px] bottom-4 w-[1px] bg-primary/20"
+                        className="absolute left-[24px] top-[48px] bottom-4 w-[1px] bg-caramel/20"
                         aria-hidden="true"
                       />
                     )}
@@ -552,7 +552,7 @@ function TrackPageContent() {
                       return (
                         <div
                           key={step.key}
-                          className="relative mb-8 pl-16"
+                          className="relative mb-10 pl-20"
                           style={
                             isCurrent ? { zIndex: 10 } : undefined
                           }
@@ -560,13 +560,13 @@ function TrackPageContent() {
                           {/* Connector from previous step */}
                           {index > 0 && (
                             <div
-                              className="absolute left-[20px] top-[44px] -mt-px w-[1px] h-[12px]"
+                              className="absolute left-[24px] top-[48px] -mt-px w-[1px] h-[12px]"
                               aria-hidden="true"
                               style={{
                                 backgroundColor:
                                   index - 1 < currentIndex
-                                    ? '#0B2744'
-                                    : '#D9E4EE',
+                                    ? '#B87945'
+                                    : '#F1E5D5',
                               }}
                             />
                           )}
@@ -574,12 +574,12 @@ function TrackPageContent() {
                           {/* Status node circle */}
                           <div
                             className={cn(
-                              'absolute left-[16px] top-0 z-20 flex size-9 shrink-0 items-center justify-center rounded-full border-2',
+                              'absolute left-[20px] top-0 z-20 flex size-10 shrink-0 items-center justify-center rounded-full border-2',
                               isCompleted
-                                ? 'bg-primary border-primary text-primary-foreground'
+                                ? 'bg-caramel border-caramel text-caramel-foreground'
                                 : isCurrent
-                                  ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_0_4px_rgba(11,39,68,0.2)]'
-                                  : 'bg-white border-primary text-primary',
+                                  ? 'bg-caramel border-caramel text-caramel-foreground shadow-[0_0_0_4px_rgba(184,121,69,0.2)]'
+                                  : 'bg-card border-caramel text-caramel',
                             )}
                           >
                             {isCompleted ? (
@@ -628,12 +628,12 @@ function TrackPageContent() {
                 </div>
 
                 {/* Order items */}
-                <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                <div className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
                   <h2 className="text-xl font-semibold text-primary mb-1">
                     Your Items
                   </h2>
 
-                  <div className="mt-5 divide-y divide-border">
+                  <div className="mt-6 divide-y divide-border">
                     {order.items.map((item) => (
                       <div
                         key={`${item.productId}-${item.variantId}`}
@@ -658,15 +658,15 @@ function TrackPageContent() {
                 </div>
 
                 {/* Delivery / pickup & schedule */}
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                <div className="grid gap-8 md:grid-cols-2">
+                  <div className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
                     <h2 className="text-xl font-semibold text-primary mb-1">
                       {order.fulfillmentType === 'DELIVERY'
                         ? 'Delivery Details'
                         : 'Pickup Details'}
                     </h2>
 
-                    <div className="mt-4 space-y-3 text-sm">
+                    <div className="mt-6 space-y-4 text-sm">
                       <div className="flex items-start gap-3">
                         <Mail className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                         <div>
@@ -680,7 +680,7 @@ function TrackPageContent() {
                       </div>
 
                       {order.fulfillmentType === 'DELIVERY' && order.address && (
-                        <div className="flex items-start gap-3 mt-3">
+                        <div className="flex items-start gap-3 mt-4">
                           <MapPin className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                           <p className="text-muted-foreground">
                             {order.address.addressLine},{' '}
@@ -692,7 +692,7 @@ function TrackPageContent() {
 
                       {order.fulfillmentType === 'PICKUP' && (
                         <>
-                          <div className="flex items-start gap-3 mt-3">
+                          <div className="flex items-start gap-3 mt-4">
                             <MapPin className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                             <div>
                               <p className="font-medium text-foreground">Pickup Location</p>
@@ -705,7 +705,7 @@ function TrackPageContent() {
                               </p>
                             </div>
                           </div>
-                          <div className="mt-3 rounded-lg border border-border bg-muted/50 p-3">
+                          <div className="mt-4 rounded-xl border border-border bg-cream/30 p-4">
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
                               Pickup Instructions
                             </p>
@@ -719,12 +719,12 @@ function TrackPageContent() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                  <div className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
                     <h2 className="text-xl font-semibold text-primary mb-1">
                       Schedule
                     </h2>
 
-                    <div className="mt-4 space-y-3 text-sm">
+                    <div className="mt-6 space-y-4 text-sm">
                       <div className="flex items-start gap-3">
                         <Calendar className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                         <p className="text-muted-foreground">
@@ -765,12 +765,12 @@ function TrackPageContent() {
                 </div>
 
                 {/* Payment summary */}
-                <div className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+                <div className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
                   <h2 className="text-xl font-semibold text-primary mb-1">
                     Payment Summary
                   </h2>
 
-                  <div className="mt-5 space-y-3">
+                  <div className="mt-6 space-y-3">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Subtotal</span>
                       <span>₹{order.subtotal.toLocaleString('en-IN')}</span>
@@ -781,7 +781,7 @@ function TrackPageContent() {
                       <span>₹{order.deliveryFee.toLocaleString('en-IN')}</span>
                     </div>
 
-                    <div className="my-3 border-t border-border" />
+                    <div className="my-4 border-t border-border" />
 
                     <div className="flex justify-between text-xl font-bold text-primary">
                       <span>Total</span>
@@ -794,13 +794,13 @@ function TrackPageContent() {
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
                   <Link
                     href="/track"
-                    className="flex-1 flex items-center justify-center rounded-lg border border-border px-6 py-3 font-medium hover:bg-muted"
+                    className="flex-1 flex items-center justify-center rounded-xl border border-border px-6 py-3.5 font-medium hover:bg-cream/50 text-caramel transition-colors"
                   >
                     Track Another Order
                   </Link>
                   <Link
                     href="/products"
-                    className="flex-1 flex items-center justify-center rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:opacity-90"
+                    className="flex-1 flex items-center justify-center rounded-xl bg-caramel px-8 py-3.5 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 transition-colors"
                   >
                     Continue Shopping
                   </Link>

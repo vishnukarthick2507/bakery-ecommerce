@@ -79,9 +79,9 @@ export function ProductsBrowser({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-col gap-5">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <InputGroup className="h-11 flex-1 bg-card border border-border">
+      <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <InputGroup className="h-11 flex-1 bg-card border border-border rounded-xl">
             <InputGroupAddon className="bg-transparent">
               <SearchIcon className="size-4 text-muted-foreground" />
             </InputGroupAddon>
@@ -105,7 +105,7 @@ export function ProductsBrowser({
             <Button
               variant="outline"
               size="xl"
-              className="flex-1 lg:hidden"
+              className="flex-1 lg:hidden rounded-xl"
               onClick={() => setSheetOpen(true)}
             >
               <SlidersHorizontalIcon data-icon="inline-start" />
@@ -116,7 +116,7 @@ export function ProductsBrowser({
               value={sort}
               onValueChange={(v) => v && setSort(v as SortOption)}
             >
-              <SelectTrigger className="h-11! flex-1 bg-card sm:w-52 border border-border" aria-label="Sort products">
+              <SelectTrigger className="h-11! flex-1 bg-card sm:w-52 border border-border rounded-xl" aria-label="Sort products">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

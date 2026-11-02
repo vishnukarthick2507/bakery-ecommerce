@@ -67,15 +67,19 @@ export function ProductDetailClient({
       </Link>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="overflow-hidden p-0 border border-border shadow-sm">
+        <Card className="overflow-hidden p-0 border border-border shadow-sm rounded-[2rem]">
           <div className="relative aspect-square bg-muted overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
             <Image
               src={product.image || '/placeholder.svg'}
               alt={product.name}
               fill
               priority
               sizes="(min-width: 1024px) 50vw, 100vw"
-              className="object-cover"
+              className="object-cover object-center"
+              onError={(e) => {
+                ;(e.target as HTMLImageElement).src = '/placeholder.svg'
+              }}
             />
 
             <div className="absolute left-4 top-4 flex items-start gap-2">
@@ -104,7 +108,7 @@ export function ProductDetailClient({
               </p>
             </div>
 
-            <div className="mt-5 flex items-center gap-3">
+            <div className="mt-6 flex items-center gap-3">
               <Price
                 price={variant.price}
                 mrp={variant.mrp}
@@ -116,7 +120,7 @@ export function ProductDetailClient({
               </span>
             </div>
 
-            <div className="mt-6 grid gap-3 rounded-xl border border-border bg-white p-5 text-sm">
+            <div className="mt-8 grid gap-3 rounded-2xl border border-border bg-cream/30 p-6 text-sm">
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Category</span>
                 <span className="font-medium capitalize">{product.category}</span>
@@ -150,7 +154,7 @@ export function ProductDetailClient({
             </div>
 
             {product.ingredients.length > 0 && (
-              <div className="mt-6">
+              <div className="mt-8">
                 <h2 className="text-sm font-semibold text-primary tracking-tight uppercase">Ingredients</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {product.ingredients.join(', ')}
@@ -159,7 +163,7 @@ export function ProductDetailClient({
             )}
 
             {product.allergens.length > 0 && (
-              <div className="mt-6">
+              <div className="mt-8">
                 <h2 className="text-sm font-semibold text-primary tracking-tight uppercase">Allergens</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {product.allergens.join(', ')}
@@ -170,11 +174,11 @@ export function ProductDetailClient({
 
           <div className="border-t border-border pt-6">
             {canOrder ? (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-medium text-foreground">Quantity</span>
 
-                  <div className="flex items-center rounded-lg border border-border">
+                  <div className="flex items-center rounded-xl border border-border bg-background">
                     <Button
                       type="button"
                       variant="outline"

@@ -11,7 +11,7 @@ export function PageHeader({
   breadcrumbs?: Array<{ href?: string; label: string }>
 }) {
   return (
-    <div className="border-b bg-secondary">
+    <div className="border-b border-border bg-cream/40">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-8 sm:px-6 sm:py-10">
         {breadcrumbs && (
           <nav aria-label="Breadcrumb">

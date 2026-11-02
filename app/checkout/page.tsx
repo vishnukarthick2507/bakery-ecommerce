@@ -217,21 +217,25 @@ export default function CheckoutPage() {
 
   if (!items.length) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-16">
-        <div className="rounded-xl border border-border p-8 text-center">
-          <h1 className="text-3xl font-semibold text-primary">
+      <main className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
+        <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-cream text-primary-foreground text-4xl">
+            🛒
+          </div>
+
+          <h1 className="mt-8 text-3xl font-semibold text-primary tracking-tight">
             Your cart is empty
           </h1>
 
-          <p className="mt-3 text-muted-foreground">
+          <p className="mt-4 text-muted-foreground leading-relaxed">
             Add some delicious items before checking out.
           </p>
 
           <Link
             href="/products"
-            className="mt-6 inline-flex rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground"
+            className="mt-8 inline-flex items-center justify-center rounded-xl bg-caramel px-8 py-3.5 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 transition-colors"
           >
-            Browse products
+            Browse Products
           </Link>
         </div>
       </main>
@@ -600,26 +604,26 @@ export default function CheckoutPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <div className="mb-8">
+      <div className="mb-10">
         <Link
           href="/products"
-          className="text-sm text-muted-foreground hover:underline"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
         >
-          ← Continue shopping
+          <span>←</span> Continue shopping
         </Link>
 
-        <h1 className="mt-3 text-3xl font-semibold text-primary">
+        <h1 className="mt-4 text-3xl font-semibold text-primary tracking-tight">
           Checkout
         </h1>
 
-        <p className="mt-2 text-muted-foreground">
-          Enter your details and choose how you
-          would like to receive your order.
+        <p className="mt-3 text-muted-foreground">
+          Enter your details and choose how you would like to receive your
+          order.
         </p>
       </div>
 
       {/* Progress indicator */}
-      <ol className="flex gap-1 mb-8" aria-label="Checkout progress">
+      <ol className="flex gap-1 mb-10" aria-label="Checkout progress">
         {STEPS.map((step, i) => {
           const isComplete = i < currentStepIndex
           const isCurrent = i === currentStepIndex
@@ -628,9 +632,9 @@ export default function CheckoutPage() {
               <div className="flex flex-col items-center gap-2">
                 <span
                   className={cn(
-                    'flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
+                    'flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors',
                     isComplete
-                      ? 'bg-primary text-primary-foreground border-primary'
+                      ? 'bg-caramel text-caramel-foreground border-caramel'
                       : isCurrent
                         ? 'border-primary text-primary'
                         : 'border-border text-muted-foreground',
@@ -655,8 +659,8 @@ export default function CheckoutPage() {
                 </span>
               </div>
               {i < STEPS.length - 1 && (
-                <div className="absolute left-1/2 top-8 -mt-0.5 w-full h-0.5 -z-10" aria-hidden="true">
-                  <div className={cn('h-full', isComplete ? 'bg-primary' : 'bg-border')} />
+                <div className="absolute left-1/2 top-9 -mt-0.5 w-full h-0.5 -z-10" aria-hidden="true">
+                  <div className={cn('h-full', isComplete ? 'bg-caramel' : 'bg-border')} />
                 </div>
               )}
             </li>
@@ -664,16 +668,16 @@ export default function CheckoutPage() {
         })}
       </ol>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-        <section className="space-y-6">
+      <div className="grid gap-10 lg:grid-cols-[1fr_380px]">
+        <section className="space-y-8">
           {error && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
               {error}
             </div>
           )}
 
           {closed && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
               {settings?.closedMessage ||
                 'Online ordering is currently closed. Please check back soon.'}
               {settings?.reopenAt && (
@@ -690,7 +694,7 @@ export default function CheckoutPage() {
 
             {/* Step: Customer details */}
             {activeStep === 'details' && (
-              <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+              <div className="rounded-[2rem] border border-border bg-card p-8 shadow-sm">
                 <h2 className="text-xl font-semibold text-primary mb-1">
                   Customer details
                 </h2>
@@ -698,7 +702,7 @@ export default function CheckoutPage() {
                   We&apos;ll use this to confirm your order.
                 </p>
 
-                <div className="mt-5 grid gap-4">
+                <div className="mt-6 grid gap-5">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-foreground">
                       Full name
@@ -718,10 +722,10 @@ export default function CheckoutPage() {
                       }}
                       onBlur={() => clearFieldError('customerName')}
                       className={cn(
-                        'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                        'w-full rounded-xl border px-4 py-3 outline-none focus:ring-2',
                         fieldErrors.customerName
                           ? 'border-destructive focus:ring-destructive'
-                          : 'border-border focus:ring-primary',
+                          : 'border-border focus:ring-caramel',
                       )}
                     />
                   </div>
@@ -747,10 +751,10 @@ export default function CheckoutPage() {
                       }}
                       onBlur={() => clearFieldError('customerEmail')}
                       className={cn(
-                        'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                        'w-full rounded-xl border px-4 py-3 outline-none focus:ring-2',
                         fieldErrors.customerEmail
                           ? 'border-destructive focus:ring-destructive'
-                          : 'border-border focus:ring-primary',
+                          : 'border-border focus:ring-caramel',
                       )}
                     />
                   </div>
@@ -777,10 +781,10 @@ export default function CheckoutPage() {
                       }}
                       onBlur={() => clearFieldError('phone')}
                       className={cn(
-                        'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                        'w-full rounded-xl border px-4 py-3 outline-none focus:ring-2',
                         fieldErrors.phone
                           ? 'border-destructive focus:ring-destructive'
-                          : 'border-border focus:ring-primary',
+                          : 'border-border focus:ring-caramel',
                       )}
                     />
                   </div>
@@ -799,7 +803,7 @@ export default function CheckoutPage() {
                     setActiveStep('fulfilment')
                   }}
                   disabled={isSubmitting}
-                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                  className="mt-6 inline-flex items-center gap-2 rounded-xl bg-caramel px-6 py-3.5 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 transition-colors"
                 >
                   Continue <span aria-hidden="true">›</span>
                 </button>
@@ -808,7 +812,7 @@ export default function CheckoutPage() {
 
           {/* Step: Fulfilment */}
           {activeStep === 'fulfilment' && (
-            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+            <div className="rounded-[2rem] border border-border bg-card p-8 shadow-sm">
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Delivery or pickup
               </h2>
@@ -816,18 +820,18 @@ export default function CheckoutPage() {
                 How would you like to receive your order?
               </p>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 {!settings?.deliveryEnabled ? null : (
                   <button
                     type="button"
                     disabled={!settings?.onlineOrdersEnabled}
                     onClick={() => setFulfilment('delivery')}
-                    className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${
+                    className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${
                       fulfilment === 'delivery' && settings?.deliveryEnabled
-                        ? 'border-primary bg-primary/5'
+                        ? 'border-caramel bg-caramel/5'
                         : !settings?.deliveryEnabled
                           ? 'border-border opacity-50'
-                          : 'border-border hover:bg-muted'
+                          : 'border-border hover:bg-cream/50'
                     }`}
                   >
                     <div className="font-semibold text-foreground">
@@ -848,12 +852,12 @@ export default function CheckoutPage() {
                     type="button"
                     disabled={!settings?.onlineOrdersEnabled}
                     onClick={() => setFulfilment('pickup')}
-                    className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${
+                    className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${
                       fulfilment === 'pickup' && settings?.pickupEnabled
-                        ? 'border-primary bg-primary/5'
+                        ? 'border-caramel bg-caramel/5'
                         : !settings?.pickupEnabled
                           ? 'border-border opacity-50'
-                          : 'border-border hover:bg-muted'
+                          : 'border-border hover:bg-cream/50'
                     }`}
                   >
                     <div className="font-semibold text-foreground">Pickup</div>
@@ -870,7 +874,7 @@ export default function CheckoutPage() {
               </div>
 
               {fulfilment === 'delivery' && (
-                <div className="mt-6 grid gap-4">
+                <div className="mt-8 grid gap-5">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-foreground">
                       Address
@@ -890,10 +894,10 @@ export default function CheckoutPage() {
                       }}
                       onBlur={() => clearFieldError('addressLine')}
                       className={cn(
-                        'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                        'w-full rounded-xl border px-4 py-3 outline-none focus:ring-2',
                         fieldErrors.addressLine
                           ? 'border-destructive focus:ring-destructive'
-                          : 'border-border focus:ring-primary',
+                          : 'border-border focus:ring-caramel',
                       )}
                     />
                   </div>
@@ -918,10 +922,10 @@ export default function CheckoutPage() {
                         }}
                         onBlur={() => clearFieldError('city')}
                         className={cn(
-                          'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                          'w-full rounded-xl border px-4 py-3 outline-none focus:ring-2',
                           fieldErrors.city
                             ? 'border-destructive focus:ring-destructive'
-                            : 'border-border focus:ring-primary',
+                            : 'border-border focus:ring-caramel',
                         )}
                       />
                     </div>
@@ -945,10 +949,10 @@ export default function CheckoutPage() {
                         }}
                         onBlur={() => clearFieldError('pincode')}
                         className={cn(
-                          'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                          'w-full rounded-xl border px-4 py-3 outline-none focus:ring-2',
                           fieldErrors.pincode
                             ? 'border-destructive focus:ring-destructive'
-                            : 'border-border focus:ring-primary',
+                            : 'border-border focus:ring-caramel',
                         )}
                       />
                     </div>
@@ -968,7 +972,7 @@ export default function CheckoutPage() {
                   type="button"
                   onClick={() => setActiveStep('schedule')}
                   disabled={isSubmitting}
-                  className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                  className="ml-auto inline-flex items-center gap-2 rounded-xl bg-caramel px-6 py-3.5 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 transition-colors"
                 >
                   Continue <span aria-hidden="true">›</span>
                 </button>
@@ -978,7 +982,7 @@ export default function CheckoutPage() {
 
           {/* Step: Schedule */}
           {activeStep === 'schedule' && (
-            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+            <div className="rounded-[2rem] border border-border bg-card p-8 shadow-sm">
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Schedule your order
               </h2>
@@ -986,7 +990,7 @@ export default function CheckoutPage() {
                 Choose when you&apos;d like to pick up or receive your order.
               </p>
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="mt-8 grid gap-5 sm:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
                     Date
@@ -1005,10 +1009,10 @@ export default function CheckoutPage() {
                       clearFieldError('scheduledDate')
                     }}
                     className={cn(
-                      'w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      'w-full rounded-xl border px-4 py-3 outline-none focus:ring-2',
                       fieldErrors.scheduledDate
                         ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-primary',
+                        : 'border-border focus:ring-caramel',
                     )}
                   />
                 </div>
@@ -1020,7 +1024,7 @@ export default function CheckoutPage() {
                   <select
                     value={scheduledTime}
                     onChange={(e) => setScheduledTime(e.target.value)}
-                    className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 border-border focus:ring-primary"
+                    className="w-full rounded-xl border px-4 py-3 outline-none focus:ring-2 border-border focus:ring-caramel"
                   >
                     <option>
                       10:00 AM - 12:00 PM
@@ -1041,7 +1045,7 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div className="mt-8 flex items-center gap-2">
+              <div className="mt-10 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setActiveStep('fulfilment')}
@@ -1070,7 +1074,7 @@ export default function CheckoutPage() {
                     setActiveStep('payment')
                   }}
                   disabled={isSubmitting}
-                  className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                  className="ml-auto inline-flex items-center gap-2 rounded-xl bg-caramel px-6 py-3.5 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 transition-colors"
                 >
                   Continue <span aria-hidden="true">›</span>
                 </button>
@@ -1080,7 +1084,7 @@ export default function CheckoutPage() {
 
           {/* Step: Payment */}
           {activeStep === 'payment' && (
-            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+            <div className="rounded-[2rem] border border-border bg-card p-8 shadow-sm">
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Payment method
               </h2>
@@ -1088,7 +1092,7 @@ export default function CheckoutPage() {
                 Choose how you&apos;d like to pay.
               </p>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-8 grid gap-5 sm:grid-cols-2">
                 {fulfilment === 'delivery' ? (
                   <>
                     <button
@@ -1097,7 +1101,7 @@ export default function CheckoutPage() {
                         setPayment('cod')
                         setPendingOnlineOrder(null)
                       }}
-                      className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'cod' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                      className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${payment === 'cod' ? 'border-caramel bg-caramel/5' : 'border-border hover:bg-cream/50'}`}
                     >
                       <div className="font-semibold text-foreground">Cash on Delivery</div>
                       <div className="mt-1 text-sm text-muted-foreground">
@@ -1111,7 +1115,7 @@ export default function CheckoutPage() {
                         setPayment('online')
                         setPendingOnlineOrder(null)
                       }}
-                      className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'online' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                      className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${payment === 'online' ? 'border-caramel bg-caramel/5' : 'border-border hover:bg-cream/50'}`}
                     >
                       <div className="font-semibold text-foreground">Online Payment</div>
                       <div className="mt-1 text-sm text-muted-foreground">
@@ -1128,7 +1132,7 @@ export default function CheckoutPage() {
                         setPayment('online')
                         setPendingOnlineOrder(null)
                       }}
-                      className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'online' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                      className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${payment === 'online' ? 'border-caramel bg-caramel/5' : 'border-border hover:bg-cream/50'}`}
                     >
                       <div className="font-semibold text-foreground">Online Payment</div>
                       <div className="mt-1 text-sm text-muted-foreground">
@@ -1143,7 +1147,7 @@ export default function CheckoutPage() {
                         setPayment('pay_at_store')
                         setPendingOnlineOrder(null)
                       }}
-                      className={`flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${payment === 'pay_at_store' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                      className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${payment === 'pay_at_store' ? 'border-caramel bg-caramel/5' : 'border-border hover:bg-cream/50'}`}
                     >
                       <div className="font-semibold text-foreground">Pay at Store</div>
                       <div className="mt-1 text-sm text-muted-foreground">
@@ -1166,7 +1170,7 @@ export default function CheckoutPage() {
                   type="button"
                   onClick={() => setActiveStep('summary')}
                   disabled={isSubmitting}
-                  className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                  className="ml-auto inline-flex items-center gap-2 rounded-xl bg-caramel px-6 py-3.5 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 transition-colors"
                 >
                   Continue <span aria-hidden="true">›</span>
                 </button>
@@ -1176,7 +1180,7 @@ export default function CheckoutPage() {
 
           {/* Step: Summary */}
           {activeStep === 'summary' && (
-            <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+            <div className="rounded-[2rem] border border-border bg-card p-8 shadow-sm">
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Review your order
               </h2>
@@ -1184,8 +1188,8 @@ export default function CheckoutPage() {
                 Please review your order before placing it.
               </p>
 
-              <div className="space-y-4">
-                <div className="flex justify-between items-start py-3 border-b border-border">
+              <div className="space-y-6">
+                <div className="flex justify-between items-start py-4 border-b border-border">
                   <div>
                     <p className="font-medium text-foreground">
                       {fulfilment === 'delivery' ? 'Delivery' : 'Pickup'}
@@ -1225,7 +1229,7 @@ export default function CheckoutPage() {
                   ))}
                 </div>
 
-                <div className="my-4 border-t border-border" />
+                <div className="my-5 border-t border-border" />
 
                 <div className="space-y-2">
                   <div className="flex justify-between">
@@ -1234,14 +1238,14 @@ export default function CheckoutPage() {
                     </span>
                     <span>{formatPrice(pricing.subtotal)}</span>
                   </div>
-                  <div className="flex justify-between text-lg font-bold text-primary">
+                  <div className="flex justify-between text-xl font-bold text-primary">
                     <span>Total</span>
                     <span>{formatPrice(pricing.subtotal)}</span>
                   </div>
                 </div>
 
                 {pendingOnlineOrder && (
-                  <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
+                  <div className="mt-6 rounded-xl border border-caramel/20 bg-caramel/5 p-4 text-sm text-primary">
                     Order{' '}
                     <span className="font-semibold">
                       {pendingOnlineOrder}
@@ -1253,13 +1257,13 @@ export default function CheckoutPage() {
                 )}
 
                 {error && (
-                  <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                     {error}
                   </div>
                 )}
               </div>
 
-              <div className="mt-8 flex items-center gap-2">
+              <div className="mt-10 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setActiveStep('payment')}
@@ -1271,7 +1275,7 @@ export default function CheckoutPage() {
                   type="button"
                   disabled={closed || isSubmitting}
                   onClick={handlePlaceOrder}
-                  className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                  className="ml-auto inline-flex items-center gap-2 rounded-xl bg-caramel px-8 py-4 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 transition-colors"
                 >
                   {isSubmitting
                     ? payment === 'online'
@@ -1285,7 +1289,7 @@ export default function CheckoutPage() {
                 </button>
               </div>
 
-              <p className="mt-4 text-center text-xs text-muted-foreground">
+              <p className="mt-5 text-center text-xs text-muted-foreground">
                 Your order will be securely saved to our system.
               </p>
             </div>
@@ -1293,12 +1297,12 @@ export default function CheckoutPage() {
         </section>
 
         {/* Order summary sidebar */}
-        <aside className="h-fit rounded-xl border border-border p-6 shadow-sm lg:sticky lg:top-6">
+        <aside className="h-fit rounded-[2rem] border border-border p-8 shadow-sm bg-card lg:sticky lg:top-24">
           <h2 className="text-xl font-semibold text-primary">
             Order summary
           </h2>
 
-          <div className="mt-5 space-y-4">
+          <div className="mt-8 space-y-5">
             {pricing.lines.map((line) => (
               <div
                 key={`${line.item.productId}-${line.item.variantId}`}
@@ -1320,9 +1324,9 @@ export default function CheckoutPage() {
             ))}
           </div>
 
-          <div className="my-6 border-t border-border" />
+          <div className="my-7 border-t border-border" />
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex justify-between">
               <span className="text-muted-foreground">
                 Subtotal
@@ -1335,12 +1339,12 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <p className="mt-4 text-xs text-muted-foreground text-center">
+          <p className="mt-5 text-xs text-muted-foreground text-center">
             Delivery is currently free on all orders.
           </p>
 
           {pendingOnlineOrder && (
-            <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
+            <div className="mt-6 rounded-xl border border-caramel/20 bg-caramel/5 p-4 text-sm text-primary">
               Order{' '}
               <span className="font-semibold">
                 {pendingOnlineOrder}
@@ -1352,7 +1356,7 @@ export default function CheckoutPage() {
           )}
 
           {error && (
-            <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -1361,7 +1365,7 @@ export default function CheckoutPage() {
             type="button"
             disabled={closed || isSubmitting}
             onClick={handlePlaceOrder}
-            className="mt-6 w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-8 w-full rounded-xl bg-caramel px-8 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
           >
             {isSubmitting
               ? payment === 'online'
@@ -1374,9 +1378,8 @@ export default function CheckoutPage() {
                   : 'Place Order'}
           </button>
 
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            Your order will be securely saved to
-            our system.
+          <p className="mt-5 text-center text-xs text-muted-foreground">
+            Your order will be securely saved to our system.
           </p>
         </aside>
       </div>

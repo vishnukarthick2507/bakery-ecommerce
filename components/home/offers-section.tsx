@@ -27,25 +27,27 @@ export function OffersSection() {
   return (
     <Section labelledBy="offers-title" className="bg-cream">
       <SectionHeading id="offers-title" eyebrow="Offers" title="Current offers" description="Apply these codes at checkout." />
-      <ul className="grid gap-4 md:grid-cols-3">
+      <ul className="grid gap-5 md:grid-cols-3">
         {isLoading
           ? Array.from({ length: 3 }, (_, i) => (
               <li key={i}>
-                <Skeleton className="h-44 rounded-xl" />
+                <Skeleton className="h-48 rounded-2xl" />
               </li>
             ))
           : data?.map((offer) => (
               <li key={offer.code}>
-                <Card className="h-full border-dashed shadow-sm">
-                  <CardHeader>
-                    <div className="mb-1 flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Card
+                  className="h-full border border-border rounded-2xl bg-card shadow-sm transition-shadow duration-200 hover:shadow-md hover:border-caramel/50"
+                >
+                  <CardHeader className="pb-4">
+                    <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-caramel/10 text-caramel">
                       <TicketPercentIcon className="size-5" aria-hidden="true" />
                     </div>
                     <CardTitle className="font-heading text-xl">{offer.title}</CardTitle>
-                    <CardDescription>{offer.description}</CardDescription>
+                    <CardDescription className="text-sm">{offer.description}</CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1" />
-                  <CardFooter className="justify-between gap-2">
+                  <CardFooter className="justify-between gap-2 pt-4">
                     <code className="rounded-md bg-secondary px-2.5 py-1 font-mono text-sm font-semibold text-primary">
                       {offer.code}
                     </code>

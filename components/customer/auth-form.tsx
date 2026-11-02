@@ -312,33 +312,35 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
 
   return (
     <main className="mx-auto max-w-lg px-4 py-12 sm:px-6">
-      <section className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
-        <p className="text-sm font-semibold text-primary">S.V. Bakery</p>
-        <h1 className="mt-2 text-3xl font-semibold text-primary">
+      <section className="rounded-[2rem] border border-border bg-card p-8 sm:p-10 shadow-sm">
+        <p className="text-sm font-semibold text-primary tracking-wide uppercase">
+          S.V. Bakery
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold text-primary tracking-tight">
           {mode === 'register' ? 'Create your account' : 'Customer sign in'}
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
           {mode === 'register'
             ? 'Keep your account details and orders together.'
             : 'Sign in to view your account and order history.'}
         </p>
 
         {error && (
-          <div role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <div role="alert" className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
             {error}
           </div>
         )}
 
         {/* Auth method switch */}
-        <div className="mt-6 flex flex-col sm:flex-row gap-2">
+        <div className="mt-8 flex flex-col sm:flex-row gap-2">
           <button
             type="button"
             onClick={() => switchAuthMethod('password')}
             className={cn(
-              'flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
+              'flex-1 rounded-xl border px-5 py-3 text-sm font-medium transition-all',
               authMethod === 'password'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'border-border text-muted-foreground hover:bg-muted',
+                ? 'bg-caramel text-caramel-foreground border-caramel shadow-sm'
+                : 'border-border text-muted-foreground hover:bg-cream/50 hover:border-caramel/20',
             )}
           >
             Password
@@ -347,10 +349,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
             type="button"
             onClick={() => switchAuthMethod('phone-otp')}
             className={cn(
-              'flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
+              'flex-1 rounded-xl border px-5 py-3 text-sm font-medium transition-all',
               authMethod === 'phone-otp'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'border-border text-muted-foreground hover:bg-muted',
+                ? 'bg-caramel text-caramel-foreground border-caramel shadow-sm'
+                : 'border-border text-muted-foreground hover:bg-cream/50 hover:border-caramel/20',
             )}
           >
             Phone OTP
@@ -358,8 +360,8 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         </div>
 
         {authMethod === 'password' ? (
-          // ---- Password form (existing, unchanged) ----
-          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+          // ---- Password form (existing, unchanged logic) ----
+          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
             {mode === 'register' && (
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">
@@ -382,10 +384,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   }}
                   placeholder="Priya"
                   className={cn(
-                    'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                    'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
                     fieldErrors.name
                       ? 'border-destructive focus:ring-destructive'
-                      : 'border-border focus:ring-primary',
+                      : 'border-border focus:ring-caramel',
                   )}
                 />
               </div>
@@ -412,10 +414,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 }}
                 placeholder="priya@example.com"
                 className={cn(
-                  'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                  'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
                   fieldErrors.email
                     ? 'border-destructive focus:ring-destructive'
-                    : 'border-border focus:ring-primary',
+                    : 'border-border focus:ring-caramel',
                 )}
               />
             </div>
@@ -445,10 +447,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   }}
                   placeholder="9840916058"
                   className={cn(
-                    'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                    'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
                     fieldErrors.phone
                       ? 'border-destructive focus:ring-destructive'
-                      : 'border-border focus:ring-primary',
+                      : 'border-border focus:ring-caramel',
                   )}
                 />
               </div>
@@ -476,10 +478,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 }}
                 placeholder="••••••••"
                 className={cn(
-                  'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                  'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
                   fieldErrors.password
                     ? 'border-destructive focus:ring-destructive'
-                    : 'border-border focus:ring-primary',
+                    : 'border-border focus:ring-caramel',
                 )}
               />
             </div>
@@ -507,10 +509,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   }}
                   placeholder="••••••••"
                   className={cn(
-                    'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                    'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
                     fieldErrors.confirmPassword
                       ? 'border-destructive focus:ring-destructive'
-                      : 'border-border focus:ring-primary',
+                      : 'border-border focus:ring-caramel',
                   )}
                 />
               </div>
@@ -519,14 +521,14 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
+              className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               {submitting ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Sign in'}
             </button>
           </form>
         ) : (
           // ---- Phone OTP form (unified: no LOGIN/REGISTER choice) ----
-          <form className="mt-6 space-y-5">
+          <form className="mt-8 space-y-6">
             {otpStep === 'send' ? (
               <>
                 <div>
@@ -552,10 +554,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     }}
                     placeholder="+91 98409 16058"
                     className={cn(
-                      'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
                       fieldErrors.phone
                         ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-primary',
+                        : 'border-border focus:ring-caramel',
                     )}
                   />
                 </div>
@@ -564,7 +566,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   type="button"
                   onClick={handleSendOtp}
                   disabled={submitting || !isValidOtpPhone(phone)}
-                  className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
+                  className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                   {submitting ? 'Sending…' : 'Send OTP'}
                 </button>
@@ -575,10 +577,12 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               </>
             ) : otpStep === 'verify' ? (
               <>
-                <div className="bg-muted/50 rounded-lg p-4">
+                <div className="bg-cream rounded-xl p-5">
                   <p className="text-sm text-muted-foreground">
                     Enter the 6-digit code sent to{' '}
-                    <span className="font-medium">{cleanPhone(phone) || phone}</span>
+                    <span className="font-medium text-primary">
+                      {cleanPhone(phone) || phone}
+                    </span>
                   </p>
                 </div>
 
@@ -605,10 +609,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     }}
                     placeholder="123456"
                     className={cn(
-                      'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2 text-center letter-spacing-widest font-mono',
                       fieldErrors.otp
                         ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-primary',
+                        : 'border-border focus:ring-caramel',
                     )}
                   />
                 </div>
@@ -617,7 +621,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   type="button"
                   onClick={handleVerifyOtp}
                   disabled={submitting || otp.trim().length !== 6}
-                  className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
+                  className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                   {submitting ? 'Verifying…' : 'Verify OTP'}
                 </button>
@@ -625,7 +629,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={() => setOtpStep('send')}
-                  className="w-full rounded-lg border border-border px-5 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                  className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted-foreground hover:bg-cream/50 transition-colors"
                 >
                   ← Use a different phone number
                 </button>
@@ -634,17 +638,17 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   type="button"
                   onClick={handleSendOtp}
                   disabled={submitting}
-                  className="w-full rounded-lg border border-border px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-muted"
+                  className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-caramel-foreground hover:bg-cream/50 transition-colors"
                 >
                   Resend OTP
                 </button>
               </>
             ) : (
               // Registration step (new customer after OTP verification)
-              <form onSubmit={handleCompleteRegistration} className="mt-6 space-y-5">
-                <div className="bg-muted/50 rounded-lg p-4">
+              <form onSubmit={handleCompleteRegistration} className="mt-8 space-y-6">
+                <div className="bg-cream rounded-xl p-5">
                   <p className="text-sm text-muted-foreground">
-                    Phone verified: <span className="font-medium">{cleanPhone(phone) || phone}</span>. Please complete your profile.
+                    Phone verified: <span className="font-medium text-primary">{cleanPhone(phone) || phone}</span>. Please complete your profile.
                   </p>
                 </div>
 
@@ -669,10 +673,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     }}
                     placeholder="Priya"
                     className={cn(
-                      'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
                       fieldErrors.name
                         ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-primary',
+                        : 'border-border focus:ring-caramel',
                     )}
                   />
                 </div>
@@ -698,10 +702,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     }}
                     placeholder="priya@example.com"
                     className={cn(
-                      'mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2',
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
                       fieldErrors.email
                         ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-primary',
+                        : 'border-border focus:ring-caramel',
                     )}
                   />
                 </div>
@@ -714,7 +718,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-60 hover:opacity-90"
+                  className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                   {submitting ? 'Creating account…' : 'Create account'}
                 </button>
@@ -722,7 +726,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={() => setOtpStep('send')}
-                  className="w-full rounded-lg border border-border px-5 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                  className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted-foreground hover:bg-cream/50 transition-colors"
                 >
                   ← Use a different phone number
                 </button>
@@ -731,18 +735,18 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           </form>
         )}
 
-        <p className="mt-6 text-sm text-muted-foreground">
+        <p className="mt-8 text-sm text-muted-foreground text-center">
           {mode === 'register' ? 'Already have an account?' : 'New to S.V. Bakery?'}{' '}
           {mode === 'register' ? (
             <Link
-              className="font-medium text-primary underline-offset-4 hover:underline"
+              className="font-medium text-caramel underline-offset-4 hover:underline"
               href="/account/login"
             >
               Sign in
             </Link>
           ) : (
             <Link
-              className="font-medium text-primary underline-offset-4 hover:underline"
+              className="font-medium text-caramel underline-offset-4 hover:underline"
               href="/account/register"
             >
               Create an account

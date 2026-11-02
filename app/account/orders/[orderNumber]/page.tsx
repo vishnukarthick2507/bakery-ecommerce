@@ -316,17 +316,17 @@ export default function CustomerOrderDetailPage() {
   }
 
   if (loading) return (
-    <main className="mx-auto max-w-4xl px-4 py-12">
-      <div className="rounded-xl border border-border p-10 text-center">
+    <main className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
+      <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
         <p className="text-muted-foreground">Loading order…</p>
       </div>
     </main>
   )
   if (error) return (
-    <main className="mx-auto max-w-4xl px-4 py-12">
-      <div className="rounded-xl border border-border p-10 text-center shadow-sm">
+    <main className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
+      <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
         <p className="text-destructive">{error}</p>
-        <Link href="/account/orders" className="mt-4 inline-flex underline text-sm">
+        <Link href="/account/orders" className="mt-4 inline-flex underline text-sm text-caramel">
           Back to my orders
         </Link>
       </div>
@@ -335,25 +335,27 @@ export default function CustomerOrderDetailPage() {
   if (!order) return null
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+    <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6">
       <div className="flex items-end justify-between gap-4">
         <div>
           <Link href="/account/orders" className="text-sm text-muted-foreground hover:underline">
             ← My orders
           </Link>
-          <h1 className="mt-3 text-3xl font-semibold text-primary">{order.orderNumber}</h1>
+          <h1 className="mt-3 text-3xl font-semibold text-primary tracking-tight">
+            {order.orderNumber}
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {new Date(order.createdAt).toLocaleString('en-IN')}
           </p>
         </div>
         <div className="text-right text-sm">
-          <p className="font-semibold">{formatOrderStatus(order.orderStatus)}</p>
+          <p className="font-semibold text-primary">{formatOrderStatus(order.orderStatus)}</p>
           <p className="mt-1 text-muted-foreground">Payment: {order.paymentStatus}</p>
         </div>
       </div>
 
       {order.proposedSlot?.status === 'PENDING' && (
-        <section className="mt-6 rounded-xl border border-primary bg-primary/5 p-6 sm:p-8 shadow-sm">
+        <section className="mt-10 rounded-[2rem] border border-caramel bg-caramel/5 p-6 sm:p-8 shadow-sm">
           <h2 className="text-xl font-semibold text-primary">New time suggested</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             The bakery has suggested a different time for your order.
@@ -385,12 +387,12 @@ export default function CustomerOrderDetailPage() {
               </div>
             )}
           </div>
-          <div className="mt-5 flex gap-3 sm:flex-row">
+          <div className="mt-6 flex gap-3 sm:flex-row">
             <button
               type="button"
               disabled={proposing === 'accept' || isSubmitting}
               onClick={handleAcceptProposal}
-              className="flex-1 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground disabled:opacity-60 hover:opacity-90"
+              className="flex-1 rounded-xl bg-caramel px-5 py-3 font-medium text-caramel-foreground disabled:opacity-60 hover:bg-caramel/90"
             >
               {proposing === 'accept' ? 'Accepting…' : 'Accept'}
             </button>
@@ -398,13 +400,13 @@ export default function CustomerOrderDetailPage() {
               type="button"
               disabled={proposing === 'decline' || isSubmitting}
               onClick={handleDeclineProposal}
-              className="flex-1 rounded-lg border border-destructive px-5 py-3 font-medium text-destructive disabled:opacity-60 hover:bg-destructive/5"
+              className="flex-1 rounded-xl border border-destructive px-5 py-3 font-medium text-destructive disabled:opacity-60 hover:bg-destructive/5"
             >
               {proposing === 'decline' ? 'Declining…' : 'Decline'}
             </button>
           </div>
           {error && (
-            <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -412,7 +414,7 @@ export default function CustomerOrderDetailPage() {
       )}
 
       {order.proposedSlot?.status === 'DECLINED' && (
-        <section className="mt-6 rounded-xl border border-destructive bg-destructive/5 p-6 sm:p-8 shadow-sm">
+        <section className="mt-10 rounded-[2rem] border border-destructive bg-destructive/5 p-6 sm:p-8 shadow-sm">
           <h2 className="text-xl font-semibold text-primary">Proposal declined</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             You declined the suggested time. Your order retains its original
@@ -426,13 +428,13 @@ export default function CustomerOrderDetailPage() {
         order.paymentStatus !== 'PAID' &&
         order.orderStatus !== 'CANCELLED' &&
         (order.paymentStatus === 'FAILED' || order.paymentStatus === 'PENDING') && (
-          <section className="mt-6 rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+          <section className="mt-10 rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
             <h2 className="text-xl font-semibold text-primary">Retry Payment</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Your online payment was not completed. You can retry payment for this order.
             </p>
             {error && (
-              <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                 {error}
               </div>
             )}
@@ -448,7 +450,7 @@ export default function CustomerOrderDetailPage() {
                   order.customer?.phone ?? order.phone,
                 )
               }}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-caramel px-6 py-4 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               {isSubmitting ? 'Processing Payment…' : 'Retry Payment'}
             </button>
@@ -458,8 +460,10 @@ export default function CustomerOrderDetailPage() {
           </section>
         )}
 
-      <section className="mt-6 rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
-        <h2 className="text-xl font-semibold text-primary">Items</h2>
+      <section className="mt-10 rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
+        <h2 className="text-xl font-semibold text-primary mb-1">
+          Items
+        </h2>
         <div className="mt-4 divide-y divide-border">
           {order.items.map((item) => (
             <div
@@ -467,12 +471,14 @@ export default function CustomerOrderDetailPage() {
               className="flex justify-between gap-4 py-4"
             >
               <div>
-                <p className="font-medium">{item.productName}</p>
+                <p className="font-medium text-foreground">
+                  {item.productName}
+                </p>
                 <p className="text-sm text-muted-foreground">
                   {item.quantity} × ₹{item.unitPrice.toLocaleString('en-IN')}
                 </p>
               </div>
-              <p className="font-medium">
+              <p className="font-medium text-primary">
                 ₹{(item.itemTotal ?? item.totalPrice).toLocaleString('en-IN')}
               </p>
             </div>
@@ -485,9 +491,9 @@ export default function CustomerOrderDetailPage() {
         </div>
       </section>
 
-      <section className="mt-5 grid gap-5 rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm sm:grid-cols-2">
+      <section className="mt-10 grid gap-6 rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm sm:grid-cols-2">
         <div>
-          <h2 className="font-semibold text-primary">Customer</h2>
+          <h2 className="font-semibold text-primary uppercase tracking-wider text-sm">Customer</h2>
           <p className="mt-2 text-sm">{order.customer?.name ?? order.customerName}</p>
           {order.customer?.email && (
             <p className="mt-1 text-sm text-muted-foreground">{order.customer.email}</p>
@@ -495,7 +501,7 @@ export default function CustomerOrderDetailPage() {
           <p className="mt-1 text-sm text-muted-foreground">{order.customer?.phone ?? order.phone}</p>
         </div>
         <div>
-          <h2 className="font-semibold text-primary">
+          <h2 className="font-semibold text-primary uppercase tracking-wider text-sm">
             {order.fulfillmentType === 'DELIVERY' ? 'Delivery address' : 'Pickup'}
           </h2>
           <p className="mt-2 text-sm">
