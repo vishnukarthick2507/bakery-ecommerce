@@ -11,12 +11,13 @@ import {
   hashOtp,
   verifyOtp,
 } from "../src/services/otpService.js";
-import { sendOtpEmail } from "../src/services/emailService.js";
+import { sendOtpEmail, isBrevoSmtpConfigured } from "../src/services/emailService.js";
 import { connectTestDB, clearTestDB, disconnectTestDB } from "./testDatabase.js";
 import { createAuthTestApp } from "./authTestApp.js";
 
 vi.mock("../src/services/emailService.js", () => ({
   sendOtpEmail: vi.fn(),
+  isBrevoSmtpConfigured: vi.fn(() => true),
 }));
 
 const app = createAuthTestApp();
@@ -67,6 +68,7 @@ describe("OTP service", () => {
     // By default, Brevo email delivery succeeds in tests. Individual tests
     // override this to simulate delivery failure.
     (sendOtpEmail as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (isBrevoSmtpConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
   });
 
   afterAll(async () => {
@@ -340,12 +342,34 @@ describe("OTP service", () => {
         const res = await sendOtpRequest("otp-fail@example.com");
         expect(res.status).toBe(502);
         expect(res.body.message).toContain("Unable to send OTP");
+        expect(res.body.code).toBe("EMAIL_DELIVERY_FAILED");
 
         const session = await OtpSession.findOne({ identifier: "otp-fail@example.com" });
         expect(session).toBeNull();
       } finally {
         process.env.NODE_ENV = originalNodeEnv;
         (sendOtpEmail as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+      }
+    });
+
+    it("returns 503 in production mode when Brevo SMTP is not configured, without creating an OTP session", async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = "production";
+      (isBrevoSmtpConfigured as ReturnType<typeof vi.fn>).mockReturnValue(false);
+      try {
+        const res = await sendOtpRequest("otp-config@example.com");
+        expect(res.status).toBe(503);
+        expect(res.body.message).toContain("Email service is not configured");
+        expect(res.body.code).toBe("EMAIL_CONFIG_MISSING");
+
+        // Confirm no OTP session was created
+        const session = await OtpSession.findOne({ identifier: "otp-config@example.com" });
+        expect(session).toBeNull();
+        // Confirm sendOtpEmail was never called
+        expect(sendOtpEmail).not.toHaveBeenCalled();
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+        (isBrevoSmtpConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
       }
     });
 

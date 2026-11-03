@@ -7,6 +7,7 @@ import {
   verifyToken,
   adminMe,
   adminLogout,
+  brevoSmtpDiagnostic,
 } from "../controllers/authController.js";
 import {
   getCurrentCustomer,
@@ -17,7 +18,7 @@ import {
   verifyOtp,
   completeRegistration,
 } from "../controllers/customerAuthController.js";
-import { authenticateCustomer } from "../middleware/auth.js";
+import { authenticateCustomer, authenticateAdmin } from "../middleware/auth.js";
 import {
   adminLoginLimiter,
   customerLoginLimiter,
@@ -90,6 +91,12 @@ router.post(
   },
   authenticateCustomer,
   logoutCustomer,
+);
+
+router.get(
+  "/diagnostics/brevo-smtp",
+  authenticateAdmin,
+  brevoSmtpDiagnostic,
 );
 
 router.post("/register", customerRegisterLimiter, registerCustomer);

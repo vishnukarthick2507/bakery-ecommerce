@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { Admin } from "../models/Admin.js";
 import { getJwtSecret } from "../config/jwt.js";
+import { verifyBrevoSmtpConnection } from "../services/emailService.js";
 
 const JWT_EXPIRES_IN = "7d";
 
@@ -252,4 +253,26 @@ export const adminLogout = async (
 ): Promise<void> => {
   clearAdminTokenCookie(res);
   res.status(200).json({ message: "Logged out" });
+};
+
+/*
+||--------------------------------------------------------------------------
+|| BREVO SMTP DIAGNOSTIC
+|| GET /api/admin/diagnostics/brevo-smtp
+||--------------------------------------------------------------------------
+|| Protected admin diagnostic. Verifies Brevo SMTP configuration and
+|| connectivity/authentication without sending an email.
+|| Never exposes SMTP credentials, OTPs, customer data, or environment values.
+*/
+export const brevoSmtpDiagnostic = async (
+  _req: Request,
+  res: Response,
+): Promise<void> => {
+  const result = await verifyBrevoSmtpConnection();
+  const smtpConfigured = result.detail !== "Brevo SMTP is not configured";
+  res.status(200).json({
+    smtpConfigured,
+    smtpConnectionOk: result.ok,
+    ...(result.detail ? { error: result.detail } : {}),
+  });
 };

@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sendOtpEmail } from "../src/services/emailService.js";
+import { sendOtpEmail, isBrevoSmtpConfigured, verifyBrevoSmtpConnection } from "../src/services/emailService.js";
 
 const sendMailMock = vi.fn();
+const verifyMock = vi.fn().mockResolvedValue(true);
 
 vi.mock("nodemailer", () => ({
   default: {
     createTransport: vi.fn(() => ({
       sendMail: sendMailMock,
+      verify: verifyMock,
     })),
   },
 }));
@@ -133,5 +135,122 @@ describe("sendOtpEmail (Brevo SMTP via Nodemailer)", () => {
     const html = sendMailMock.mock.calls[0]![0]!.html as string;
     expect(html).not.toContain("secret-key");
     expect(html).not.toContain("user@smtp-brevo.com");
+  });
+
+  describe("verifyBrevoSmtpConnection", () => {
+    it("returns true when SMTP verify succeeds", async () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_PORT: "587",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "smtp-key",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      verifyMock.mockResolvedValue(true);
+      const result = await verifyBrevoSmtpConnection();
+      expect(result.ok).toBe(true);
+    });
+
+    it("returns false when not configured", async () => {
+      clearBrevoEnv();
+      const result = await verifyBrevoSmtpConnection();
+      expect(result.ok).toBe(false);
+      expect(result.detail).toBe("Brevo SMTP is not configured");
+    });
+
+    it("returns false when transporter.verify rejects (auth/connection failure)", async () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_PORT: "587",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "wrong-key",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      verifyMock.mockRejectedValue(new Error("Invalid login"));
+      const result = await verifyBrevoSmtpConnection();
+      expect(result.ok).toBe(false);
+      expect(verifyMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("sendOtpEmail failure modes", () => {
+    it("returns false on SMTP authentication failure", async () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_PORT: "587",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "wrong-key",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      sendMailMock.mockRejectedValue(
+        Object.assign(new Error("Invalid login"), { code: "AUTHENTICATION_FAILED" }),
+      );
+
+      const result = await sendOtpEmail("customer@example.com", "123456", "LOGIN");
+      expect(result).toBe(false);
+    });
+
+    it("returns false on SMTP connection failure", async () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_PORT: "587",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "smtp-key",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      sendMailMock.mockRejectedValue(
+        Object.assign(new Error("Connection timed out"), { code: "ECONNREFUSED" }),
+      );
+
+      const result = await sendOtpEmail("customer@example.com", "123456", "LOGIN");
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("isBrevoSmtpConfigured", () => {
+    it("returns true when all Brevo SMTP vars are set", async () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_PORT: "587",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "smtp-key",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      expect(isBrevoSmtpConfigured()).toBe(true);
+    });
+
+    it("returns false when BREVO_SMTP_HOST is missing", async () => {
+      setBrevoEnv({
+        BREVO_SMTP_PORT: "587",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "smtp-key",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      expect(isBrevoSmtpConfigured()).toBe(false);
+    });
+
+    it("returns false when BREVO_SMTP_KEY is missing", async () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_PORT: "587",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      expect(isBrevoSmtpConfigured()).toBe(false);
+    });
+
+    it("returns false when BREVO_FROM_EMAIL is missing", async () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_PORT: "587",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "smtp-key",
+      });
+      expect(isBrevoSmtpConfigured()).toBe(false);
+    });
+
+    it("returns false when no Brevo vars are set", async () => {
+      expect(isBrevoSmtpConfigured()).toBe(false);
+    });
   });
 });

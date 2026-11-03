@@ -151,7 +151,13 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail(raw))
   }
 
-  function otpErrorMessage(status: number, message: string): string {
+  function otpErrorMessage(status: number, message: string, code?: string): string {
+    switch (code) {
+      case "EMAIL_CONFIG_MISSING":
+        return "Email service is not configured. Please contact support."
+      case "EMAIL_DELIVERY_FAILED":
+        return message || "Unable to send OTP. Please try again later."
+    }
     switch (status) {
       case 400:
         return message || 'Invalid input. Please check your details.'
@@ -162,9 +168,11 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       case 409:
         return 'An account with this email address already exists.'
       case 429:
-        return 'Too many requests. Please try again later.'
-      case 429:
         return message || 'Too many OTP requests. Please wait before resending.'
+      case 502:
+        return message || 'Unable to send OTP. Please try again later.'
+      case 503:
+        return 'Email service is not configured. Please contact support.'
       default:
         return message || 'Unable to process your request. Please try again.'
     }
@@ -196,7 +204,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           startResendCooldownTimer()
           throw new Error(`Please wait ${data.retryAfter}s before resending OTP.`)
         }
-        throw new Error(otpErrorMessage(response.status, data.message))
+        throw new Error(otpErrorMessage(response.status, data.message, data.code))
       }
       setOtp('')
       setOtpStep('verify')
@@ -248,7 +256,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       })
       const data = await response.json()
       if (!response.ok) {
-        throw new Error(otpErrorMessage(response.status, data.message))
+        throw new Error(otpErrorMessage(response.status, data.message, data.code))
       }
 
       setOtpStep('register')
@@ -508,7 +516,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={handleSendOtp}
-                  disabled={submitting || !isValidOtpEmail(email)}
+                  disabled={submitting || !isValidOtpEmail(email) || resendCooldown > 0}
                   className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                   {submitting ? 'Sending…' : 'Send OTP'}

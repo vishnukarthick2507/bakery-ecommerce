@@ -19,6 +19,19 @@ function getBrevoSmtpConfig() {
 }
 
 /**
+ * Returns true only when all required Brevo SMTP environment variables are set.
+ * Used by the controller to distinguish a misconfigured service (503) from a
+ * transient delivery failure (502). Never logs credential values.
+ */
+export function isBrevoSmtpConfigured(): boolean {
+  const host = process.env.BREVO_SMTP_HOST;
+  const user = process.env.BREVO_SMTP_USER;
+  const pass = process.env.BREVO_SMTP_KEY;
+  const from = process.env.BREVO_FROM_EMAIL;
+  return Boolean(host && user && pass && from);
+}
+
+/**
  * Sends a 6-digit OTP to the customer's email address via Brevo SMTP (Nodemailer).
  *
  * @param to - Recipient email address.
@@ -28,14 +41,21 @@ function getBrevoSmtpConfig() {
  *
  * Reads Brevo SMTP credentials exclusively from environment variables.
  * Delivery failures (network, auth, incomplete config) fail closed: false is
- * returned and no OTP session is created by the caller. The OTP value and SMTP
- * credentials are never written to application logs.
+ * returned and no OTP session is created by the caller. The OTP value, SMTP
+ * credentials, and recipient address are never written to application logs.
  */
 export async function sendOtpEmail(
   to: string,
   otp: string,
   purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" = "LOGIN",
 ): Promise<boolean> {
+  if (!isBrevoSmtpConfigured()) {
+    console.error(
+      "OTP email delivery failed: Brevo SMTP is not configured. Set BREVO_SMTP_HOST, BREVO_SMTP_USER, BREVO_SMTP_KEY and BREVO_FROM_EMAIL.",
+    );
+    return false;
+  }
+
   try {
     const { host, port, user, pass, from, fromName } = getBrevoSmtpConfig();
 
@@ -114,8 +134,77 @@ export async function sendOtpEmail(
 
     return true;
   } catch (error) {
-    // Delivery failures fail closed. Log without exposing the OTP or SMTP credentials.
-    console.error("OTP email delivery failed:", error instanceof Error ? error.message : String(error));
+    // Delivery failures fail closed. Log the SMTP failure reason without
+    // exposing the OTP, SMTP credentials, or the recipient address.
+    const smtpError = error as {
+      code?: string;
+      responseCode?: number;
+      response?: string;
+      command?: string;
+    };
+    const safeDetail =
+      smtpError.code || smtpError.responseCode || smtpError.command
+        ? `code=${String(
+            smtpError.code ?? smtpError.responseCode ?? smtpError.command,
+          )}`
+        : "";
+    console.error(
+      `OTP email delivery failed${safeDetail ? ` (${safeDetail})` : ""}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
     return false;
   }
 }
+
+/**
+ * Diagnostic helper: verifies Brevo SMTP connectivity and authentication.
+ *
+ * Intended for health-check / startup diagnostics, NOT for the per-request
+ * send path (transporter.verify() adds latency on every call).
+ *
+ * Logs only the outcome and SMTP codes; never credentials, the OTP, or the
+ * recipient address.
+ */
+export async function verifyBrevoSmtpConnection(): Promise<{
+  ok: boolean;
+  detail?: string;
+}> {
+  if (!isBrevoSmtpConfigured()) {
+    return { ok: false, detail: "Brevo SMTP is not configured" };
+  }
+
+  try {
+    const { host, port, user, pass } = getBrevoSmtpConfig();
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    });
+    await transporter.verify();
+    return { ok: true };
+  } catch (error) {
+    const smtpError = error as {
+      code?: string;
+      responseCode?: number;
+      command?: string;
+    };
+    const safeDetail =
+      smtpError.code || smtpError.responseCode || smtpError.command
+        ? `code=${String(
+            smtpError.code ?? smtpError.responseCode ?? smtpError.command,
+          )}`
+        : "";
+    console.error(
+      `Brevo SMTP verification failed${safeDetail ? ` (${safeDetail})` : ""}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return {
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
