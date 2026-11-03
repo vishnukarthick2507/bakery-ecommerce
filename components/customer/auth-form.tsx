@@ -7,28 +7,27 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 type AuthMode = 'login' | 'register'
-type AuthMethod = 'password' | 'phone-otp'
+type AuthMethod = 'password' | 'email-otp'
 type OtpStep = 'send' | 'verify' | 'register'
 
 export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter()
 
-  // ---- Auth method: Password vs Phone OTP ----
-  // Password registration is disabled. New customers must use phone OTP.
+  // ---- Auth method: Password vs Email OTP ----
+  // Password registration is disabled. New customers must use email OTP.
   const [authMethod, setAuthMethod] = useState<AuthMethod>(
-    mode === 'register' ? 'phone-otp' : 'password',
+    mode === 'register' ? 'email-otp' : 'password',
   )
 
   // ---- OTP flow state ----
   const [otpStep, setOtpStep] = useState<OtpStep>('send')
   const [otp, setOtp] = useState('')
-  const [phone, setPhone] = useState('')
-  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'email' | 'phone' | 'password' | 'otp', string>>>({})
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'email' | 'password' | 'otp', string>>>({})
   const [resendCooldown, setResendCooldown] = useState(0)
   const resendCooldownTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -44,7 +43,6 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     setAuthMethod(method)
     setOtpStep('send')
     setOtp('')
-    setPhone('')
     setName('')
     setEmail('')
     setError('')
@@ -66,7 +64,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     }
   }, [])
 
-  const isOtpFlow = authMethod === 'phone-otp'
+  const isOtpFlow = authMethod === 'email-otp'
   const isLogin = mode === 'login'
 
   // ---- Password flow (existing, unchanged) ----
@@ -75,14 +73,14 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     setError('')
     setFieldErrors({})
 
-    const nextFieldErrors: Partial<Record<'name' | 'email' | 'phone' | 'password', string>> = {}
+    const nextFieldErrors: Partial<Record<'name' | 'email' | 'password', string>> = {}
     let hasError = false
 
     if (mode === 'register') {
-      // Password registration is disabled; new customers register via phone OTP.
+      // Password registration is disabled; new customers register via email OTP.
       // The password form is not shown in register mode, so no password validation
-      // is needed here. Only name, email, and phone are collected for display
-      // purposes, but the actual registration happens via the OTP flow.
+      // is needed here. Only name and email are collected for display purposes,
+      // but the actual registration happens via the OTP flow.
       if (!name.trim() || name.trim().length < 2) {
         nextFieldErrors.name = 'Please enter your full name.'
         hasError = true
@@ -95,13 +93,6 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         hasError = true
       } else {
         clearFieldError('email')
-      }
-
-      if (!/^[6-9]\d{9}$/.test(phone)) {
-        nextFieldErrors.phone = 'Enter a valid 10-digit Indian mobile number.'
-        hasError = true
-      } else {
-        clearFieldError('phone')
       }
     } else {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
@@ -133,7 +124,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ...(mode === 'register' ? { name: name.trim(), phone } : {}),
+            ...(mode === 'register' ? { name: name.trim() } : {}),
             email: email.trim().toLowerCase(),
             password,
           }),
@@ -151,14 +142,13 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     }
   }
 
-  // ---- Phone OTP helpers ----
-  function cleanPhone(raw: string): string {
-    return raw.replace(/\s+/g, '').replace(/-/g, '').replace(/^(\+91|91)/, '')
+  // ---- Email OTP helpers ----
+  function cleanEmail(raw: string): string {
+    return raw.trim().toLowerCase()
   }
 
-  function isValidOtpPhone(raw: string): boolean {
-    const cleaned = cleanPhone(raw)
-    return /^[6-9]\d{9}$/.test(cleaned)
+  function isValidOtpEmail(raw: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail(raw))
   }
 
   function otpErrorMessage(status: number, message: string): string {
@@ -168,15 +158,13 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       case 401:
         return 'Invalid or expired OTP. Please try again.'
       case 404:
-        return 'No account found for this phone number.'
+        return 'No account found for this email address.'
       case 409:
-        return 'An account with this phone number already exists.'
+        return 'An account with this email address already exists.'
       case 429:
         return 'Too many requests. Please try again later.'
       case 429:
         return message || 'Too many OTP requests. Please wait before resending.'
-      case 501:
-        return 'SMS delivery is not configured. Please try again later.'
       default:
         return message || 'Unable to process your request. Please try again.'
     }
@@ -186,9 +174,9 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     setError('')
     setFieldErrors({})
 
-    if (!isValidOtpPhone(phone)) {
-      const msg = 'Enter a valid 10-digit Indian mobile number.'
-      setFieldErrors({ phone: msg })
+    if (!isValidOtpEmail(email)) {
+      const msg = 'Enter a valid email address.'
+      setFieldErrors({ email: msg })
       setError(msg)
       return
     }
@@ -199,7 +187,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: cleanPhone(phone) }),
+        body: JSON.stringify({ email: cleanEmail(email) }),
       })
       const data = await response.json()
       if (!response.ok) {
@@ -212,10 +200,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       }
       setOtp('')
       setOtpStep('verify')
-      toast.success('OTP sent to your mobile number.')
+      toast.success('OTP sent to your email address.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to send OTP.'
-      setFieldErrors({ phone: msg })
+      setFieldErrors({ email: msg })
       setError(msg)
       toast.error(msg)
     } finally {
@@ -256,7 +244,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: cleanPhone(phone), otp: otp.trim() }),
+        body: JSON.stringify({ email: cleanEmail(email), otp: otp.trim() }),
       })
       const data = await response.json()
       if (!response.ok) {
@@ -265,16 +253,15 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
 
       setOtpStep('register')
       setName('')
-      setEmail('')
-      toast.success('Phone verified. Enter your details to continue.')
+      toast.success('Email verified. Enter your details to continue.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to verify OTP.'
       if (msg.includes('already exists') || msg.includes('No account found')) {
-        setFieldErrors({ phone: msg })
+        setFieldErrors({ email: msg })
       } else if (msg.includes('OTP') || msg.includes('6-digit')) {
         setFieldErrors({ otp: msg })
       } else {
-        setFieldErrors({ phone: msg })
+        setFieldErrors({ email: msg })
       }
       setError(msg)
       toast.error(msg)
@@ -323,7 +310,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       if (msg.includes('already exists')) {
         setFieldErrors({ email: msg })
       } else {
-        setFieldErrors({ phone: msg })
+        setFieldErrors({ email: msg })
       }
       setError(msg)
       toast.error(msg)
@@ -371,15 +358,15 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           ) : null}
           <button
             type="button"
-            onClick={() => switchAuthMethod('phone-otp')}
+            onClick={() => switchAuthMethod('email-otp')}
             className={cn(
               'flex-1 rounded-xl border px-5 py-3 text-sm font-medium transition-all',
-              authMethod === 'phone-otp'
+              authMethod === 'email-otp'
                 ? 'bg-caramel text-caramel-foreground border-caramel shadow-sm'
                 : 'border-border text-muted-foreground hover:bg-cream/50 hover:border-caramel/20',
             )}
           >
-            Phone OTP
+            Email OTP
           </button>
         </div>
 
@@ -446,40 +433,6 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               />
             </div>
 
-            {mode === 'register' && (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">
-                  Indian mobile number
-                </label>
-                {fieldErrors.phone && (
-                  <p className="mb-2 text-xs text-destructive">
-                    {fieldErrors.phone}
-                  </p>
-                )}
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  required
-                  minLength={10}
-                  maxLength={10}
-                  pattern="[6-9][0-9]{9}"
-                  value={phone}
-                  onChange={(event) => {
-                    setPhone(event.target.value)
-                    clearFieldError('phone')
-                  }}
-                  placeholder="9840916058"
-                  className={cn(
-                    'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                    fieldErrors.phone
-                      ? 'border-destructive focus:ring-destructive'
-                      : 'border-border focus:ring-caramel',
-                  )}
-                />
-              </div>
-            )}
-
             <div>
               <label className="mb-2 block text-sm font-medium text-foreground">
                 Password
@@ -525,29 +478,27 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               <>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
-                    Indian mobile number
+                    Email address
                   </label>
-                  {fieldErrors.phone && (
+                  {fieldErrors.email && (
                     <p className="mb-2 text-xs text-destructive">
-                      {fieldErrors.phone}
+                      {fieldErrors.email}
                     </p>
                   )}
                   <input
-                    type="tel"
-                    inputMode="numeric"
-                    autoComplete="tel-national"
+                    type="email"
+                    autoComplete="email"
                     required
-                    minLength={10}
-                    maxLength={15}
-                    value={phone}
+                    maxLength={254}
+                    value={email}
                     onChange={(event) => {
-                      setPhone(event.target.value)
-                      clearFieldError('phone')
+                      setEmail(event.target.value)
+                      clearFieldError('email')
                     }}
-                    placeholder="+91 98409 16058"
+                    placeholder="priya@example.com"
                     className={cn(
                       'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.phone
+                      fieldErrors.email
                         ? 'border-destructive focus:ring-destructive'
                         : 'border-border focus:ring-caramel',
                     )}
@@ -557,14 +508,14 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={handleSendOtp}
-                  disabled={submitting || !isValidOtpPhone(phone)}
+                  disabled={submitting || !isValidOtpEmail(email)}
                   className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                   {submitting ? 'Sending…' : 'Send OTP'}
                 </button>
 
                 <p className="mt-4 text-sm text-muted-foreground">
-                  A 6-digit code will be sent to your mobile number.
+                  A 6-digit code will be sent to your email address.
                 </p>
               </>
             ) : otpStep === 'verify' ? (
@@ -573,7 +524,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   <p className="text-sm text-muted-foreground">
                     Enter the 6-digit code sent to{' '}
                     <span className="font-medium text-primary">
-                      {cleanPhone(phone) || phone}
+                      {email || ''}
                     </span>
                   </p>
                 </div>
@@ -623,7 +574,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   onClick={() => setOtpStep('send')}
                   className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted-foreground hover:bg-cream/50 transition-colors"
                 >
-                  ← Use a different phone number
+                  ← Use a different email address
                 </button>
 
                 <button
@@ -640,7 +591,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               <form onSubmit={handleCompleteRegistration} className="mt-8 space-y-6">
                 <div className="bg-cream rounded-xl p-5">
                   <p className="text-sm text-muted-foreground">
-                    Phone verified: <span className="font-medium text-primary">{cleanPhone(phone) || phone}</span>. Enter your name and email to continue. Any saved profile for this phone will remain unchanged.
+                    Email verified: <span className="font-medium text-primary">{email}</span>. Enter your name to continue. Any saved profile for this email will remain unchanged.
                   </p>
                 </div>
 
@@ -703,8 +654,8 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 </div>
 
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Your phone number is verified and cannot be changed here. To
-                  use a different phone, restart OTP verification.
+                  Your email address is verified and cannot be changed here. To
+                  use a different email, restart OTP verification.
                 </p>
 
                 <button
@@ -720,7 +671,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   onClick={() => setOtpStep('send')}
                   className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted-foreground hover:bg-cream/50 transition-colors"
                 >
-                  ← Use a different phone number
+                  ← Use a different email address
                 </button>
               </form>
             )}

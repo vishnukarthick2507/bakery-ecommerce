@@ -24,7 +24,7 @@ A full-stack bakery e-commerce application with a customer storefront and a dedi
 
 
 
-\- Phone OTP authentication
+\- Email OTP authentication
 
 \- Browse bakery products and cakes
 
@@ -96,7 +96,7 @@ A full-stack bakery e-commerce application with a customer storefront and a dedi
 
 
 
-### Phone OTP Sign In
+### Email OTP Sign In
 
 
 

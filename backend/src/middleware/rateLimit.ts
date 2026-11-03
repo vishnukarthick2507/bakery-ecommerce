@@ -69,27 +69,25 @@ export const guestTrackingLimiter = rateLimit({
 
 /*
 |--------------------------------------------------------------------------
-| PHONE NORMALIZATION FOR RATE-LIMIT KEYS
+| EMAIL NORMALIZATION FOR RATE-LIMIT KEYS
 |--------------------------------------------------------------------------
-| Mirrors the normalization used by customerAuthController so the same mobile
-| number (with or without spaces, dashes, or a leading +91/91 country code)
-| always maps to the same rate-limit bucket. Values that are missing, empty,
-| or not a valid 10-digit Indian mobile number collapse to a single shared
-| "unknown" bucket, so a client cannot bypass rate limiting by repeatedly
-| changing the request body.
+| Mirrors the email handling used by customerAuthController so the same
+| email address (with different casing or surrounding whitespace) always maps
+| to the same rate-limit bucket. Values that are missing, empty, or not a
+| valid email collapse to a single shared "unknown" bucket, so a client cannot
+| bypass rate limiting by repeatedly changing the request body.
 */
-function normalizePhone(phone: unknown): string {
-  if (typeof phone !== "string" || phone.length === 0) {
+function normalizeEmail(email: unknown): string {
+  if (typeof email !== "string" || email.length === 0) {
     return "unknown";
   }
-  const cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");
-  const normalized = cleaned.replace(/^(\+91|91)/, "");
-  return /^[6-9]\d{9}$/.test(normalized) ? normalized : "unknown";
+  const normalized = email.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : "unknown";
 }
 
 export const otpSendLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  limit: 3, // 3 OTP sends per phone/IP per hour
+  limit: 3, // 3 OTP sends per email/IP per hour
   standardHeaders: "draft-6",
   legacyHeaders: false,
   message: {
@@ -99,15 +97,15 @@ export const otpSendLimiter = rateLimit({
     res.status(options.statusCode).json(options.message);
   },
   keyGenerator: (req) => {
-    const phone = normalizePhone(req.body?.phone);
+    const email = normalizeEmail(req.body?.email);
     const ipKey = ipKeyGenerator(req.ip ?? "127.0.0.1");
-    return `${phone}:${ipKey}`;
+    return `${email}:${ipKey}`;
   },
 });
 
 export const otpVerifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 10, // 10 OTP verification attempts per phone/IP per 15 minutes
+  limit: 10, // 10 OTP verification attempts per email/IP per 15 minutes
   standardHeaders: "draft-6",
   legacyHeaders: false,
   message: {
@@ -118,8 +116,8 @@ export const otpVerifyLimiter = rateLimit({
     res.status(options.statusCode).json(options.message);
   },
   keyGenerator: (req) => {
-    const phone = normalizePhone(req.body?.phone);
+    const email = normalizeEmail(req.body?.email);
     const ipKey = ipKeyGenerator(req.ip ?? "127.0.0.1");
-    return `${phone}:${ipKey}`;
+    return `${email}:${ipKey}`;
   },
 });

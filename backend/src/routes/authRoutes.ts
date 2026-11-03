@@ -29,28 +29,28 @@ import { getJwtSecret } from "../config/jwt.js";
 
 const router: Router = Router();
 
-function setVerifiedPhoneForRegistrationLimit(
+function setVerifiedEmailForRegistrationLimit(
   req: Request,
   _res: Response,
   next: NextFunction,
 ): void {
-  let verifiedPhone: string | undefined;
+  let verifiedEmail: string | undefined;
   const token = req.cookies?.["otp-registration-token"];
 
   if (token) {
     try {
       const decoded = jwt.verify(token, getJwtSecret()) as {
-        phone?: unknown;
+        email?: unknown;
         purpose?: string;
         accountType?: string;
       };
       if (
         decoded.accountType === "REGISTRATION" &&
         decoded.purpose === "REGISTRATION" &&
-        typeof decoded.phone === "string" &&
-        /^[6-9]\d{9}$/.test(decoded.phone)
+        typeof decoded.email === "string" &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(decoded.email)
       ) {
-        verifiedPhone = decoded.phone;
+        verifiedEmail = decoded.email.toLowerCase();
       }
     } catch {
       // Invalid proof tokens share the IP-only rate-limit bucket.
@@ -59,7 +59,7 @@ function setVerifiedPhoneForRegistrationLimit(
 
   req.body = {
     ...(req.body && typeof req.body === "object" ? req.body : {}),
-    phone: verifiedPhone,
+    email: verifiedEmail,
   };
   next();
 }
@@ -98,7 +98,7 @@ router.post("/otp/send", otpSendLimiter, sendOtp);
 router.post("/otp/verify", otpVerifyLimiter, verifyOtp);
 router.post(
   "/otp/register-complete",
-  setVerifiedPhoneForRegistrationLimit,
+  setVerifiedEmailForRegistrationLimit,
   otpVerifyLimiter,
   completeRegistration,
 );

@@ -3,8 +3,10 @@ import { OtpSession } from "../models/OtpSession.js";
 import { OtpSendCooldown } from "../models/OtpSendCooldown.js";
 
 const OTP_LENGTH = 6;
-const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
-const MAX_ATTEMPTS = 5;
+// OTP expiry is restored to 10 minutes per approved security requirements.
+export const OTP_EXPIRY_MS = 10 * 60 * 1000;
+export const OTP_EXPIRY_MINUTES = OTP_EXPIRY_MS / (60 * 1000); // 10
+const MAX_ATTEMPTS = 3;
 export const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 
 export interface OtpSendCooldownClaim {

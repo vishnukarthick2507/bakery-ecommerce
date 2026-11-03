@@ -15,26 +15,29 @@ import {
   releaseOtpSendCooldown,
   verifyOtp as verifyOtpCode,
 } from "../services/otpService.js";
-import { sendOtpSms } from "../services/smsService.js";
+import { sendOtpEmail } from "../services/emailService.js";
 import { OtpSession } from "../models/OtpSession.js";
 import { CustomerOtpProof } from "../models/CustomerOtpProof.js";
 
 const PHONE_PATTERN = /^[6-9]\d{9}$/;
 
 const otpSendSchema = z.object({
-  phone: z.string().trim().min(1),
+  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
   purpose: z.enum(["LOGIN", "REGISTER", "AUTH", "GUEST_CHECKOUT"]).optional(),
 });
 
 const otpVerifySchema = z.object({
-  phone: z.string().trim().min(1),
+  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
   otp: z.string().length(6, "OTP must be a 6-digit code"),
   purpose: z.enum(["LOGIN", "REGISTER", "AUTH", "GUEST_CHECKOUT"]).optional(),
 });
 
 const registrationCompleteSchema = z.object({
   name: z.string().trim().min(2).max(100),
-  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
+  // Email is optional in the body because the verified email comes from the
+  // httpOnly registration token cookie (set after OTP verification). It is
+  // accepted here only for forward-compatibility and is not authoritative.
+  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()).optional(),
 });
 
 function normalizePhone(phone: string): string {
@@ -70,14 +73,14 @@ function publicCustomer(user: {
   _id: { toString(): string };
   name: string;
   email?: string | null;
-  phone: string;
+  phone?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): {
   id: string;
   name: string;
   email: string | null | undefined;
-  phone: string;
+  phone?: string | null | undefined;
   createdAt: Date;
   updatedAt: Date;
 } {
@@ -85,7 +88,7 @@ function publicCustomer(user: {
     id: user._id.toString(),
     name: user.name,
     email: user.email,
-    phone: user.phone,
+    phone: user.phone ?? undefined,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -117,13 +120,16 @@ const REGISTRATION_TOKEN_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const INVALID_REGISTRATION_PROOF_MESSAGE = "Invalid or expired registration session. Please request OTP again.";
 const GENERIC_AUTH_COMPLETION_RESPONSE = { message: "Authentication request processed" };
 
-async function createRegistrationToken(phone: string): Promise<string> {
+async function createRegistrationToken(email: string): Promise<string> {
   const proofId = randomUUID();
   const expiresAt = new Date(Date.now() + REGISTRATION_TOKEN_EXPIRY_MS);
-  await CustomerOtpProof.create({ proofId, phone, expiresAt });
+  // The CustomerOtpProof.phone field is a plain String (no phone-specific DB
+  // constraint), so it stores the verified contact identifier. After the
+  // migration from SMS to email OTP, that identifier is the customer's email.
+  await CustomerOtpProof.create({ proofId, phone: email, expiresAt });
 
   return jwt.sign(
-    { phone, purpose: "REGISTRATION", accountType: "REGISTRATION" },
+    { email, purpose: "REGISTRATION", accountType: "REGISTRATION" },
     getJwtSecret(),
     { expiresIn: "10m", jwtid: proofId },
   );
@@ -131,11 +137,11 @@ async function createRegistrationToken(phone: string): Promise<string> {
 
 async function consumeRegistrationProof(
   proofId: string,
-  phone: string,
+  email: string,
 ): Promise<boolean> {
   const proof = await CustomerOtpProof.findOneAndDelete({
     proofId,
-    phone,
+    phone: email,
     expiresAt: { $gt: new Date() },
   });
   return proof !== null;
@@ -284,11 +290,11 @@ async function checkOtpCooldown(
 || OTP SEND
 || POST /api/auth/otp/send
 ||--------------------------------------------------------------------------
-|| Creates a 6-digit OTP session for the given Indian mobile number.
-|| Rate limited: 3 sends per identifier/IP per hour (otpSendLimiter).
-|| Cooldown: minimum 60 seconds between sends for the same phone+purpose.
+|| Creates a 6-digit OTP session for the given customer email address.
+|| Rate limited: 3 sends per email/IP per hour (otpSendLimiter).
+|| Cooldown: minimum 60 seconds between sends for the same email+purpose.
 || In development/test mode the OTP is returned in the response so it can
-|| be used without a real SMS provider. Never exposes the OTP in production.
+|| be used without a real email provider. Never exposes the OTP in production.
 */
 export const sendOtp = async (
   req: AuthRequest,
@@ -300,19 +306,13 @@ export const sendOtp = async (
     return;
   }
 
-  const { phone: rawPhone } = parsed.data;
-  const phone = normalizePhone(rawPhone);
-
-  if (!isValidIndianPhone(phone)) {
-    res.status(400).json({ message: "Enter a valid 10-digit Indian mobile number" });
-    return;
-  }
+  const { email } = parsed.data;
 
   const purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" =
     parsed.data.purpose ?? "AUTH";
 
-  // Enforce 60-second cooldown between OTP sends for the same phone+purpose.
-  const retryAfter = await checkOtpCooldown(phone, purpose);
+  // Enforce 60-second cooldown between OTP sends for the same email+purpose.
+  const retryAfter = await checkOtpCooldown(email, purpose);
   if (retryAfter !== null) {
     res.status(429).json({
       message: "Please wait before requesting another OTP.",
@@ -323,7 +323,7 @@ export const sendOtp = async (
 
   let cooldownClaim;
   try {
-    cooldownClaim = await claimOtpSendCooldown(phone, purpose);
+    cooldownClaim = await claimOtpSendCooldown(email, purpose);
   } catch (error) {
     console.error("OTP send reservation failed:", error);
     res.status(500).json({ message: "Unable to send OTP" });
@@ -338,12 +338,15 @@ export const sendOtp = async (
     return;
   }
 
+  const otp = generateOtp();
   let providerAccepted = false;
   try {
     if (process.env.NODE_ENV === "production") {
-      const otp = generateOtp();
-      const smsSent = await sendOtpSms(phone, otp);
-      if (!smsSent) {
+      // Production: deliver the OTP via Brevo transactional email before
+      // creating an OTP session. Fail closed if email delivery fails - no
+      // session and no success response is returned when delivery fails.
+      const emailSent = await sendOtpEmail(email, otp, purpose);
+      if (!emailSent) {
         await releaseOtpSendCooldown(cooldownClaim.claim);
         res.status(502).json({ message: "Unable to send OTP. Please try again later." });
         return;
@@ -351,13 +354,15 @@ export const sendOtp = async (
 
       providerAccepted = true;
       await commitOtpSendCooldown(cooldownClaim.claim);
-      await createOtpSession(phone, purpose, otp);
+      await createOtpSession(email, purpose, otp);
       res.status(200).json({ message: "OTP sent successfully" });
       return;
     }
 
-    const { otp } = await createOtpSession(phone, purpose);
+    // Development/test: create the session and return the OTP so it can be
+    // used without configuring a real email provider.
     await commitOtpSendCooldown(cooldownClaim.claim);
+    await createOtpSession(email, purpose, otp);
     res.status(200).json({ message: "OTP sent successfully", otp });
   } catch (error) {
     if (!providerAccepted) {
@@ -377,8 +382,8 @@ export const sendOtp = async (
 || OTP VERIFY
 || POST /api/auth/otp/verify
 ||--------------------------------------------------------------------------
-|| Verifies a 6-digit OTP for the given Indian mobile number.
-|| On success, finds or creates the customer by phone and issues the
+|| Verifies a 6-digit OTP for the given customer email address.
+|| On success, finds or creates the customer by email and issues the
 || existing secure customer JWT cookie. Rate limited: 10 attempts per
 || identifier/IP per 15 minutes (otpVerifyLimiter).
 */
@@ -392,18 +397,12 @@ export const verifyOtp = async (
     return;
   }
 
-  const { phone: rawPhone, otp } = parsed.data;
-  const phone = normalizePhone(rawPhone);
+  const { email, otp } = parsed.data;
   const purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" =
     parsed.data.purpose ?? "AUTH";
 
-  if (!isValidIndianPhone(phone)) {
-    res.status(400).json({ message: "Enter a valid 10-digit Indian mobile number" });
-    return;
-  }
-
   try {
-    const isValid = await verifyOtpCode(phone, otp, purpose);
+    const isValid = await verifyOtpCode(email, otp, purpose);
 
     if (!isValid) {
       res.status(401).json({ message: "Invalid or expired OTP" });
@@ -411,8 +410,8 @@ export const verifyOtp = async (
     }
 
     // Keep the response and proof cookie identical regardless of account state.
-    // The verified phone is carried only in this short-lived HTTP-only cookie.
-    const regToken = await createRegistrationToken(phone);
+    // The verified email is carried only in this short-lived HTTP-only cookie.
+    const regToken = await createRegistrationToken(email);
     setRegistrationTokenCookie(res, regToken);
     res.status(200).json({
       message: "OTP verified successfully",
@@ -445,14 +444,14 @@ export const completeRegistration = async (
   }
 
   let decoded: {
-    phone?: string;
+    email?: string;
     purpose?: string;
     accountType?: string;
     jti?: string;
   };
   try {
     decoded = jwt.verify(token, getJwtSecret()) as {
-      phone?: string;
+      email?: string;
       purpose?: string;
       accountType?: string;
       jti?: string;
@@ -466,8 +465,7 @@ export const completeRegistration = async (
   if (
     decoded.accountType !== "REGISTRATION" ||
     decoded.purpose !== "REGISTRATION" ||
-    !decoded.phone ||
-    !isValidIndianPhone(decoded.phone) ||
+    !decoded.email ||
     !decoded.jti
   ) {
     clearRegistrationTokenCookie(res);
@@ -475,22 +473,24 @@ export const completeRegistration = async (
     return;
   }
 
-  const phone = decoded.phone;
+  // The verified email comes exclusively from the signed registration token
+  // cookie - never from the request body.
+  const email = decoded.email.toLowerCase();
 
   const parsed = registrationCompleteSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({
       code: "PROFILE_REQUIRED",
-      message: "Please provide your name and email to complete registration",
+      message: "Please provide your name to complete registration",
     });
     return;
   }
 
-  const { name, email } = parsed.data;
+  const { name } = parsed.data;
 
-  const existingUser = await User.findOne({ phone }).select("+tokenVersion");
+  const existingUser = await User.findOne({ email }).select("+tokenVersion");
   if (existingUser) {
-    const proofConsumed = await consumeRegistrationProof(decoded.jti, phone);
+    const proofConsumed = await consumeRegistrationProof(decoded.jti, email);
     if (!proofConsumed) {
       clearRegistrationTokenCookie(res);
       res.status(401).json({ message: INVALID_REGISTRATION_PROOF_MESSAGE });
@@ -512,7 +512,7 @@ export const completeRegistration = async (
     return;
   }
 
-  const proofConsumed = await consumeRegistrationProof(decoded.jti, phone);
+  const proofConsumed = await consumeRegistrationProof(decoded.jti, email);
   if (!proofConsumed) {
     clearRegistrationTokenCookie(res);
     res.status(401).json({ message: INVALID_REGISTRATION_PROOF_MESSAGE });
@@ -525,7 +525,6 @@ export const completeRegistration = async (
     const created = await User.create({
       name: name.trim(),
       email,
-      phone,
       active: true,
     });
     const user = created.toObject();

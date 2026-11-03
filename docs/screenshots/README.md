@@ -14,7 +14,7 @@ This folder contains screenshots of the customer-facing storefront and administr
 
 |---|---|
 
-| 01 – Phone OTP Sign In | Customer authentication using phone OTP |
+| 01 – Email OTP Sign In | Customer authentication using email OTP |
 
 | 02 – Checkout \& Order Review | Customer checkout and order review |
 
