@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { CustomerOrder, customerAuthHeaders, formatOrderStatus } from '@/lib/customer-auth'
+import { CustomerOrder, formatOrderStatus } from '@/lib/customer-auth'
 
 export default function CustomerOrdersPage() {
   const router = useRouter()
@@ -12,13 +12,12 @@ export default function CustomerOrdersPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!window.localStorage.getItem('customer-token')) {
-      router.replace('/account/login')
-      return
-    }
-    fetch('/api/orders/me', { headers: customerAuthHeaders(), cache: 'no-store' })
+    fetch('/api/orders/me', { credentials: 'include', cache: 'no-store' })
       .then(async (response) => {
         const data = await response.json()
+        if (response.status === 401 || response.status === 403) {
+          router.replace('/account/login')
+        }
         if (!response.ok) throw new Error(data.message || 'Unable to load orders.')
         setOrders(data.orders)
       })

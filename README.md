@@ -1,4 +1,4 @@
-﻿# S.V. Sweets & Bakers
+# S.V. Sweets & Bakers
 
 
 
@@ -221,5 +221,3 @@ Project: S.V. Sweets & Bakers
 
 
 Repository: https://github.com/vishnukarthick2507/bakery-ecommerce
-
-

@@ -227,12 +227,12 @@ export const createOrder = async (
   }
 
   const data = parsed.data;
-  if (
-    !req.customer &&
-    (!data.customerName || !data.email || !data.phone)
-  ) {
+
+  // All checkouts (guest and authenticated) require a name, email, and phone.
+  // Guest checkout no longer requires OTP verification.
+  if (!data.customerName || !data.email || !data.phone) {
     res.status(400).json({
-      message: "Guest checkout requires a name, valid email, and valid phone number",
+      message: "Checkout requires a name, valid email, and valid phone number",
     });
     return;
   }
@@ -240,15 +240,6 @@ export const createOrder = async (
   if (data.paymentMethod === "ONLINE" && (!getRazorpayKeyId() || !getRazorpayKeySecret())) {
     res.status(503).json({
       message: "Online payments are not configured yet. Please choose Cash on Delivery.",
-    });
-    return;
-  }
-
-  // Online payments require an authenticated customer session (OTP verified).
-  // COD and PAY_AT_STORE remain available to guests per existing checkout rules.
-  if (data.paymentMethod === "ONLINE" && !req.customer) {
-    res.status(401).json({
-      message: "Customer authentication required for online payments. Please verify your identity.",
     });
     return;
   }
@@ -425,9 +416,23 @@ export const createOrder = async (
         };
       });
 
-      await reserveInventory(session, orderItems);
-
       const subtotal = orderItems.reduce((sum, item) => sum + item.itemTotal, 0);
+
+      // COD maximum enforcement: reject COD orders above the admin-configured limit.
+      // Backend enforcement is authoritative; frontend totals are not trusted.
+      // Order item prices are recalculated from database product prices above.
+      if (
+        data.paymentMethod === "COD" &&
+        settings.codMaxAmount !== null &&
+        subtotal > settings.codMaxAmount
+      ) {
+        throw new OrderRequestError(
+          "Please pay online to place this order.",
+          400,
+        );
+      }
+
+      await reserveInventory(session, orderItems);
       const orderData = {
         orderNumber: generateOrderNumber(),
         idempotencyKey: idempotencyKey.data,

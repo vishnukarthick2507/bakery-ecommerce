@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/components/cart/cart-provider'
-import { customerAuthHeaders } from '@/lib/customer-auth'
 import { cn } from '@/lib/utils'
 import { formatPrice } from '@/lib/format'
 
@@ -118,17 +117,23 @@ export default function CheckoutPage() {
     pickupEnabled: boolean
     closedMessage: string
     reopenAt: string | null
+    codMaxAmount: number | null
   } | null>(null)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   // True only after settings have loaded and online ordering is disabled.
   // While settings are loading (settings === null) we do not treat the store
   // as closed; the buttons stay enabled and the backend enforces the real state.
   const closed = settingsLoaded && settings && !settings.onlineOrdersEnabled
+  const codLimitExceeded =
+    settings !== null &&
+    settings.codMaxAmount !== null &&
+    pricing.subtotal > settings.codMaxAmount
 
   // An ONLINE order that is created but not yet paid, so retries
   // reuse the same order instead of creating duplicates.
@@ -171,16 +176,15 @@ export default function CheckoutPage() {
   }
 
   useEffect(() => {
-    const token = window.localStorage.getItem('customer-token')
-    if (!token) return
     void fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
       cache: 'no-store',
     })
       .then(async (response) => {
         if (!response.ok) return
         const data = await safeJson(response)
         if (!data?.user) return
+        setIsAuthenticated(true)
         setCustomerName((current) => current || data.user.name)
         setCustomerEmail((current) => current || data.user.email || '')
         setPhone((current) => current || data.user.phone)
@@ -199,6 +203,7 @@ export default function CheckoutPage() {
           pickupEnabled: data?.settings?.pickupEnabled ?? false,
           closedMessage: data?.settings?.closedMessage || '',
           reopenAt: data?.settings?.reopenAt ?? null,
+          codMaxAmount: data?.settings?.codMaxAmount ?? null,
         })
       })
       .catch(() => undefined)
@@ -257,9 +262,9 @@ export default function CheckoutPage() {
       '/api/payments/create-order',
       {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...customerAuthHeaders(),
         },
         body: JSON.stringify({ orderNumber }),
       },
@@ -305,9 +310,9 @@ export default function CheckoutPage() {
             '/api/payments/verify',
             {
               method: 'POST',
+              credentials: 'include',
               headers: {
                 'Content-Type': 'application/json',
-                ...customerAuthHeaders(),
               },
               body: JSON.stringify(paymentResponse),
             },
@@ -403,7 +408,6 @@ export default function CheckoutPage() {
 
     // Email is required for guest checkout; optional for authenticated
     // customers (e.g. phone-only OTP customers may not have an email).
-    const isAuthenticated = !!window.localStorage.getItem('customer-token')
     if (
       !isAuthenticated &&
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())
@@ -491,10 +495,10 @@ export default function CheckoutPage() {
           '/api/orders',
           {
             method: 'POST',
+            credentials: 'include',
             headers: {
               'Content-Type': 'application/json',
               'Idempotency-Key': orderIdempotencyKey.current,
-              ...customerAuthHeaders(),
             },
             body: JSON.stringify({
               customerName: customerName.trim(),
@@ -526,7 +530,9 @@ export default function CheckoutPage() {
               paymentMethod:
                 payment === 'online'
                   ? 'ONLINE'
-                  : 'COD',
+                  : payment === 'pay_at_store'
+                    ? 'PAY_AT_STORE'
+                    : 'COD',
 
               items: items.map((item) => {
                 const line = pricing.lines.find(
@@ -1092,6 +1098,14 @@ export default function CheckoutPage() {
                 Choose how you&apos;d like to pay.
               </p>
 
+              {fulfilment === 'delivery' && codLimitExceeded && (
+                <p className="mb-6 rounded-xl border border-caramel/30 bg-caramel/5 p-4 text-sm text-primary">
+                  This subtotal is above the Cash on Delivery limit of{' '}
+                  {formatPrice(settings!.codMaxAmount!)}. Choose Online Payment;
+                  the server will recheck the final order total.
+                </p>
+              )}
+
               <div className="mt-8 grid gap-5 sm:grid-cols-2">
                 {fulfilment === 'delivery' ? (
                   <>
@@ -1123,6 +1137,7 @@ export default function CheckoutPage() {
                         cards & netbanking
                       </div>
                     </button>
+
                   </>
                 ) : (
                   <>
@@ -1154,6 +1169,7 @@ export default function CheckoutPage() {
                         Pay when you collect your order
                       </div>
                     </button>
+
                   </>
                 )}
               </div>
@@ -1365,7 +1381,7 @@ export default function CheckoutPage() {
             type="button"
             disabled={closed || isSubmitting}
             onClick={handlePlaceOrder}
-            className="mt-8 w-full rounded-xl bg-caramel px-8 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+            className="mt-8 w-full rounded-xl bg-caramel px-8 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             {isSubmitting
               ? payment === 'online'
@@ -1377,6 +1393,10 @@ export default function CheckoutPage() {
                   ? 'Place Order & Pay Online'
                   : 'Place Order'}
           </button>
+
+          <p className="mt-5 text-center text-xs text-muted-foreground">
+            Your order will be securely saved to our system.
+          </p>
 
           <p className="mt-5 text-center text-xs text-muted-foreground">
             Your order will be securely saved to our system.

@@ -123,24 +123,52 @@ export function parseCheckoutSlot(
   const month = parseInt(dateMatch[2]!, 10) - 1; // 0-indexed
   const day = parseInt(dateMatch[3]!, 10);
 
-  // Parse start time from "H:MM AM/PM - H:MM AM/PM"
+  // Parse and validate both ends of "H:MM AM/PM - H:MM AM/PM".
   const timeMatch = scheduledTime.match(
-    /^(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*/i,
+    /^(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)$/i,
   );
   if (!timeMatch) return null;
-  let hour = parseInt(timeMatch[1]!, 10);
-  const minute = parseInt(timeMatch[2]!, 10);
-  const ampm = timeMatch[3]!.toUpperCase();
-  if (ampm === "PM" && hour !== 12) hour += 12;
-  if (ampm === "AM" && hour === 12) hour = 0;
 
-  // Construct as if UTC, then subtract the IST offset so the stored
-  // UTC instant represents the same local time in Asia/Kolkata.
-  const localAsUtc = Date.UTC(year, month, day, hour, minute, 0, 0);
-  const utcTime = localAsUtc - KOLKATA_OFFSET_MINUTES * 60 * 1000;
-  const result = new Date(utcTime);
+  const toMinutes = (hourText: string, minuteText: string, period: string): number | null => {
+    let hour = parseInt(hourText, 10);
+    const minute = parseInt(minuteText, 10);
+    const normalizedPeriod = period.toUpperCase();
+    if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return null;
+    if (normalizedPeriod === "PM" && hour !== 12) hour += 12;
+    if (normalizedPeriod === "AM" && hour === 12) hour = 0;
+    return hour * 60 + minute;
+  };
 
-  if (isNaN(result.getTime())) return null;
+  const startMinutes = toMinutes(timeMatch[1]!, timeMatch[2]!, timeMatch[3]!);
+  const endMinutes = toMinutes(timeMatch[4]!, timeMatch[5]!, timeMatch[6]!);
+  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+    return null;
+  }
+
+  // setUTCFullYear avoids Date.UTC's special handling of years 0 through 99;
+  // the round-trip check rejects dates that JavaScript would otherwise roll over.
+  const localAsUtc = new Date(0);
+  localAsUtc.setUTCHours(0, 0, 0, 0);
+  localAsUtc.setUTCFullYear(year, month, day);
+  if (
+    localAsUtc.getUTCFullYear() !== year ||
+    localAsUtc.getUTCMonth() !== month ||
+    localAsUtc.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  const startHour = Math.floor(startMinutes / 60);
+  const startMinute = startMinutes % 60;
+  localAsUtc.setUTCHours(startHour, startMinute, 0, 0);
+  const result = new Date(
+    localAsUtc.getTime() - KOLKATA_OFFSET_MINUTES * 60 * 1000,
+  );
+
+  const { day: weekday } = getKolkataDayAndTime(result);
+  const hours = BUSINESS_HOURS[weekday];
+  if (!hours || endMinutes > hours.close * 60) return null;
+
   return result;
 }
 

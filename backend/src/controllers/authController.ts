@@ -192,6 +192,15 @@ export const adminMe = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
+    const hasBearerToken = req.headers.authorization?.startsWith("Bearer ") ?? false;
+    if (
+      req.baseUrl === "/api/auth" &&
+      !hasBearerToken &&
+      req.cookies?.["customer-token"]
+    ) {
+      return next();
+    }
+
     const token = getTokenFromRequest(req);
 
     if (!token) {
@@ -214,7 +223,11 @@ export const adminMe = async (
     // the customer profile request wrongly returns { isAdmin: false } and the
     // frontend clears a valid customer session, causing a login redirect loop.
     if (!decoded.adminId || decoded.accountType === "CUSTOMER") {
-      return next();
+      if (req.baseUrl === "/api/auth") {
+        return next();
+      }
+      res.status(200).json({ isAdmin: false });
+      return;
     }
 
     const admin = await Admin.findById(decoded.adminId).lean();

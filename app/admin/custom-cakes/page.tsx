@@ -27,6 +27,24 @@ function formatStatus(status: CustomCakeRequest['status']) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
+function statusBadge(status: CustomCakeRequest['status']) {
+  const isPending = status === 'PENDING'
+  const isClosed = status === 'CLOSED'
+  return (
+    <span
+      className={
+        isPending
+          ? 'inline-flex items-center gap-1 rounded-full border border-caramel/20 bg-caramel/10 px-2.5 py-0.5 text-xs font-semibold text-caramel'
+          : isClosed
+            ? 'inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/5 px-2.5 py-0.5 text-xs font-semibold text-destructive'
+            : 'inline-flex items-center gap-1 rounded-full border border-border/50 bg-cream px-2.5 py-0.5 text-xs font-semibold text-muted-foreground'
+      }
+    >
+      {formatStatus(status)}
+    </span>
+  )
+}
+
 function AdminCustomCakesPage() {
   const [requests, setRequests] = useState<CustomCakeRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,9 +104,7 @@ function AdminCustomCakesPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(
-          data.message || 'Unable to update status',
-        )
+        throw new Error(data.message || 'Unable to update status')
       }
 
       setRequests((currentRequests) =>
@@ -100,9 +116,7 @@ function AdminCustomCakesPage() {
       )
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to update status',
+        err instanceof Error ? err.message : 'Unable to update status',
       )
     } finally {
       setUpdatingId(null)
@@ -110,12 +124,12 @@ function AdminCustomCakesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/20">
+    <main className="min-h-screen bg-cream/30">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm font-medium text-primary">
+            <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
               S.V. Bakery Admin
             </p>
 
@@ -126,100 +140,104 @@ function AdminCustomCakesPage() {
               ← Back to Dashboard
             </Link>
 
-            <h1 className="mt-3 text-3xl font-bold text-primary">
+            <h1 className="mt-2 text-3xl font-bold text-primary tracking-tight">
               Custom Cake Requests
             </h1>
 
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-3 text-muted-foreground leading-relaxed">
               View and manage custom cake requests from customers.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={fetchRequests}
-            disabled={loading}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-          >
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
-          <Link
-            href="/"
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
-          >
-            View Store
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={fetchRequests}
+              disabled={loading}
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 disabled:opacity-60 transition-colors"
+            >
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+            <Link
+              href="/"
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
+            >
+              View Store
+            </Link>
+          </div>
         </div>
 
-        <AdminNav className="mt-6" />
+        <AdminNav className="mt-8" />
 
         {error && (
-          <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <div className="mt-6 rounded-[2rem] border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
             {error}
           </div>
         )}
 
         {loading && (
-          <div className="mt-8 rounded-xl border border-border p-10 text-center">
+          <div className="mt-10 rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
             Loading requests...
           </div>
         )}
 
         {!loading && !error && requests.length === 0 && (
-          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+          <div className="mt-10 rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
             <h2 className="text-xl font-semibold text-primary">
               No custom cake requests yet
             </h2>
 
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-3 text-muted-foreground">
               Custom cake requests will appear here.
             </p>
           </div>
         )}
 
         {!loading && requests.length > 0 && (
-          <div className="mt-8 space-y-6">
+          <div className="mt-10 space-y-8">
             {requests.map((request) => (
               <section
                 key={request._id}
-                className="rounded-xl border border-border bg-white p-6 shadow-sm sm:p-8"
+                className="rounded-[2rem] border border-border bg-card p-8 shadow-sm sm:p-10"
               >
                 {/* Header */}
-                <div className="flex flex-col justify-between gap-4 border-b border-border pb-6 sm:flex-row">
+                <div className="flex flex-col justify-between gap-5 border-b border-border pb-7 sm:flex-row">
                   <div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Reference Number
                     </p>
 
-                    <h2 className="mt-1 text-2xl font-bold text-primary">
+                    <h2 className="mt-1.5 text-2xl font-bold text-primary tracking-tight">
                       {request.referenceNumber}
                     </h2>
 
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-3 text-sm text-muted-foreground">
                       Requested{' '}
                       {new Date(request.createdAt).toLocaleString('en-IN')}
                     </p>
                   </div>
 
-                  <div>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="text-right">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Status
                     </p>
-
-                    <p className="mt-1 text-xl font-bold text-primary">
-                      {formatStatus(request.status)}
+                    <p className="mt-1 flex items-center justify-end gap-2">
+                      <span className="font-semibold text-primary">
+                        {formatStatus(request.status)}
+                      </span>
+                      {statusBadge(request.status)}
                     </p>
                   </div>
                 </div>
 
                 {/* Customer details */}
-                <div className="grid gap-6 border-b border-border py-6 md:grid-cols-2">
+                <div className="grid gap-7 border-b border-border py-7 md:grid-cols-2">
                   <div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Customer
                     </p>
 
-                    <p className="mt-1 font-semibold text-primary">
+                    <p className="mt-2 font-semibold text-primary">
                       {request.name}
                     </p>
 
@@ -229,11 +247,11 @@ function AdminCustomCakesPage() {
                   </div>
 
                   <div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Cake Details
                     </p>
 
-                    <p className="mt-1 font-semibold text-primary">
+                    <p className="mt-2 font-semibold text-primary">
                       {request.flavour}
                     </p>
 
@@ -244,25 +262,25 @@ function AdminCustomCakesPage() {
                 </div>
 
                 {/* Theme and message */}
-                <div className="border-b border-border py-6">
-                  <div className="grid gap-6 md:grid-cols-2">
+                <div className="border-b border-border py-7">
+                  <div className="grid gap-7 md:grid-cols-2">
                     <div>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                         Theme
                       </p>
 
-                      <p className="mt-1 font-medium text-primary">
+                      <p className="mt-2 font-medium text-primary">
                         {request.theme}
                       </p>
                     </div>
 
                     {request.messageOnCake && (
                       <div>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                           Message on Cake
                         </p>
 
-                        <p className="mt-1 font-medium text-primary">
+                        <p className="mt-2 font-medium text-primary">
                           {request.messageOnCake}
                         </p>
                       </div>
@@ -272,12 +290,12 @@ function AdminCustomCakesPage() {
 
                 {/* Instructions */}
                 {request.instructions && (
-                  <div className="border-b border-border py-6">
-                    <p className="text-sm text-muted-foreground">
+                  <div className="border-b border-border py-7">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Additional Instructions
                     </p>
 
-                    <p className="mt-1 font-medium text-primary">
+                    <p className="mt-2 font-medium text-primary">
                       {request.instructions}
                     </p>
                   </div>
@@ -285,8 +303,8 @@ function AdminCustomCakesPage() {
 
                 {/* Reference image */}
                 {request.referenceImageUrl && (
-                  <div className="border-b border-border py-6">
-                    <p className="text-sm text-muted-foreground">
+                  <div className="border-b border-border py-7">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Reference Image
                     </p>
 
@@ -294,7 +312,7 @@ function AdminCustomCakesPage() {
                       href={request.referenceImageUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-2 inline-block text-sm font-medium text-primary hover:underline"
+                      className="mt-2 inline-block text-sm font-medium text-caramel hover:underline"
                     >
                       View Image
                     </a>
@@ -302,7 +320,7 @@ function AdminCustomCakesPage() {
                 )}
 
                 {/* Status update */}
-                <div className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex flex-col gap-5 pt-7 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <label
                       htmlFor={`status-${request._id}`}
@@ -321,7 +339,7 @@ function AdminCustomCakesPage() {
                           event.target.value as CustomCakeRequest['status'],
                         )
                       }
-                      className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60 sm:w-72"
+                      className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel disabled:opacity-60 sm:w-72"
                     >
                       <option value="PENDING">
                         Pending

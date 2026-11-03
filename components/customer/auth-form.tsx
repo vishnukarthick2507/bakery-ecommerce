@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -14,7 +14,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter()
 
   // ---- Auth method: Password vs Phone OTP ----
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('password')
+  // Password registration is disabled. New customers must use phone OTP.
+  const [authMethod, setAuthMethod] = useState<AuthMethod>(
+    mode === 'register' ? 'phone-otp' : 'password',
+  )
 
   // ---- OTP flow state ----
   const [otpStep, setOtpStep] = useState<OtpStep>('send')
@@ -23,10 +26,11 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'email' | 'phone' | 'password' | 'confirmPassword' | 'otp', string>>>({})
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'email' | 'phone' | 'password' | 'otp', string>>>({})
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const resendCooldownTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const clearFieldError = (field: keyof typeof fieldErrors) => {
     setFieldErrors((prev) => {
@@ -45,7 +49,22 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     setEmail('')
     setError('')
     setFieldErrors({})
+    setResendCooldown(0)
+    if (resendCooldownTimer.current) {
+      clearInterval(resendCooldownTimer.current)
+      resendCooldownTimer.current = null
+    }
   }
+
+  // Cleanup cooldown timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (resendCooldownTimer.current) {
+        clearInterval(resendCooldownTimer.current)
+        resendCooldownTimer.current = null
+      }
+    }
+  }, [])
 
   const isOtpFlow = authMethod === 'phone-otp'
   const isLogin = mode === 'login'
@@ -56,10 +75,14 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     setError('')
     setFieldErrors({})
 
-    const nextFieldErrors: Partial<Record<'name' | 'email' | 'phone' | 'password' | 'confirmPassword', string>> = {}
+    const nextFieldErrors: Partial<Record<'name' | 'email' | 'phone' | 'password', string>> = {}
     let hasError = false
 
     if (mode === 'register') {
+      // Password registration is disabled; new customers register via phone OTP.
+      // The password form is not shown in register mode, so no password validation
+      // is needed here. Only name, email, and phone are collected for display
+      // purposes, but the actual registration happens via the OTP flow.
       if (!name.trim() || name.trim().length < 2) {
         nextFieldErrors.name = 'Please enter your full name.'
         hasError = true
@@ -79,20 +102,6 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         hasError = true
       } else {
         clearFieldError('phone')
-      }
-
-      if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-        nextFieldErrors.password = 'Password must be at least 8 characters with a letter and a number.'
-        hasError = true
-      } else {
-        clearFieldError('password')
-      }
-
-      if (password !== confirmPassword) {
-        nextFieldErrors.confirmPassword = 'Passwords do not match.'
-        hasError = true
-      } else {
-        clearFieldError('confirmPassword')
       }
     } else {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
@@ -134,7 +143,6 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       if (!response.ok) {
         throw new Error(data.message || 'Unable to authenticate.')
       }
-      window.localStorage.setItem('customer-token', data.token)
       router.push('/account')
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : 'Unable to authenticate.')
@@ -165,6 +173,8 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         return 'An account with this phone number already exists.'
       case 429:
         return 'Too many requests. Please try again later.'
+      case 429:
+        return message || 'Too many OTP requests. Please wait before resending.'
       case 501:
         return 'SMS delivery is not configured. Please try again later.'
       default:
@@ -193,6 +203,11 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       })
       const data = await response.json()
       if (!response.ok) {
+        if (response.status === 429 && data.retryAfter) {
+          setResendCooldown(data.retryAfter)
+          startResendCooldownTimer()
+          throw new Error(`Please wait ${data.retryAfter}s before resending OTP.`)
+        }
         throw new Error(otpErrorMessage(response.status, data.message))
       }
       setOtp('')
@@ -206,6 +221,22 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function startResendCooldownTimer() {
+    if (resendCooldownTimer.current) {
+      clearInterval(resendCooldownTimer.current)
+    }
+    resendCooldownTimer.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(resendCooldownTimer.current!)
+          resendCooldownTimer.current = null
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
   }
 
   async function handleVerifyOtp() {
@@ -232,19 +263,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         throw new Error(otpErrorMessage(response.status, data.message))
       }
 
-      if (data.status === 'registration_required') {
-        // New customer: proceed to registration form. Phone is verified by the
-        // backend and carried in the registration token cookie.
-        setOtpStep('register')
-        setName('')
-        setEmail('')
-        toast.success('OTP verified. Please complete your registration.')
-        return
-      }
-
-      // Existing customer: authenticated via OTP, httpOnly cookie set by backend.
-      router.push('/account')
-      toast.success('Welcome back!')
+      setOtpStep('register')
+      setName('')
+      setEmail('')
+      toast.success('Phone verified. Enter your details to continue.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to verify OTP.'
       if (msg.includes('already exists') || msg.includes('No account found')) {
@@ -295,7 +317,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       }
 
       router.push('/account')
-      toast.success('Account created successfully!')
+      toast.success('You’re signed in.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to create account.'
       if (msg.includes('already exists')) {
@@ -333,18 +355,20 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
 
         {/* Auth method switch */}
         <div className="mt-8 flex flex-col sm:flex-row gap-2">
-          <button
-            type="button"
-            onClick={() => switchAuthMethod('password')}
-            className={cn(
-              'flex-1 rounded-xl border px-5 py-3 text-sm font-medium transition-all',
-              authMethod === 'password'
-                ? 'bg-caramel text-caramel-foreground border-caramel shadow-sm'
-                : 'border-border text-muted-foreground hover:bg-cream/50 hover:border-caramel/20',
-            )}
-          >
-            Password
-          </button>
+          {mode === 'login' ? (
+            <button
+              type="button"
+              onClick={() => switchAuthMethod('password')}
+              className={cn(
+                'flex-1 rounded-xl border px-5 py-3 text-sm font-medium transition-all',
+                authMethod === 'password'
+                  ? 'bg-caramel text-caramel-foreground border-caramel shadow-sm'
+                  : 'border-border text-muted-foreground hover:bg-cream/50 hover:border-caramel/20',
+              )}
+            >
+              Password
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => switchAuthMethod('phone-otp')}
@@ -486,38 +510,6 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               />
             </div>
 
-            {mode === 'register' && (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">
-                  Confirm password
-                </label>
-                {fieldErrors.confirmPassword && (
-                  <p className="mb-2 text-xs text-destructive">
-                    {fieldErrors.confirmPassword}
-                  </p>
-                )}
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                  maxLength={72}
-                  value={confirmPassword}
-                  onChange={(event) => {
-                    setConfirmPassword(event.target.value)
-                    clearFieldError('confirmPassword')
-                  }}
-                  placeholder="••••••••"
-                  className={cn(
-                    'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                    fieldErrors.confirmPassword
-                      ? 'border-destructive focus:ring-destructive'
-                      : 'border-border focus:ring-caramel',
-                  )}
-                />
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={submitting}
@@ -528,7 +520,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           </form>
         ) : (
           // ---- Phone OTP form (unified: no LOGIN/REGISTER choice) ----
-          <form className="mt-8 space-y-6">
+          <div className="mt-8 space-y-6">
             {otpStep === 'send' ? (
               <>
                 <div>
@@ -637,10 +629,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={handleSendOtp}
-                  disabled={submitting}
-                  className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-caramel-foreground hover:bg-cream/50 transition-colors"
+                  disabled={submitting || resendCooldown > 0}
+                  className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-caramel-foreground hover:bg-cream/50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
-                  Resend OTP
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
                 </button>
               </>
             ) : (
@@ -648,7 +640,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               <form onSubmit={handleCompleteRegistration} className="mt-8 space-y-6">
                 <div className="bg-cream rounded-xl p-5">
                   <p className="text-sm text-muted-foreground">
-                    Phone verified: <span className="font-medium text-primary">{cleanPhone(phone) || phone}</span>. Please complete your profile.
+                    Phone verified: <span className="font-medium text-primary">{cleanPhone(phone) || phone}</span>. Enter your name and email to continue. Any saved profile for this phone will remain unchanged.
                   </p>
                 </div>
 
@@ -720,7 +712,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   disabled={submitting}
                   className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
-                  {submitting ? 'Creating account…' : 'Create account'}
+                  {submitting ? 'Continuing…' : 'Continue'}
                 </button>
 
                 <button
@@ -732,7 +724,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 </button>
               </form>
             )}
-          </form>
+          </div>
         )}
 
         <p className="mt-8 text-sm text-muted-foreground text-center">

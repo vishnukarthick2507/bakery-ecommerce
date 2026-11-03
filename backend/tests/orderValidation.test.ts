@@ -88,9 +88,13 @@ const baseOrderPayload = {
 };
 
 function postOrder(payload: Record<string, unknown>) {
+  return postOrderWithKey(randomUUID(), payload);
+}
+
+function postOrderWithKey(key: string, payload: Record<string, unknown>) {
   return request(app)
     .post("/api/orders")
-    .set("Idempotency-Key", randomUUID())
+    .set("Idempotency-Key", key)
     .send(payload);
 }
 
@@ -183,8 +187,130 @@ describe("Order validation", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.message).toContain(
-        "Guest checkout requires a name, valid email, and valid phone number",
+        "Checkout requires a name, valid email, and valid phone number",
       );
+    });
+  });
+
+  describe("POST /api/orders - server-side checkout validation", () => {
+    it("rejects an invalid product ID", async () => {
+      const response = await postOrder({
+        ...baseOrderPayload,
+        items: [{ ...baseOrderPayload.items[0], productId: "not-an-object-id" }],
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Invalid product ID");
+    });
+
+    it("rejects an inactive product", async () => {
+      const productId = baseOrderPayload.items[0].productId;
+      await Product.findByIdAndUpdate(productId, { active: false });
+
+      const response = await postOrder(baseOrderPayload);
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toContain("Product not found");
+      expect(await Order.countDocuments()).toBe(0);
+    });
+
+    it("rejects a quantity above the database stock", async () => {
+      const response = await postOrder({
+        ...baseOrderPayload,
+        items: [{ ...baseOrderPayload.items[0], quantity: 11 }],
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toContain("Only 10 unit(s)");
+      expect(await Order.countDocuments()).toBe(0);
+      expect((await Product.findById(baseOrderPayload.items[0].productId))?.stock).toBe(10);
+    });
+
+    it("rejects quantities above the per-item limit", async () => {
+      const response = await postOrder({
+        ...baseOrderPayload,
+        items: [{ ...baseOrderPayload.items[0], quantity: 21 }],
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Invalid order data");
+    });
+
+    it("rejects duplicate product lines whose combined quantity exceeds the limit", async () => {
+      const item = baseOrderPayload.items[0];
+      const response = await postOrder({
+        ...baseOrderPayload,
+        items: [
+          { ...item, quantity: 11 },
+          { ...item, quantity: 10 },
+        ],
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("A maximum of 20 units per product can be ordered");
+      expect(await Order.countDocuments()).toBe(0);
+    });
+
+    it("allows the maximum quantity when database stock permits it", async () => {
+      await Product.findByIdAndUpdate(baseOrderPayload.items[0].productId, { stock: 20 });
+      const response = await postOrder({
+        ...baseOrderPayload,
+        items: [{ ...baseOrderPayload.items[0], quantity: 20 }],
+      });
+
+      expect(response.status).toBe(201);
+      expect((await Product.findById(baseOrderPayload.items[0].productId))?.stock).toBe(0);
+    });
+
+    it("rejects delivery orders without an address", async () => {
+      const { address: _address, ...withoutAddress } = baseOrderPayload;
+      const response = await postOrder({
+        ...withoutAddress,
+        fulfillmentType: "DELIVERY",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Delivery address is required for delivery orders");
+    });
+
+    it("rejects invalid required delivery address fields", async () => {
+      const response = await postOrder({
+        ...baseOrderPayload,
+        fulfillmentType: "DELIVERY",
+        address: { addressLine: "1", city: "", pincode: "12" },
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Invalid order data");
+    });
+  });
+
+  describe("POST /api/orders - idempotency", () => {
+    it("returns the original order for an identical replay without reserving stock twice", async () => {
+      const idempotencyKey = randomUUID();
+      const firstResponse = await postOrderWithKey(idempotencyKey, baseOrderPayload);
+      const replayResponse = await postOrderWithKey(idempotencyKey, baseOrderPayload);
+
+      expect(firstResponse.status).toBe(201);
+      expect(replayResponse.status).toBe(200);
+      expect(replayResponse.body.order.orderNumber).toBe(firstResponse.body.order.orderNumber);
+      expect(await Order.countDocuments()).toBe(1);
+      expect((await Product.findById(baseOrderPayload.items[0].productId))?.stock).toBe(9);
+    });
+
+    it("rejects reuse of an idempotency key with a changed payload", async () => {
+      const idempotencyKey = randomUUID();
+      const firstResponse = await postOrderWithKey(idempotencyKey, baseOrderPayload);
+      const conflictResponse = await postOrderWithKey(idempotencyKey, {
+        ...baseOrderPayload,
+        scheduledTime: "2:00 PM - 4:00 PM",
+      });
+
+      expect(firstResponse.status).toBe(201);
+      expect(conflictResponse.status).toBe(409);
+      expect(conflictResponse.body.message).toContain("Idempotency key was already used");
+      expect(await Order.countDocuments()).toBe(1);
+      expect((await Product.findById(baseOrderPayload.items[0].productId))?.stock).toBe(9);
     });
   });
 
@@ -213,13 +339,12 @@ describe("Order validation", () => {
       );
     });
 
-    it("allows an authenticated phone-only customer to create an order without email", async () => {
-      const { email: _email, ...payloadWithoutEmail } = baseOrderPayload;
+    it("allows an authenticated phone-only customer to create an order", async () => {
       const res = await request(app)
         .post("/api/orders")
         .set("Idempotency-Key", randomUUID())
         .set("Authorization", `Bearer ${customerToken}`)
-        .send(payloadWithoutEmail);
+        .send(baseOrderPayload);
 
       expect(res.status).toBe(201);
       expect(res.body.order.orderNumber).toBeDefined();
@@ -230,9 +355,6 @@ describe("Order validation", () => {
       });
       expect(order).toBeDefined();
       expect(order?.userId?.toString()).toBe(customerId);
-
-      // Verify the customer snapshot does not contain a fabricated or empty email
-      expect(order?.customer.email).toBeUndefined();
     });
   });
 
@@ -281,6 +403,105 @@ describe("Order validation", () => {
 
       expect(res.status).toBe(201);
       expect(res.body.order.orderNumber).toBeDefined();
+    });
+  });
+
+  describe("POST /api/orders - scheduled date and time validation", () => {
+    it("rejects an impossible calendar date instead of normalizing it", async () => {
+      const impossibleDate = `${new Date().getFullYear() + 1}-02-31`;
+      const response = await postOrder({
+        ...baseOrderPayload,
+        scheduledDate: impossibleDate,
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/invalid scheduled date or time/i);
+    });
+
+    it("rejects invalid minutes in a scheduled time range", async () => {
+      const response = await postOrder({
+        ...baseOrderPayload,
+        scheduledTime: "10:99 AM - 12:00 PM",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/invalid scheduled date or time/i);
+    });
+
+    it("rejects a malformed scheduled time range", async () => {
+      const response = await postOrder({
+        ...baseOrderPayload,
+        scheduledTime: "10:00 AM - not a time",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/invalid scheduled date or time/i);
+    });
+
+    it("rejects a reversed scheduled time range", async () => {
+      const response = await postOrder({
+        ...baseOrderPayload,
+        scheduledTime: "2:00 PM - 10:00 AM",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/invalid scheduled date or time/i);
+    });
+
+    it("rejects scheduled slots outside the existing weekly business hours", async () => {
+      const response = await postOrder({
+        ...baseOrderPayload,
+        scheduledTime: "5:00 AM - 7:00 AM",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/Bakery hours/i);
+    });
+
+    it("rejects a time range that ends after the latest existing closing time", async () => {
+      const response = await postOrder({
+        ...baseOrderPayload,
+        scheduledTime: "6:00 PM - 11:00 PM",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/invalid scheduled date or time/i);
+    });
+  });
+
+  describe("POST /api/orders - Pay at Store (pickup only)", () => {
+    it("allows guest pickup with Pay at Store without OTP", async () => {
+      const res = await postOrder({
+        ...baseOrderPayload,
+        fulfillmentType: "PICKUP",
+        paymentMethod: "PAY_AT_STORE",
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.order.orderNumber).toBeDefined();
+
+      // Verify the order was created by querying it directly
+      const order = await Order.findOne({
+        orderNumber: res.body.order.orderNumber,
+      });
+      expect(order).toBeDefined();
+      expect(order!.paymentMethod).toBe("PAY_AT_STORE");
+    });
+
+    it("rejects delivery with Pay at Store", async () => {
+      const res = await postOrder({
+        ...baseOrderPayload,
+        fulfillmentType: "DELIVERY",
+        address: {
+          addressLine: "123 Test Street",
+          city: "Test City",
+          pincode: "600001",
+        },
+        paymentMethod: "PAY_AT_STORE",
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Pay at Store is only available for pickup orders.");
     });
   });
 });

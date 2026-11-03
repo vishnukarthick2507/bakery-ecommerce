@@ -27,6 +27,7 @@ import { Order } from "../src/models/Order.js";
 import { Product } from "../src/models/Product.js";
 import { User } from "../src/models/User.js";
 import paymentRoutes from "../src/routes/paymentRoutes.js";
+import orderRoutes from "../src/routes/orderRoutes.js";
 import {
   clearTestDB,
   disconnectTestDB,
@@ -47,6 +48,7 @@ function createTestApp() {
   app.use(express.json());
 
   app.use("/api/payments", paymentRoutes);
+  app.use("/api/orders", orderRoutes);
 
   return app;
 }
@@ -212,6 +214,80 @@ describe("Payments API", () => {
     },
     120000,
   );
+
+  describe("guest online checkout", () => {
+    it("creates a guest order and marks it PAID only after valid signature verification", async () => {
+      const product = await createTestProduct();
+      const scheduledDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      const orderResponse = await request(app)
+        .post("/api/orders")
+        .set("Idempotency-Key", crypto.randomUUID())
+        .send({
+          customerName: "Guest Customer",
+          email: "guest@example.com",
+          phone: "9876543210",
+          fulfillmentType: "PICKUP",
+          scheduledDate,
+          scheduledTime: "10:00 AM - 12:00 PM",
+          paymentMethod: "ONLINE",
+          items: [{
+            productId: product._id.toString(),
+            productName: product.name,
+            variantId: "default",
+            quantity: 1,
+          }],
+        });
+
+      expect(orderResponse.status).toBe(201);
+      const orderNumber = orderResponse.body.order.orderNumber as string;
+      const guestOrder = await Order.findOne({ orderNumber }).lean();
+      expect(guestOrder?.userId).toBeUndefined();
+      expect(guestOrder?.customer).toEqual({
+        name: "Guest Customer",
+        email: "guest@example.com",
+        phone: "9876543210",
+      });
+
+      mockOrdersCreate.mockResolvedValue({ id: "rzp_guest_order_123" });
+      const paymentOrderResponse = await request(app)
+        .post("/api/payments/create-order")
+        .send({ orderNumber });
+
+      expect(paymentOrderResponse.status).toBe(200);
+      expect(mockOrdersCreate).toHaveBeenCalledWith(expect.objectContaining({
+        amount: 10000,
+        currency: "INR",
+        receipt: orderNumber,
+      }));
+
+      const invalidVerification = await request(app)
+        .post("/api/payments/verify")
+        .send({
+          razorpay_order_id: "rzp_guest_order_123",
+          razorpay_payment_id: "rzp_guest_payment_123",
+          razorpay_signature: "invalid_signature",
+        });
+
+      expect(invalidVerification.status).toBe(400);
+      expect((await Order.findOne({ orderNumber }).lean())?.paymentStatus).toBe("PENDING");
+
+      const validVerification = await request(app)
+        .post("/api/payments/verify")
+        .send({
+          razorpay_order_id: "rzp_guest_order_123",
+          razorpay_payment_id: "rzp_guest_payment_123",
+          razorpay_signature: makeRazorpaySignature(
+            "rzp_guest_order_123",
+            "rzp_guest_payment_123",
+          ),
+        });
+
+      expect(validVerification.status).toBe(200);
+      expect((await Order.findOne({ orderNumber }).lean())?.paymentStatus).toBe("PAID");
+    });
+  });
 
   describe("POST /api/payments/verify", () => {
     it("verifies a valid payment signature and marks the order PAID", async () => {

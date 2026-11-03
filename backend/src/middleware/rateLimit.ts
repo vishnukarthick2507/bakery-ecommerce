@@ -67,9 +67,29 @@ export const guestTrackingLimiter = rateLimit({
   },
 });
 
+/*
+|--------------------------------------------------------------------------
+| PHONE NORMALIZATION FOR RATE-LIMIT KEYS
+|--------------------------------------------------------------------------
+| Mirrors the normalization used by customerAuthController so the same mobile
+| number (with or without spaces, dashes, or a leading +91/91 country code)
+| always maps to the same rate-limit bucket. Values that are missing, empty,
+| or not a valid 10-digit Indian mobile number collapse to a single shared
+| "unknown" bucket, so a client cannot bypass rate limiting by repeatedly
+| changing the request body.
+*/
+function normalizePhone(phone: unknown): string {
+  if (typeof phone !== "string" || phone.length === 0) {
+    return "unknown";
+  }
+  const cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");
+  const normalized = cleaned.replace(/^(\+91|91)/, "");
+  return /^[6-9]\d{9}$/.test(normalized) ? normalized : "unknown";
+}
+
 export const otpSendLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  limit: 3, // 3 OTP sends per identifier/IP per hour
+  limit: 3, // 3 OTP sends per phone/IP per hour
   standardHeaders: "draft-6",
   legacyHeaders: false,
   message: {
@@ -79,15 +99,15 @@ export const otpSendLimiter = rateLimit({
     res.status(options.statusCode).json(options.message);
   },
   keyGenerator: (req) => {
-    const identifier = req.body?.identifier || "unknown";
+    const phone = normalizePhone(req.body?.phone);
     const ipKey = ipKeyGenerator(req.ip ?? "127.0.0.1");
-    return `${identifier}:${ipKey}`;
+    return `${phone}:${ipKey}`;
   },
 });
 
 export const otpVerifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 10, // 10 OTP verification attempts per identifier/IP per 15 minutes
+  limit: 10, // 10 OTP verification attempts per phone/IP per 15 minutes
   standardHeaders: "draft-6",
   legacyHeaders: false,
   message: {
@@ -98,8 +118,8 @@ export const otpVerifyLimiter = rateLimit({
     res.status(options.statusCode).json(options.message);
   },
   keyGenerator: (req) => {
-    const identifier = req.body?.identifier || "unknown";
+    const phone = normalizePhone(req.body?.phone);
     const ipKey = ipKeyGenerator(req.ip ?? "127.0.0.1");
-    return `${identifier}:${ipKey}`;
+    return `${phone}:${ipKey}`;
   },
 });

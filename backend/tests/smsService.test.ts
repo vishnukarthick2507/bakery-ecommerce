@@ -4,6 +4,7 @@ import { sendOtpSms } from "../src/services/smsService.js";
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
+  vi.useRealTimers();
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
   delete process.env.TWOFACTOR_API_KEY;
@@ -82,6 +83,32 @@ describe("sendOtpSms", () => {
     const result = await sendOtpSms("9840916058", "123456");
 
     expect(result).toBe(false);
+  });
+
+  it("returns false when the provider request times out", async () => {
+    process.env.TWOFACTOR_API_KEY = "sk_test_123";
+    vi.useFakeTimers();
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), milliseconds);
+      return controller.signal;
+    });
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Request timed out", "TimeoutError")),
+          { once: true },
+        );
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = sendOtpSms("9840916058", "123456");
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await expect(result).resolves.toBe(false);
+    expect(timeoutSpy).toHaveBeenCalledWith(10_000);
   });
 
   it("normalizes the phone number to +91 format", async () => {

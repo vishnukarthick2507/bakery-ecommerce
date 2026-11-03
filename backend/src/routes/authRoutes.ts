@@ -1,4 +1,6 @@
 import { Router } from "express";
+import type { NextFunction, Request, Response } from "express";
+import jwt from "jsonwebtoken";
 
 import {
   adminLogin,
@@ -23,8 +25,44 @@ import {
   otpSendLimiter,
   otpVerifyLimiter,
 } from "../middleware/rateLimit.js";
+import { getJwtSecret } from "../config/jwt.js";
 
-const router = Router();
+const router: Router = Router();
+
+function setVerifiedPhoneForRegistrationLimit(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  let verifiedPhone: string | undefined;
+  const token = req.cookies?.["otp-registration-token"];
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, getJwtSecret()) as {
+        phone?: unknown;
+        purpose?: string;
+        accountType?: string;
+      };
+      if (
+        decoded.accountType === "REGISTRATION" &&
+        decoded.purpose === "REGISTRATION" &&
+        typeof decoded.phone === "string" &&
+        /^[6-9]\d{9}$/.test(decoded.phone)
+      ) {
+        verifiedPhone = decoded.phone;
+      }
+    } catch {
+      // Invalid proof tokens share the IP-only rate-limit bucket.
+    }
+  }
+
+  req.body = {
+    ...(req.body && typeof req.body === "object" ? req.body : {}),
+    phone: verifiedPhone,
+  };
+  next();
+}
 
 /*
 ||--------------------------------------------------------------------------
@@ -40,14 +78,30 @@ router.get("/verify", verifyToken);
 
 // Admin session status (reads httpOnly admin-token cookie)
 router.get("/me", adminMe);
-router.post("/logout", adminLogout);
+
+router.post(
+  "/logout",
+  (req, res, next) => {
+    if (req.baseUrl === "/api/admin") {
+      void adminLogout(req, res);
+      return;
+    }
+    next();
+  },
+  authenticateCustomer,
+  logoutCustomer,
+);
 
 router.post("/register", customerRegisterLimiter, registerCustomer);
 router.post("/customer/login", customerLoginLimiter, loginCustomer);
 router.post("/otp/send", otpSendLimiter, sendOtp);
 router.post("/otp/verify", otpVerifyLimiter, verifyOtp);
-router.post("/otp/register-complete", completeRegistration);
+router.post(
+  "/otp/register-complete",
+  setVerifiedPhoneForRegistrationLimit,
+  otpVerifyLimiter,
+  completeRegistration,
+);
 router.get("/me", authenticateCustomer, getCurrentCustomer);
-router.post("/logout", authenticateCustomer, logoutCustomer);
 
 export default router;

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { clearCustomerSession, customerAuthHeaders, type CustomerProfile } from '@/lib/customer-auth'
+import type { CustomerProfile } from '@/lib/customer-auth'
 
 export default function AccountPage() {
   const router = useRouter()
@@ -12,14 +12,7 @@ export default function AccountPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const token = window.localStorage.getItem('customer-token')
-    if (!token) {
-      router.replace('/account/login')
-      return
-    }
-
     fetch('/api/auth/me', {
-      headers: customerAuthHeaders(),
       credentials: 'include',
       cache: 'no-store',
     })
@@ -29,15 +22,13 @@ export default function AccountPage() {
           // and send the user back to login. Any other status (e.g. 5xx) is a
           // transient server error: keep the valid session and surface the error.
           if (response.status === 401 || response.status === 403) {
-            clearCustomerSession()
             router.replace('/account/login')
           }
           throw new Error('Unable to load account.')
         }
         const data = await response.json()
         if (!data?.user) {
-          // Unexpected response shape: keep the valid customer session rather
-          // than clearing it over a temporary/server formatting issue.
+          router.replace('/account/login')
           throw new Error('Unable to load account.')
         }
         setProfile(data.user)
@@ -50,11 +41,9 @@ export default function AccountPage() {
   }, [router])
 
   async function logout() {
-    const headers = customerAuthHeaders()
     try {
-      await fetch('/api/auth/logout', { method: 'POST', headers, credentials: 'include' })
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
     } finally {
-      clearCustomerSession()
       router.replace('/account/login')
     }
   }

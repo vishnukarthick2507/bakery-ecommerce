@@ -40,9 +40,11 @@ const statusLabel = (status: OrderStatus) =>
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-primary">{value}</p>
+    <div className="rounded-[2rem] border border-border bg-card p-6 shadow-sm">
+      <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+        {label}
+      </p>
+      <p className="mt-2.5 text-3xl font-bold text-primary">{value}</p>
     </div>
   )
 }
@@ -182,44 +184,44 @@ function AdminPage() {
   ).length
 
   return (
-    <main className="min-h-screen bg-muted/20">
+    <main className="min-h-screen bg-cream/30">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm font-medium text-primary">
+            <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
               S.V. Bakery Admin
             </p>
 
-            <h1 className="mt-1 text-3xl font-bold text-primary">
+            <h1 className="mt-1.5 text-3xl font-bold text-primary tracking-tight">
               Admin Dashboard
             </h1>
 
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-3 text-muted-foreground leading-relaxed">
               Manage your bakery orders and business operations.
             </p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
             <button
               onClick={handleLogout}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
             >
               Logout
             </button>
             <Link
               href="/"
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
             >
               View Store
             </Link>
           </div>
         </div>
 
-        <AdminNav className="mt-6" />
+        <AdminNav className="mt-8" />
 
         {/* Stats */}
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total Orders" value={loading || error ? '—' : totalOrders.toLocaleString('en-IN')} />
           <StatCard label="Today's Orders" value={loading || error ? '—' : todaysOrders.length.toLocaleString('en-IN')} />
           <StatCard label="Pending Orders" value={loading || error ? '—' : pendingOrders.toLocaleString('en-IN')} />
@@ -241,8 +243,8 @@ function AdminPage() {
         )}
 
         {/* Recent Orders */}
-        <section className="mt-8 rounded-xl border border-border bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-border p-6">
+        <section className="mt-10 rounded-[2rem] border border-border bg-card shadow-sm">
+          <div className="flex items-center justify-between border-b border-border px-8 py-6">
             <div>
               <h2 className="text-xl font-semibold text-primary">Recent Orders</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -251,18 +253,18 @@ function AdminPage() {
             </div>
             <Link
               href="/admin/orders"
-              className="text-sm font-medium text-primary hover:underline"
+              className="text-sm font-semibold text-caramel hover:underline"
             >
               View All
             </Link>
           </div>
 
           {error && (
-            <div className="p-6 text-sm text-destructive">{error}</div>
+            <div className="p-8 text-sm text-destructive">{error}</div>
           )}
 
           {!loading && !error && orders.length === 0 && (
-            <div className="p-8 text-center text-muted-foreground">
+            <div className="p-10 text-center text-muted-foreground">
               No orders yet.
             </div>
           )}
@@ -272,7 +274,7 @@ function AdminPage() {
               {orders.slice(0, 5).map((order) => (
                 <div
                   key={order._id}
-                  className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-5 p-8 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <p className="font-semibold text-primary">{order.orderNumber}</p>
@@ -281,11 +283,9 @@ function AdminPage() {
                       {new Date(order.createdAt).toLocaleString('en-IN')}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="font-semibold text-primary">₹{order.totalAmount.toLocaleString('en-IN')}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">{statusLabel(order.orderStatus)}</p>
-                    </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-primary">₹{order.totalAmount.toLocaleString('en-IN')}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{statusLabel(order.orderStatus)}</p>
                   </div>
                 </div>
               ))}
@@ -294,18 +294,22 @@ function AdminPage() {
         </section>
 
         {/* Delivery summary */}
-        <section className="mt-8 rounded-xl border border-border bg-white p-6 shadow-sm">
+        <section className="mt-10 rounded-[2rem] border border-border bg-card p-8 shadow-sm">
           <h2 className="text-xl font-semibold text-primary">Order Summary</h2>
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+          <div className="mt-6 grid gap-5 sm:grid-cols-3">
             <div>
-              <p className="text-sm text-muted-foreground">Delivered</p>
-              <p className="mt-1 text-2xl font-bold text-primary">
+              <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                Delivered
+              </p>
+              <p className="mt-2 text-3xl font-bold text-primary">
                 {loading || error ? '—' : deliveredOrders}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Active Orders</p>
-              <p className="mt-1 text-2xl font-bold text-primary">
+              <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                Active Orders
+              </p>
+              <p className="mt-2 text-3xl font-bold text-primary">
                 {loading || error
                   ? '—'
                   : orders.filter(
@@ -315,8 +319,10 @@ function AdminPage() {
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Pending Confirmation</p>
-              <p className="mt-1 text-2xl font-bold text-primary">
+              <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                Pending Confirmation
+              </p>
+              <p className="mt-2 text-3xl font-bold text-primary">
                 {loading || error ? '—' : pendingOrders}
               </p>
             </div>

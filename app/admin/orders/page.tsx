@@ -286,12 +286,12 @@ function AdminOrdersPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/20">
+    <main className="min-h-screen bg-cream/30">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm font-medium text-primary">
+            <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
               S.V. Bakery Admin
             </p>
 
@@ -302,51 +302,53 @@ function AdminOrdersPage() {
               ← Back to Dashboard
             </Link>
 
-            <h1 className="mt-3 text-3xl font-bold text-primary">
+            <h1 className="mt-2 text-3xl font-bold text-primary tracking-tight">
               Orders
             </h1>
 
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-3 text-muted-foreground leading-relaxed">
               View and manage customer orders.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={fetchOrders}
-            disabled={loading}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-          >
-            {loading ? 'Refreshing...' : 'Refresh Orders'}
-          </button>
-          <Link
-            href="/"
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
-          >
-            View Store
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={fetchOrders}
+              disabled={loading}
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 disabled:opacity-60 transition-colors"
+            >
+              {loading ? 'Refreshing...' : 'Refresh Orders'}
+            </button>
+            <Link
+              href="/"
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
+            >
+              View Store
+            </Link>
+          </div>
         </div>
 
-        <AdminNav className="mt-6" />
+        <AdminNav className="mt-8" />
 
-        <div className="mt-8 grid gap-3 sm:grid-cols-3">
-          <label className="grid gap-1.5 text-sm font-medium">
+        <div className="mt-10 grid gap-5 sm:grid-cols-3">
+          <label className="grid gap-2 text-sm font-semibold text-foreground">
             Search orders
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Order number, customer or phone"
-              className="h-11 rounded-lg border border-border bg-white px-3 font-normal outline-none focus:ring-2 focus:ring-primary"
+              className="h-11 rounded-xl border border-border bg-card px-3 font-normal outline-none focus:ring-2 focus:ring-caramel"
             />
           </label>
 
-          <label className="grid gap-1.5 text-sm font-medium">
+          <label className="grid gap-2 text-sm font-semibold text-foreground">
             Status
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as 'ALL' | OrderStatus)}
-              className="h-11 rounded-lg border border-border bg-white px-3 font-normal outline-none focus:ring-2 focus:ring-primary"
+              className="h-11 rounded-xl border border-border bg-card px-3 font-normal outline-none focus:ring-2 focus:ring-caramel"
             >
               <option value="ALL">All statuses</option>
               {([
@@ -368,12 +370,12 @@ function AdminOrdersPage() {
             </select>
           </label>
 
-          <label className="grid gap-1.5 text-sm font-medium">
+          <label className="grid gap-2 text-sm font-semibold text-foreground">
             Fulfillment
             <select
               value={fulfillmentFilter}
               onChange={(event) => setFulfillmentFilter(event.target.value as FulfillmentFilter)}
-              className="h-11 rounded-lg border border-border bg-white px-3 font-normal outline-none focus:ring-2 focus:ring-primary"
+              className="h-11 rounded-xl border border-border bg-card px-3 font-normal outline-none focus:ring-2 focus:ring-caramel"
             >
               <option value="ALL">Delivery and pickup</option>
               <option value="DELIVERY">Delivery</option>
@@ -383,82 +385,77 @@ function AdminOrdersPage() {
         </div>
 
         {error && (
-          <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <div className="mt-6 rounded-[2rem] border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
             {error}
           </div>
         )}
 
         {loading && (
-          <div className="mt-8 rounded-xl border border-border p-10 text-center">
+          <div className="mt-10 rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
             Loading orders...
           </div>
         )}
 
         {!loading && !error && orders.length === 0 && (
-          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+          <div className="mt-10 rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
             <h2 className="text-xl font-semibold text-primary">
               No orders yet
             </h2>
 
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-3 text-muted-foreground">
               Customer orders will appear here.
             </p>
           </div>
         )}
 
         {!loading && !error && orders.length > 0 && filteredOrders.length === 0 && (
-          <div className="mt-8 rounded-xl border border-border p-10 text-center shadow-sm">
+          <div className="mt-10 rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
             <h2 className="text-xl font-semibold text-primary">No matching orders</h2>
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-3 text-muted-foreground">
               Change or clear the search and filters to see other orders.
             </p>
           </div>
         )}
 
         {!loading && !error && filteredOrders.length > 0 && (
-          <div className="mt-8 space-y-6">
+          <div className="mt-10 space-y-8">
             {filteredOrders.map((order) => (
               <section
                 key={order._id}
-                className="rounded-xl border border-border bg-white p-6 shadow-sm sm:p-8"
+                className="rounded-[2rem] border border-border bg-card p-8 shadow-sm sm:p-10"
               >
                 {/* Order header */}
-                <div className="flex flex-col justify-between gap-4 border-b border-border pb-6 sm:flex-row">
+                <div className="flex flex-col justify-between gap-5 border-b border-border pb-7 sm:flex-row">
                   <div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Order Number
                     </p>
 
-                    <h2 className="mt-1 text-2xl font-bold text-primary">
+                    <h2 className="mt-1.5 text-2xl font-bold text-primary tracking-tight">
                       {order.orderNumber}
                     </h2>
 
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-3 text-sm text-muted-foreground">
                       Placed{' '}
                       {new Date(order.createdAt).toLocaleString('en-IN')}
                     </p>
                   </div>
 
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Total
-                    </p>
-
-                    <p className="text-2xl font-bold text-primary">
-                      ₹{order.totalAmount.toLocaleString('en-IN')}
-                    </p>
+                  <div className="text-right">
+                    <p className="font-bold text-primary">₹{order.totalAmount.toLocaleString('en-IN')}</p>
+                    <p className="mt-2 text-sm text-muted-foreground">{formatStatus(order.orderStatus)}</p>
                   </div>
                 </div>
 
                 {/* Customer details */}
-                <div className="grid gap-6 border-b border-border py-6 md:grid-cols-4">
+                <div className="grid gap-7 border-b border-border py-7 md:grid-cols-4">
 
                   <div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Customer
                     </p>
 
-                    <p className="mt-1 font-semibold text-primary">
+                    <p className="mt-2 font-semibold text-primary">
                       {order.customerName}
                     </p>
 
@@ -468,11 +465,11 @@ function AdminOrdersPage() {
                   </div>
 
                   <div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Fulfillment
                     </p>
 
-                    <p className="mt-1 font-semibold text-primary">
+                    <p className="mt-2 font-semibold text-primary">
                       {order.fulfillmentType === 'DELIVERY'
                         ? 'Delivery'
                         : 'Pickup'}
@@ -483,7 +480,7 @@ function AdminOrdersPage() {
                     </p>
 
                     {order.requestedSlot && (
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-2 text-xs text-muted-foreground">
                         Requested: {new Date(order.requestedSlot).toLocaleString('en-IN')}
                       </p>
                     )}
@@ -495,11 +492,11 @@ function AdminOrdersPage() {
                   </div>
 
                   <div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Payment
                     </p>
 
-                    <p className="mt-1 font-semibold text-primary">
+                    <p className="mt-2 font-semibold text-primary">
                       {order.paymentMethod === 'COD'
                         ? 'Cash on Delivery'
                         : order.paymentMethod === 'ONLINE'
@@ -512,13 +509,13 @@ function AdminOrdersPage() {
                     </p>
 
                     {order.paymentMethod === 'PAY_AT_STORE' && order.paidAt && (
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-2 text-xs text-muted-foreground">
                         Paid at: {new Date(order.paidAt).toLocaleString('en-IN')}
                       </p>
                     )}
 
                     {order.razorpayOrderId && (
-                      <p className="mt-1 text-xs text-muted-foreground break-all">
+                      <p className="mt-2 text-xs text-muted-foreground break-all">
                         RZP Order: {order.razorpayOrderId}
                       </p>
                     )}
@@ -536,23 +533,23 @@ function AdminOrdersPage() {
                     )}
 
                     {order.proposedSlot && (
-                      <div className="mt-3 rounded-lg border border-border bg-muted/50 p-3">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                      <div className="mt-4 rounded-[1.5rem] border border-caramel/20 bg-caramel/5 p-4">
+                        <p className="text-xs font-semibold text-caramel uppercase tracking-wider mb-2">
                           Reschedule Proposal
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Status: {order.proposedSlot.status.charAt(0).toUpperCase() + order.proposedSlot.status.slice(1).toLowerCase()}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           Proposed: {new Date(order.proposedSlot.time).toLocaleString('en-IN')}
                         </p>
                         {order.proposedSlot.note && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             Note: {order.proposedSlot.note}
                           </p>
                         )}
                         {order.proposedSlot.expiresAt && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             Expires: {new Date(order.proposedSlot.expiresAt).toLocaleString('en-IN')}
                           </p>
                         )}
@@ -561,17 +558,17 @@ function AdminOrdersPage() {
                   </div>
 
                   <div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Inventory
                     </p>
 
-                    <p className="mt-1 font-semibold text-primary">
+                    <p className="mt-2 font-semibold text-primary">
                       {order.inventoryStatus
                         ? order.inventoryStatus.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())
                         : 'Not tracked (legacy order)'}
                     </p>
                     {order.reconciliationStatus === 'REVIEW_REQUIRED' && (
-                      <p role="status" className="mt-2 text-sm font-medium text-destructive">
+                      <p role="status" className="mt-3 text-sm font-medium text-destructive">
                         Manual review required{order.reconciliationReason ? `: ${order.reconciliationReason}` : ''}
                       </p>
                     )}
@@ -580,8 +577,8 @@ function AdminOrdersPage() {
                 </div>
 
                 {/* Items */}
-                <div className="border-b border-border py-6">
-                  <h3 className="font-semibold text-primary">
+                <div className="border-b border-border py-7">
+                  <h3 className="font-semibold text-primary uppercase tracking-wider text-sm">
                     Items
                   </h3>
 
@@ -589,7 +586,7 @@ function AdminOrdersPage() {
                     {order.items.map((item, index) => (
                       <div
                         key={`${order._id}-${index}`}
-                        className="flex items-center justify-between gap-4 py-3"
+                        className="flex items-center justify-between gap-4 py-4"
                       >
                         <div>
                           <p className="font-medium text-primary">
@@ -611,14 +608,14 @@ function AdminOrdersPage() {
                 </div>
 
                 {/* Status */}
-                <div className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex flex-col gap-5 pt-7 sm:flex-row sm:items-end sm:justify-between">
 
                   <div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                       Current Status
                     </p>
 
-                    <p className="mt-1 text-xl font-bold text-primary">
+                    <p className="mt-2 text-2xl font-bold text-primary">
                       {formatStatus(order.orderStatus)}
                     </p>
                   </div>
@@ -663,7 +660,7 @@ function AdminOrdersPage() {
                       }
 
                       return (
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-3">
                           {action && (
                             <button
                               type="button"
@@ -674,7 +671,7 @@ function AdminOrdersPage() {
                                   action.status,
                                 )
                               }
-                              className="w-full rounded-lg bg-primary px-4 py-3 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                              className="w-full rounded-xl bg-caramel px-5 py-3.5 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 transition-colors"
                             >
                               {action.label}
                             </button>
@@ -732,7 +729,7 @@ function AdminOrdersPage() {
                                     })
                                 }
                               }}
-                              className="w-full rounded-lg border border-primary px-4 py-2.5 font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
+                              className="w-full rounded-xl border border-caramel px-5 py-3 font-medium text-caramel hover:bg-caramel/5 disabled:opacity-60 transition-colors"
                             >
                               Mark Paid
                             </button>
@@ -740,32 +737,32 @@ function AdminOrdersPage() {
 
                           {/* Suggest another time */}
                           {proposingOrder === order._id ? (
-                            <div className="flex flex-col gap-2">
-                              <label className="text-xs font-medium text-muted-foreground">
+                            <div className="flex flex-col gap-3">
+                              <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
                                 New date & time
                               </label>
-                              <div className="grid gap-2 sm:grid-cols-2">
+                              <div className="grid gap-3 sm:grid-cols-2">
                                 <input
                                   type="date"
                                   value={proposeDate}
                                   onChange={(e) => setProposeDate(e.target.value)}
-                                  className="text-xs rounded-lg border border-border px-2 py-2"
+                                  className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
                                 />
                                 <input
                                   type="time"
                                   value={proposeTime}
                                   onChange={(e) => setProposeTime(e.target.value)}
-                                  className="text-xs rounded-lg border border-border px-2 py-2"
+                                  className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
                                 />
                               </div>
-                              <label className="text-xs font-medium text-muted-foreground">
+                              <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
                                 Note (optional)
                               </label>
                               <textarea
                                 value={proposeNote}
                                 onChange={(e) => setProposeNote(e.target.value)}
                                 rows={2}
-                                className="text-xs rounded-lg border border-border px-2 py-2"
+                                className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
                                 placeholder="e.g. Requested slot unavailable"
                               />
                               <button
@@ -779,7 +776,7 @@ function AdminOrdersPage() {
                                     proposeNote,
                                   )
                                 }
-                                className="w-full rounded-lg bg-primary px-2 py-2 text-xs text-primary-foreground disabled:opacity-60"
+                                className="w-full rounded-xl bg-caramel px-3 py-2.5 text-xs text-caramel-foreground disabled:opacity-60 transition-colors"
                               >
                                 {proposing ? 'Proposing…' : 'Suggest Time'}
                               </button>
@@ -791,7 +788,7 @@ function AdminOrdersPage() {
                                   setProposeTime('')
                                   setProposeNote('')
                                 }}
-                                className="w-full rounded-lg border border-border px-2 py-2 text-xs text-muted-foreground hover:bg-muted"
+                                className="w-full rounded-xl border border-border px-3 py-2.5 text-xs text-caramel hover:bg-cream/50 transition-colors"
                               >
                                 Cancel
                               </button>
@@ -806,7 +803,7 @@ function AdminOrdersPage() {
                                 setProposeTime('')
                                 setProposeNote('')
                               }}
-                              className="w-full rounded-lg border border-primary px-2 py-2 text-xs text-primary hover:bg-primary/5 disabled:opacity-60"
+                              className="w-full rounded-xl border border-caramel px-3 py-2.5 text-xs text-caramel hover:bg-caramel/5 disabled:opacity-60 transition-colors"
                             >
                               Suggest Another Time
                             </button>
@@ -820,7 +817,7 @@ function AdminOrdersPage() {
                               )}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="w-full rounded-lg border border-primary px-2 py-2 text-xs text-primary hover:bg-primary/5 disabled:opacity-60"
+                              className="w-full rounded-xl border border-caramel px-3 py-2.5 text-xs text-caramel hover:bg-caramel/5 disabled:opacity-60 transition-colors"
                             >
                               Open WhatsApp
                             </a>
@@ -842,7 +839,7 @@ function AdminOrdersPage() {
                                   )
                                 }
                               }}
-                              className="w-full rounded-lg border border-destructive/30 px-4 py-2.5 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60"
+                              className="w-full rounded-xl border border-destructive/30 px-5 py-3 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60 transition-colors"
                             >
                               Cancel Order
                             </button>

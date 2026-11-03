@@ -13,6 +13,11 @@ const updateSettingsSchema = z.object({
     .string()
     .optional()
     .transform((val) => (val ? new Date(val) : null)),
+  codMaxAmount: z
+    .number()
+    .min(0, "COD maximum must be zero or greater")
+    .optional()
+    .nullable(),
 });
 
 function serializeSettings(settings: ISettingsLike) {
@@ -23,6 +28,7 @@ function serializeSettings(settings: ISettingsLike) {
     pickupEnabled: settings.pickupEnabled,
     closedMessage: settings.closedMessage,
     reopenAt: settings.reopenAt,
+    codMaxAmount: settings.codMaxAmount,
   };
 }
 
@@ -71,6 +77,9 @@ export const updateSettings = async (
     if (parsed.data.reopenAt !== undefined) {
       updates.reopenAt = parsed.data.reopenAt;
     }
+    if (parsed.data.codMaxAmount !== undefined) {
+      updates.codMaxAmount = parsed.data.codMaxAmount;
+    }
 
     const settings = await Settings.findOneAndUpdate(
       {},
@@ -99,4 +108,5 @@ interface ISettingsLike {
   pickupEnabled: boolean;
   closedMessage: string;
   reopenAt: Date | null;
+  codMaxAmount: number | null;
 }

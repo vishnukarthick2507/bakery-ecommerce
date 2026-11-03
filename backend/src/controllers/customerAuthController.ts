@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import type { Response } from "express";
 import jwt from "jsonwebtoken";
@@ -7,22 +8,28 @@ import { User } from "../models/User.js";
 import { getJwtSecret } from "../config/jwt.js";
 import {
   createOtpSession,
+  claimOtpSendCooldown,
+  commitOtpSendCooldown,
   generateOtp,
+  OTP_RESEND_COOLDOWN_MS,
+  releaseOtpSendCooldown,
   verifyOtp as verifyOtpCode,
 } from "../services/otpService.js";
 import { sendOtpSms } from "../services/smsService.js";
+import { OtpSession } from "../models/OtpSession.js";
+import { CustomerOtpProof } from "../models/CustomerOtpProof.js";
 
 const PHONE_PATTERN = /^[6-9]\d{9}$/;
 
 const otpSendSchema = z.object({
   phone: z.string().trim().min(1),
-  purpose: z.enum(["LOGIN", "REGISTER", "AUTH"]).optional(),
+  purpose: z.enum(["LOGIN", "REGISTER", "AUTH", "GUEST_CHECKOUT"]).optional(),
 });
 
 const otpVerifySchema = z.object({
   phone: z.string().trim().min(1),
   otp: z.string().length(6, "OTP must be a 6-digit code"),
-  purpose: z.enum(["LOGIN", "REGISTER", "AUTH"]).optional(),
+  purpose: z.enum(["LOGIN", "REGISTER", "AUTH", "GUEST_CHECKOUT"]).optional(),
 });
 
 const registrationCompleteSchema = z.object({
@@ -107,13 +114,31 @@ function clearCustomerTokenCookie(res: Response): void {
 }
 
 const REGISTRATION_TOKEN_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const INVALID_REGISTRATION_PROOF_MESSAGE = "Invalid or expired registration session. Please request OTP again.";
+const GENERIC_AUTH_COMPLETION_RESPONSE = { message: "Authentication request processed" };
 
-function createRegistrationToken(phone: string): string {
+async function createRegistrationToken(phone: string): Promise<string> {
+  const proofId = randomUUID();
+  const expiresAt = new Date(Date.now() + REGISTRATION_TOKEN_EXPIRY_MS);
+  await CustomerOtpProof.create({ proofId, phone, expiresAt });
+
   return jwt.sign(
     { phone, purpose: "REGISTRATION", accountType: "REGISTRATION" },
     getJwtSecret(),
-    { expiresIn: "10m" },
+    { expiresIn: "10m", jwtid: proofId },
   );
+}
+
+async function consumeRegistrationProof(
+  proofId: string,
+  phone: string,
+): Promise<boolean> {
+  const proof = await CustomerOtpProof.findOneAndDelete({
+    proofId,
+    phone,
+    expiresAt: { $gt: new Date() },
+  });
+  return proof !== null;
 }
 
 function setRegistrationTokenCookie(res: Response, token: string): void {
@@ -140,41 +165,13 @@ export const registerCustomer = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  const parsed = registerSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ message: "Invalid registration details", errors: parsed.error.flatten() });
-    return;
-  }
-
-  try {
-    const { name, email, phone, password } = parsed.data;
-    const existing = await User.findOne({ $or: [{ email }, { phone }] }).lean();
-    if (existing) {
-      res.status(409).json({ message: "An account with that email or phone number already exists" });
-      return;
-    }
-
-    const user = await User.create({
-      name,
-      email,
-      phone,
-      passwordHash: await bcrypt.hash(password, 12),
-      active: true,
-    });
-    const token = createCustomerToken(user._id.toString(), user.tokenVersion ?? 0);
-    setCustomerTokenCookie(res, token);
-    res.status(201).json({
-      token,
-      user: publicCustomer(user),
-    });
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === 11000) {
-      res.status(409).json({ message: "An account with that email or phone number already exists" });
-      return;
-    }
-    console.error("Customer registration failed:", error);
-    res.status(500).json({ message: "Unable to create your account" });
-  }
+  // Password-based customer registration is disabled.
+  // New customers must register via phone OTP (/api/auth/otp/register-complete).
+  // Existing customers can still log in with email/password via loginCustomer.
+  res.status(403).json({
+    message:
+      "Password registration is disabled. Please use phone OTP to register, or sign in if you already have an account.",
+  });
 };
 
 export const loginCustomer = async (
@@ -203,7 +200,6 @@ export const loginCustomer = async (
     const token = createCustomerToken(user._id.toString(), user.tokenVersion ?? 0);
     setCustomerTokenCookie(res, token);
     res.status(200).json({
-      token,
       user: publicCustomer(user),
     });
   } catch (error) {
@@ -257,11 +253,40 @@ export const logoutCustomer = async (
 
 /*
 ||--------------------------------------------------------------------------
+|| OTP SEND COOLDOWN CHECK
+||--------------------------------------------------------------------------
+|| Returns the number of seconds remaining before the next OTP send is
+|| allowed for the given phone number and purpose, or null if no cooldown
+|| is active. Enforced in addition to the IP+phone rate limiter.
+*/
+async function checkOtpCooldown(
+  phone: string,
+  purpose: string,
+): Promise<number | null> {
+  const recent = await (OtpSession as any).findOne({
+    identifier: phone.toLowerCase().trim(),
+    purpose,
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (!recent || !(recent as { createdAt?: Date }).createdAt) return null;
+
+  const elapsed = Date.now() - (recent as { createdAt: Date }).createdAt.getTime();
+  if (elapsed < OTP_RESEND_COOLDOWN_MS) {
+    return Math.ceil((OTP_RESEND_COOLDOWN_MS - elapsed) / 1000);
+  }
+  return null;
+}
+
+/*
+||--------------------------------------------------------------------------
 || OTP SEND
 || POST /api/auth/otp/send
 ||--------------------------------------------------------------------------
 || Creates a 6-digit OTP session for the given Indian mobile number.
 || Rate limited: 3 sends per identifier/IP per hour (otpSendLimiter).
+|| Cooldown: minimum 60 seconds between sends for the same phone+purpose.
 || In development/test mode the OTP is returned in the response so it can
 || be used without a real SMS provider. Never exposes the OTP in production.
 */
@@ -283,37 +308,65 @@ export const sendOtp = async (
     return;
   }
 
-  if (process.env.NODE_ENV === "production") {
-    // Production: deliver the OTP via the 2Factor SMS provider before creating
-    // an OTP session. Fail closed if SMS submission fails - no session and no
-    // success response is returned when delivery fails.
-    try {
-      const otp = generateOtp();
+  const purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" =
+    parsed.data.purpose ?? "AUTH";
 
+  // Enforce 60-second cooldown between OTP sends for the same phone+purpose.
+  const retryAfter = await checkOtpCooldown(phone, purpose);
+  if (retryAfter !== null) {
+    res.status(429).json({
+      message: "Please wait before requesting another OTP.",
+      retryAfter,
+    });
+    return;
+  }
+
+  let cooldownClaim;
+  try {
+    cooldownClaim = await claimOtpSendCooldown(phone, purpose);
+  } catch (error) {
+    console.error("OTP send reservation failed:", error);
+    res.status(500).json({ message: "Unable to send OTP" });
+    return;
+  }
+
+  if (!("claim" in cooldownClaim)) {
+    res.status(429).json({
+      message: "Please wait before requesting another OTP.",
+      retryAfter: cooldownClaim.retryAfter,
+    });
+    return;
+  }
+
+  let providerAccepted = false;
+  try {
+    if (process.env.NODE_ENV === "production") {
+      const otp = generateOtp();
       const smsSent = await sendOtpSms(phone, otp);
       if (!smsSent) {
+        await releaseOtpSendCooldown(cooldownClaim.claim);
         res.status(502).json({ message: "Unable to send OTP. Please try again later." });
         return;
       }
 
-      await createOtpSession(phone, "AUTH", otp);
-
-      // Never expose the OTP in production.
+      providerAccepted = true;
+      await commitOtpSendCooldown(cooldownClaim.claim);
+      await createOtpSession(phone, purpose, otp);
       res.status(200).json({ message: "OTP sent successfully" });
-    } catch (error) {
-      console.error("OTP send failed:", error);
-      res.status(500).json({ message: "Unable to send OTP" });
+      return;
     }
-    return;
-  }
 
-  try {
-    const { otp } = await createOtpSession(phone, "AUTH");
-
-    // Development/test mode: expose OTP for testing without an SMS provider.
-    // Never expose the OTP in production.
+    const { otp } = await createOtpSession(phone, purpose);
+    await commitOtpSendCooldown(cooldownClaim.claim);
     res.status(200).json({ message: "OTP sent successfully", otp });
   } catch (error) {
+    if (!providerAccepted) {
+      try {
+        await releaseOtpSendCooldown(cooldownClaim.claim);
+      } catch {
+        // The claim expires automatically if it cannot be released.
+      }
+    }
     console.error("OTP send failed:", error);
     res.status(500).json({ message: "Unable to send OTP" });
   }
@@ -341,6 +394,8 @@ export const verifyOtp = async (
 
   const { phone: rawPhone, otp } = parsed.data;
   const phone = normalizePhone(rawPhone);
+  const purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" =
+    parsed.data.purpose ?? "AUTH";
 
   if (!isValidIndianPhone(phone)) {
     res.status(400).json({ message: "Enter a valid 10-digit Indian mobile number" });
@@ -348,44 +403,19 @@ export const verifyOtp = async (
   }
 
   try {
-    const isValid = await verifyOtpCode(phone, otp, "AUTH");
+    const isValid = await verifyOtpCode(phone, otp, purpose);
 
     if (!isValid) {
       res.status(401).json({ message: "Invalid or expired OTP" });
       return;
     }
 
-    // Check if customer already exists for this verified phone.
-    const user = await User.findOne({ phone }).lean();
-
-    if (user) {
-      // Existing customer: automatically authenticate and issue session.
-      if (!user.active) {
-        res.status(403).json({ message: "This account is inactive. Please contact support." });
-        return;
-      }
-
-      const token = createCustomerToken(user._id.toString(), user.tokenVersion ?? 0);
-      setCustomerTokenCookie(res, token);
-
-      res.status(200).json({
-        message: "OTP verified successfully",
-        token,
-        user: publicCustomer(user),
-      });
-      return;
-    }
-
-    // New customer: issue a signed registration token and require registration.
-    // Never trust a phone number from the request body; the verified identity
-    // comes from the registration token cookie set below.
-    const regToken = createRegistrationToken(phone);
+    // Keep the response and proof cookie identical regardless of account state.
+    // The verified phone is carried only in this short-lived HTTP-only cookie.
+    const regToken = await createRegistrationToken(phone);
     setRegistrationTokenCookie(res, regToken);
-
     res.status(200).json({
       message: "OTP verified successfully",
-      status: "registration_required",
-      phone,
     });
   } catch (error) {
     console.error("OTP verification failed:", error);
@@ -409,9 +439,8 @@ export const completeRegistration = async (
 ): Promise<void> => {
   const token = req.cookies?.["otp-registration-token"];
   if (!token) {
-    res.status(401).json({
-      message: "Registration session expired or missing. Please request OTP again.",
-    });
+    clearRegistrationTokenCookie(res);
+    res.status(401).json({ message: INVALID_REGISTRATION_PROOF_MESSAGE });
     return;
   }
 
@@ -419,26 +448,30 @@ export const completeRegistration = async (
     phone?: string;
     purpose?: string;
     accountType?: string;
+    jti?: string;
   };
   try {
     decoded = jwt.verify(token, getJwtSecret()) as {
       phone?: string;
       purpose?: string;
       accountType?: string;
+      jti?: string;
     };
   } catch {
-    res.status(401).json({
-      message: "Invalid or expired registration session. Please request OTP again.",
-    });
+    clearRegistrationTokenCookie(res);
+    res.status(401).json({ message: INVALID_REGISTRATION_PROOF_MESSAGE });
     return;
   }
 
   if (
     decoded.accountType !== "REGISTRATION" ||
     decoded.purpose !== "REGISTRATION" ||
-    !decoded.phone
+    !decoded.phone ||
+    !isValidIndianPhone(decoded.phone) ||
+    !decoded.jti
   ) {
-    res.status(401).json({ message: "Invalid registration session." });
+    clearRegistrationTokenCookie(res);
+    res.status(401).json({ message: INVALID_REGISTRATION_PROOF_MESSAGE });
     return;
   }
 
@@ -447,22 +480,46 @@ export const completeRegistration = async (
   const parsed = registrationCompleteSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({
-      message: "Invalid registration details",
-      errors: parsed.error.flatten(),
+      code: "PROFILE_REQUIRED",
+      message: "Please provide your name and email to complete registration",
     });
     return;
   }
 
   const { name, email } = parsed.data;
 
-  // Prevent duplicate phone and email accounts, including concurrent attempts.
-  const existing = await User.findOne({ $or: [{ email }, { phone }] }).lean();
-  if (existing) {
-    res.status(409).json({
-      message: "An account with that email or phone number already exists",
-    });
+  const existingUser = await User.findOne({ phone }).select("+tokenVersion");
+  if (existingUser) {
+    const proofConsumed = await consumeRegistrationProof(decoded.jti, phone);
+    if (!proofConsumed) {
+      clearRegistrationTokenCookie(res);
+      res.status(401).json({ message: INVALID_REGISTRATION_PROOF_MESSAGE });
+      return;
+    }
+
+    clearRegistrationTokenCookie(res);
+    if (!existingUser.active) {
+      res.status(200).json(GENERIC_AUTH_COMPLETION_RESPONSE);
+      return;
+    }
+
+    const customerToken = createCustomerToken(
+      existingUser._id.toString(),
+      existingUser.tokenVersion ?? 0,
+    );
+    setCustomerTokenCookie(res, customerToken);
+    res.status(200).json(GENERIC_AUTH_COMPLETION_RESPONSE);
     return;
   }
+
+  const proofConsumed = await consumeRegistrationProof(decoded.jti, phone);
+  if (!proofConsumed) {
+    clearRegistrationTokenCookie(res);
+    res.status(401).json({ message: INVALID_REGISTRATION_PROOF_MESSAGE });
+    return;
+  }
+
+  clearRegistrationTokenCookie(res);
 
   try {
     const created = await User.create({
@@ -485,19 +542,10 @@ export const completeRegistration = async (
     );
     setCustomerTokenCookie(res, customerToken);
 
-    // Clear the registration token cookie - single use only.
-    clearRegistrationTokenCookie(res);
-
-    res.status(200).json({
-      message: "Account created successfully",
-      token: customerToken,
-      user: publicCustomer(user),
-    });
+    res.status(200).json(GENERIC_AUTH_COMPLETION_RESPONSE);
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === 11000) {
-      res.status(409).json({
-        message: "An account with that email or phone number already exists",
-      });
+      res.status(200).json(GENERIC_AUTH_COMPLETION_RESPONSE);
       return;
     }
     console.error("Customer registration failed:", error);

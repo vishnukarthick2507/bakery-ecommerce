@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { CakeIcon } from 'lucide-react'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -48,15 +49,20 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/20 px-4">
+    <main className="flex min-h-screen items-center justify-center bg-cream/30 px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-primary">Admin Login</h1>
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-caramel text-caramel-foreground mx-auto mb-4 shadow-sm">
+            <CakeIcon className="size-6" aria-hidden="true" />
+          </div>
+          <h1 className="text-3xl font-bold text-primary tracking-tight">
+            Admin Login
+          </h1>
           <p className="mt-2 text-muted-foreground">S.V. Bakery Admin</p>
         </div>
 
-        <div className="rounded-xl border border-border bg-white p-8 shadow-sm">
-          <form onSubmit={handleLogin} className="space-y-5">
+        <div className="rounded-[2rem] border border-border bg-card p-8 shadow-sm">
+          <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label className="mb-2 block text-sm font-medium text-foreground">
                 Username
@@ -66,7 +72,7 @@ export default function AdminLoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter username"
-                className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3.5 outline-none focus:ring-2 focus:ring-caramel"
                 required
               />
             </div>
@@ -80,13 +86,13 @@ export default function AdminLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"
-                className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3.5 outline-none focus:ring-2 focus:ring-caramel"
                 required
               />
             </div>
 
             {error && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                 {error}
               </div>
             )}
@@ -94,16 +100,16 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60 hover:opacity-90"
+              className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
             >
               {loading ? 'Logging in…' : 'Login'}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-8 text-center">
             <Link
               href="/"
-              className="text-sm text-muted-foreground hover:underline"
+              className="text-sm text-caramel hover:underline font-medium"
             >
               ← Back to store
             </Link>

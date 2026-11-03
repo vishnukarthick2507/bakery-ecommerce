@@ -87,13 +87,14 @@ function makeOrderNumber(): string {
 
 // Generate a future time at 2:00 PM IST (within business hours on any day)
 function futureBusinessHourTime(daysFromNow = 2): Date {
-  const IST_OFFSET_MS = 5 * 60 * 60 * 1000 + 30 * 60 * 1000; // UTC+5:30
+  const IST_OFFSET_MS = 5 * 60 * 60 * 1000 + 30 * 60 * 1000;
   const now = new Date();
   const istNow = new Date(now.getTime() + IST_OFFSET_MS);
   const result = new Date(istNow);
-  result.setDate(istNow.getDate() + daysFromNow);
-  result.setHours(14, 0, 0, 0); // 2:00 PM IST
-  // Convert back to UTC for storage
+
+  result.setUTCDate(istNow.getUTCDate() + daysFromNow);
+  result.setUTCHours(14, 0, 0, 0);
+
   return new Date(result.getTime() - IST_OFFSET_MS);
 }
 
@@ -219,6 +220,7 @@ describe("Reschedule Proposal", () => {
         .post(`/api/admin/orders/${order._id}/propose-slot`)
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ time: futureTime.toISOString(), note: "Requested slot unavailable" });
+
 
       expect(response.status).toBe(200);
       expect(response.body.order.orderStatus).toBe("RESCHEDULE_PROPOSED");

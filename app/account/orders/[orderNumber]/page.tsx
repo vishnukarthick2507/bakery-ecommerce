@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { CustomerOrder, customerAuthHeaders, formatOrderStatus } from '@/lib/customer-auth'
+import { CustomerOrder, formatOrderStatus } from '@/lib/customer-auth'
 
 type RazorpayHandlerResponse = {
   razorpay_order_id: string
@@ -85,16 +85,15 @@ export default function CustomerOrderDetailPage() {
   const [proposing, setProposing] = useState<'accept' | 'decline' | null>(null)
 
   useEffect(() => {
-    if (!window.localStorage.getItem('customer-token')) {
-      router.replace('/account/login')
-      return
-    }
     fetch(`/api/orders/me/${encodeURIComponent(params.orderNumber)}`, {
-      headers: customerAuthHeaders(),
+      credentials: 'include',
       cache: 'no-store',
     })
       .then(async (response) => {
         const data = await response.json()
+        if (response.status === 401 || response.status === 403) {
+          router.replace('/account/login')
+        }
         if (!response.ok) throw new Error(data.message || 'Unable to load order.')
         setOrder(data.order)
       })
@@ -108,21 +107,15 @@ export default function CustomerOrderDetailPage() {
     customerName: string,
     phone: string,
   ): Promise<boolean> => {
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL ||
-      'http://localhost:5000'
-
     try {
       setError('')
 
       const response = await fetch(
-        `${apiUrl}/api/payments/retry`,
+        '/api/payments/retry',
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...customerAuthHeaders(),
-          },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderNumber }),
         },
       )
@@ -164,13 +157,11 @@ export default function CustomerOrderDetailPage() {
         ) => {
           try {
             const verifyResponse = await fetch(
-              `${apiUrl}/api/payments/verify`,
+              '/api/payments/verify',
               {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...customerAuthHeaders(),
-                },
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(paymentResponse),
               },
             )
@@ -253,10 +244,8 @@ export default function CustomerOrderDetailPage() {
         `/api/orders/${encodeURIComponent(order._id)}/proposal/accept`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...customerAuthHeaders(),
-          },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
         },
       )
       const data = await response.json()
@@ -265,7 +254,7 @@ export default function CustomerOrderDetailPage() {
       const refreshResponse = await fetch(
         `/api/orders/me/${encodeURIComponent(order.orderNumber)}`,
         {
-          headers: customerAuthHeaders(),
+          credentials: 'include',
           cache: 'no-store',
         },
       )
@@ -289,10 +278,8 @@ export default function CustomerOrderDetailPage() {
         `/api/orders/${encodeURIComponent(order._id)}/proposal/decline`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...customerAuthHeaders(),
-          },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
         },
       )
       const data = await response.json()
@@ -300,7 +287,7 @@ export default function CustomerOrderDetailPage() {
       const refreshResponse = await fetch(
         `/api/orders/me/${encodeURIComponent(order.orderNumber)}`,
         {
-          headers: customerAuthHeaders(),
+          credentials: 'include',
           cache: 'no-store',
         },
       )

@@ -12,6 +12,7 @@ type Settings = {
   pickupEnabled: boolean
   closedMessage: string
   reopenAt: string | null
+  codMaxAmount: number | null
   createdAt: string
   updatedAt: string
 }
@@ -40,6 +41,7 @@ function AdminSettingsPage() {
     pickupEnabled: settings?.pickupEnabled ?? true,
     closedMessage: settings?.closedMessage ?? '',
     reopenAt: settings?.reopenAt ?? '',
+    codMaxAmount: settings?.codMaxAmount ?? '',
   }
 
   const [form, setForm] = useState({
@@ -48,6 +50,7 @@ function AdminSettingsPage() {
     pickupEnabled: local.pickupEnabled,
     closedMessage: local.closedMessage,
     reopenAt: local.reopenAt,
+    codMaxAmount: local.codMaxAmount,
   })
 
   async function fetchSettings() {
@@ -69,6 +72,7 @@ function AdminSettingsPage() {
         pickupEnabled: s.pickupEnabled,
         closedMessage: s.closedMessage,
         reopenAt: s.reopenAt ? new Date(s.reopenAt).toISOString().slice(0, 16) : '',
+        codMaxAmount: s.codMaxAmount ?? '',
       })
     } catch (err) {
       setError(
@@ -102,6 +106,7 @@ function AdminSettingsPage() {
           pickupEnabled: form.pickupEnabled,
           closedMessage: form.closedMessage.trim(),
           ...(form.reopenAt ? { reopenAt: form.reopenAt } : {}),
+          ...(form.codMaxAmount !== '' ? { codMaxAmount: Number(form.codMaxAmount) } : {}),
         }),
       })
 
@@ -133,9 +138,9 @@ function AdminSettingsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-muted/20 px-4 py-8">
+      <main className="min-h-screen bg-cream/30 px-4 py-8">
         <div className="mx-auto max-w-2xl">
-          <div className="rounded-xl border border-border p-10 text-center">
+          <div className="rounded-[2rem] border border-border bg-card p-10 text-center shadow-sm">
             <p className="text-muted-foreground">Loading settings…</p>
           </div>
         </div>
@@ -144,54 +149,61 @@ function AdminSettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/20">
+    <main className="min-h-screen bg-cream/30">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
-          <Link
-            href="/admin"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← Back to Dashboard
-          </Link>
-          <Link
-            href="/"
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted ml-2 inline-block"
-          >
-            View Store
-          </Link>
-          <h1 className="mt-3 text-3xl font-bold text-primary">
-            Ordering Settings
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            Control whether customers can place new orders and which
-            fulfilment options are offered. Existing orders are never affected.
-          </p>
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center mb-8">
+          <div>
+            <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
+              S.V. Bakery Admin
+            </p>
+            <Link
+              href="/admin"
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              ← Back to Dashboard
+            </Link>
+            <h1 className="mt-2 text-3xl font-bold text-primary tracking-tight">
+              Ordering Settings
+            </h1>
+            <p className="mt-3 text-muted-foreground leading-relaxed">
+              Control whether customers can place new orders and which
+              fulfilment options are offered. Existing orders are never affected.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
+            >
+              View Store
+            </Link>
+          </div>
         </div>
 
-        <AdminNav className="mt-6" />
+        <AdminNav className="mt-8" />
 
         {error && (
-          <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <div className="mt-6 rounded-[2rem] border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
             {error}
           </div>
         )}
 
         {saved && (
-          <div className="mb-6 rounded-xl border border-success/30 bg-success/5 p-4 text-sm text-success">
+          <div className="mt-6 rounded-[2rem] border border-success/30 bg-success/5 p-5 text-sm text-success shadow-sm">
             Settings saved successfully.
           </div>
         )}
 
         {!settings && (
-          <div className="mb-6 rounded-xl border border-border p-10 text-center text-muted-foreground">
+          <div className="mt-6 rounded-[2rem] border border-border bg-card p-10 text-center text-muted-foreground shadow-sm">
             No settings available.
           </div>
         )}
 
         {settings && (
-          <form onSubmit={handleSave} className="space-y-6">
-            <section className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+          <form onSubmit={handleSave} className="mt-8 space-y-6">
+            <section className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Online Ordering
               </h2>
@@ -210,10 +222,10 @@ function AdminSettingsPage() {
                     onClick={() => toggle('onlineOrdersEnabled')}
                     disabled={saving}
                     className={cn(
-                      'mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                      'mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60',
                       form.onlineOrdersEnabled
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60'
-                        : 'border border-destructive/30 text-destructive hover:bg-destructive/5 disabled:opacity-60',
+                        ? 'bg-caramel text-caramel-foreground hover:bg-caramel/90'
+                        : 'border border-destructive/30 text-destructive hover:bg-destructive/5',
                     )}
                   >
                     {form.onlineOrdersEnabled ? 'Turn OFF' : 'Turn ON'}
@@ -229,7 +241,7 @@ function AdminSettingsPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+            <section className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Fulfilment Options
               </h2>
@@ -248,10 +260,10 @@ function AdminSettingsPage() {
                     onClick={() => toggle('deliveryEnabled')}
                     disabled={saving}
                     className={cn(
-                      'mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                      'mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60',
                       form.deliveryEnabled
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60'
-                        : 'border border-destructive/30 text-destructive hover:bg-destructive/5 disabled:opacity-60',
+                        ? 'bg-caramel text-caramel-foreground hover:bg-caramel/90'
+                        : 'border border-destructive/30 text-destructive hover:bg-destructive/5',
                     )}
                   >
                     {form.deliveryEnabled ? 'Turn OFF' : 'Turn ON'}
@@ -268,10 +280,10 @@ function AdminSettingsPage() {
                     onClick={() => toggle('pickupEnabled')}
                     disabled={saving}
                     className={cn(
-                      'mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                      'mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60',
                       form.pickupEnabled
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60'
-                        : 'border border-destructive/30 text-destructive hover:bg-destructive/5 disabled:opacity-60',
+                        ? 'bg-caramel text-caramel-foreground hover:bg-caramel/90'
+                        : 'border border-destructive/30 text-destructive hover:bg-destructive/5',
                     )}
                   >
                     {form.pickupEnabled ? 'Turn OFF' : 'Turn ON'}
@@ -287,7 +299,7 @@ function AdminSettingsPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-border bg-white p-6 sm:p-8 shadow-sm">
+            <section className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Closed Message &amp; Reopen Time
               </h2>
@@ -309,7 +321,7 @@ function AdminSettingsPage() {
                     }}
                     rows={3}
                     placeholder="We are currently closed for online orders. Please check back soon."
-                    className="w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                    className="mt-2 w-full resize-none rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                   />
                 </div>
 
@@ -329,7 +341,7 @@ function AdminSettingsPage() {
                         setSaved(false)
                         setForm((prev) => ({ ...prev, reopenAt: e.target.value }))
                       }}
-                      className="w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                      className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                     />
                   </div>
 
@@ -342,11 +354,46 @@ function AdminSettingsPage() {
               </div>
             </section>
 
+            <section className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
+              <h2 className="text-xl font-semibold text-primary mb-1">
+                Cash on Delivery Limit
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground mb-6">
+                Orders above this amount cannot use Cash on Delivery and must
+                pay online. Leave empty to allow COD for any amount.
+              </p>
+
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Maximum COD amount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.codMaxAmount}
+                    onChange={(e) => {
+                      setError('')
+                      setSaved(false)
+                      setForm((prev) => ({ ...prev, codMaxAmount: e.target.value }))
+                    }}
+                    placeholder="No limit"
+                    className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Current: {form.codMaxAmount ? `₹${form.codMaxAmount}` : 'No limit'}
+                  </p>
+                </div>
+              </div>
+            </section>
+
             <div className="mt-8 flex items-center gap-3">
               <button
                 type="submit"
                 disabled={saving}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 rounded-lg bg-caramel px-6 py-3 font-semibold text-caramel-foreground hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {saving ? 'Saving…' : 'Save Settings'}
               </button>
@@ -354,7 +401,7 @@ function AdminSettingsPage() {
                 type="button"
                 onClick={fetchSettings}
                 disabled={saving}
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-6 py-3 font-semibold text-caramel hover:bg-cream/50 disabled:opacity-60 transition-colors"
               >
                 Refresh
               </button>

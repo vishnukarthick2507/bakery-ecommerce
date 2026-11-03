@@ -6,6 +6,7 @@ export interface ISettings extends Document {
   pickupEnabled: boolean;
   closedMessage: string;
   reopenAt: Date | null;
+  codMaxAmount: number | null;
 }
 
 const settingsSchema = new Schema<ISettings>(
@@ -38,6 +39,12 @@ const settingsSchema = new Schema<ISettings>(
 
     reopenAt: {
       type: Date,
+      default: null,
+    },
+
+    codMaxAmount: {
+      type: Number,
+      min: 0,
       default: null,
     },
   },

@@ -58,23 +58,6 @@ export type CustomerOrder = {
   updatedAt: string
 }
 
-export function getCustomerToken() {
-  return typeof window === 'undefined'
-    ? null
-    : window.localStorage.getItem('customer-token')
-}
-
-export function customerAuthHeaders(): Record<string, string> {
-  const token = getCustomerToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-export function clearCustomerSession() {
-  if (typeof window !== 'undefined') {
-    window.localStorage.removeItem('customer-token')
-  }
-}
-
 export function formatOrderStatus(status: CustomerOrder['orderStatus']) {
   return status
     .replaceAll('_', ' ')

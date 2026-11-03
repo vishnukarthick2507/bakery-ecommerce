@@ -10,6 +10,16 @@ import {
 import { createAuthTestApp } from "./authTestApp.js";
 import { Admin } from "../src/models/Admin.js";
 
+function setCookieValues(value: string | string[] | undefined): string[] {
+  return Array.isArray(value) ? value : value ? [value] : [];
+}
+
+function customerCookie(value: string | string[] | undefined): string | undefined {
+  return setCookieValues(value)
+    .find((cookie) => cookie.startsWith("customer-token="))
+    ?.split(";")[0];
+}
+
 describe("Customer password-based authentication", () => {
   let app: ReturnType<typeof createAuthTestApp>;
 
@@ -36,34 +46,27 @@ describe("Customer password-based authentication", () => {
   };
 
   describe("POST /api/auth/register", () => {
-    it("registers a new customer and returns { token, user }", async () => {
+    it("rejects password-based registration (disabled)", async () => {
       const res = await request(app)
         .post("/api/auth/register")
         .send(registerPayload);
 
-      expect(res.status).toBe(201);
-      expect(res.body.token).toBeDefined();
-      expect(typeof res.body.token).toBe("string");
-      expect(res.body.user).toMatchObject({
-        name: "Priya Customer",
-        email: "priya@example.com",
-        phone: "9840916058",
-      });
-      expect(res.body.user.passwordHash).toBeUndefined();
+      expect(res.status).toBe(403);
+      expect(res.body.message).toContain("disabled");
     });
 
-    it("rejects duplicate email", async () => {
+    it("rejects duplicate email registration via password", async () => {
       await request(app).post("/api/auth/register").send(registerPayload);
 
       const res = await request(app)
         .post("/api/auth/register")
         .send(registerPayload);
 
-      expect(res.status).toBe(409);
-      expect(res.body.message).toContain("already exists");
+      expect(res.status).toBe(403);
+      expect(res.body.message).toContain("disabled");
     });
 
-    it("rejects duplicate phone", async () => {
+    it("rejects duplicate phone registration via password", async () => {
       await request(app).post("/api/auth/register").send(registerPayload);
 
       const res = await request(app)
@@ -73,11 +76,11 @@ describe("Customer password-based authentication", () => {
           email: "someone-else@example.com",
         });
 
-      expect(res.status).toBe(409);
-      expect(res.body.message).toContain("already exists");
+      expect(res.status).toBe(403);
+      expect(res.body.message).toContain("disabled");
     });
 
-    it("rejects invalid registration details", async () => {
+    it("rejects invalid registration details via password", async () => {
       const res = await request(app).post("/api/auth/register").send({
         name: "A",
         email: "not-an-email",
@@ -85,13 +88,21 @@ describe("Customer password-based authentication", () => {
         password: "short",
       });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(403);
     });
   });
 
   describe("POST /api/auth/customer/login", () => {
-    it("logs in a registered customer and returns { token, user }", async () => {
-      await request(app).post("/api/auth/register").send(registerPayload);
+    it("logs in an existing customer with email/password", async () => {
+      // Password registration is disabled; create user directly for login tests
+      const { User } = await import("../src/models/User.js");
+      await User.create({
+        name: "Priya Customer",
+        email: "priya@example.com",
+        phone: "9840916058",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
 
       const res = await request(app)
         .post("/api/auth/customer/login")
@@ -101,7 +112,8 @@ describe("Customer password-based authentication", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.token).toBeDefined();
+      expect(res.body.token).toBeUndefined();
+      expect(setCookieValues(res.headers["set-cookie"]).some((cookie) => cookie.startsWith("customer-token="))).toBe(true);
       expect(res.body.user).toMatchObject({
         name: "Priya Customer",
         email: "priya@example.com",
@@ -109,8 +121,58 @@ describe("Customer password-based authentication", () => {
       });
     });
 
+    it("sets only HTTP-only customer cookies with environment-appropriate flags", async () => {
+      const { User } = await import("../src/models/User.js");
+      await User.create({
+        name: "Cookie Flags Customer",
+        email: "cookie-flags@example.com",
+        phone: "9840916058",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
+
+      const originalNodeEnv = process.env.NODE_ENV;
+      try {
+        process.env.NODE_ENV = "development";
+        const developmentResponse = await request(app)
+          .post("/api/auth/customer/login")
+          .send({ email: "cookie-flags@example.com", password: "Secure1password" });
+        const developmentCookie = setCookieValues(developmentResponse.headers["set-cookie"])
+          .find((cookie) => cookie.startsWith("customer-token="));
+
+        expect(developmentResponse.status).toBe(200);
+        expect(developmentResponse.body.token).toBeUndefined();
+        expect(developmentCookie).toMatch(/HttpOnly/i);
+        expect(developmentCookie).toMatch(/SameSite=Lax/i);
+        expect(developmentCookie).not.toMatch(/Secure/i);
+
+        process.env.NODE_ENV = "production";
+        const productionResponse = await request(app)
+          .post("/api/auth/customer/login")
+          .send({ email: "cookie-flags@example.com", password: "Secure1password" });
+        const productionCookie = setCookieValues(productionResponse.headers["set-cookie"])
+          .find((cookie) => cookie.startsWith("customer-token="));
+
+        expect(productionResponse.status).toBe(200);
+        expect(productionResponse.body.token).toBeUndefined();
+        expect(productionCookie).toMatch(/HttpOnly/i);
+        expect(productionCookie).toMatch(/Secure/i);
+        expect(productionCookie).toMatch(/SameSite=None/i);
+      } finally {
+        if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
     it("rejects a wrong password", async () => {
-      await request(app).post("/api/auth/register").send(registerPayload);
+      const { User } = await import("../src/models/User.js");
+      await User.create({
+        name: "Priya Customer",
+        email: "priya@example.com",
+        phone: "9840916058",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
 
       const res = await request(app)
         .post("/api/auth/customer/login")
@@ -136,18 +198,62 @@ describe("Customer password-based authentication", () => {
   });
 
   describe("GET /api/auth/me", () => {
+    it("returns the customer profile from the httpOnly customer cookie", async () => {
+      const { User } = await import("../src/models/User.js");
+      await User.create({
+        name: "Cookie Customer",
+        email: "cookie@example.com",
+        phone: "9840916058",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
+
+      const login = await request(app)
+        .post("/api/auth/customer/login")
+        .send({ email: "cookie@example.com", password: "Secure1password" });
+      const sessionCookie = customerCookie(login.headers["set-cookie"]);
+
+      expect(login.status).toBe(200);
+      expect(sessionCookie).toMatch(/^customer-token=/);
+      expect(login.body.token).toBeUndefined();
+
+      const response = await request(app)
+        .get("/api/auth/me")
+        .set("Cookie", sessionCookie!);
+
+      expect(response.status).toBe(200);
+      expect(response.body.user).toMatchObject({
+        name: "Cookie Customer",
+        email: "cookie@example.com",
+        phone: "9840916058",
+      });
+
+      const ordersResponse = await request(app)
+        .get("/api/orders/me")
+        .set("Cookie", sessionCookie!);
+      expect(ordersResponse.status).toBe(200);
+      expect(ordersResponse.body.orders).toEqual([]);
+    });
+
     it("returns the customer profile for a valid customer token", async () => {
-      await request(app).post("/api/auth/register").send(registerPayload);
+      const { User } = await import("../src/models/User.js");
+      const user = await User.create({
+        name: "Priya Customer",
+        email: "priya@example.com",
+        phone: "9840916058",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
 
       const login = await request(app)
         .post("/api/auth/customer/login")
         .send({ email: "priya@example.com", password: "Secure1password" });
       expect(login.status).toBe(200);
-      const token = login.body.token;
+      const sessionCookie = customerCookie(login.headers["set-cookie"]);
 
       const res = await request(app)
         .get("/api/auth/me")
-        .set("Authorization", `Bearer ${token}`);
+        .set("Cookie", sessionCookie!);
 
       expect(res.status).toBe(200);
       expect(res.body.user).toMatchObject({
@@ -156,6 +262,7 @@ describe("Customer password-based authentication", () => {
         phone: "9840916058",
       });
       expect(res.body.user.passwordHash).toBeUndefined();
+      expect(user._id.toString()).toBe(res.body.user.id);
     });
 
     it("returns { isAdmin: false } with no token (admin fallback unchanged)", async () => {
@@ -164,14 +271,21 @@ describe("Customer password-based authentication", () => {
       expect(res.body).toEqual({ isAdmin: false });
     });
 
-    it("returns customer profile when Authorization header has customer JWT and admin-token cookie also exists", async () => {
-      await request(app).post("/api/auth/register").send(registerPayload);
+    it("returns customer profile from the customer cookie when an admin cookie also exists", async () => {
+      const { User } = await import("../src/models/User.js");
+      await User.create({
+        name: "Priya Customer",
+        email: "priya@example.com",
+        phone: "9840916058",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
 
       const login = await request(app)
         .post("/api/auth/customer/login")
         .send({ email: "priya@example.com", password: "Secure1password" });
       expect(login.status).toBe(200);
-      const customerToken = login.body.token;
+      const sessionCookie = customerCookie(login.headers["set-cookie"]);
 
       const admin = await Admin.create({
         username: "testadmin",
@@ -186,8 +300,7 @@ describe("Customer password-based authentication", () => {
 
       const res = await request(app)
         .get("/api/auth/me")
-        .set("Authorization", `Bearer ${customerToken}`)
-        .set("Cookie", `admin-token=${adminToken}`);
+        .set("Cookie", `${sessionCookie}; admin-token=${adminToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.user).toMatchObject({
@@ -252,6 +365,36 @@ describe("Customer password-based authentication", () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ isAdmin: false });
+    });
+
+    it("logs out a customer using the customer cookie and invalidates the session", async () => {
+      const { User } = await import("../src/models/User.js");
+      await User.create({
+        name: "Logout Customer",
+        email: "logout@example.com",
+        phone: "9840916058",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
+
+      const login = await request(app)
+        .post("/api/auth/customer/login")
+        .send({ email: "logout@example.com", password: "Secure1password" });
+      const sessionCookie = customerCookie(login.headers["set-cookie"]);
+
+      const logout = await request(app)
+        .post("/api/auth/logout")
+        .set("Cookie", sessionCookie!);
+
+      expect(logout.status).toBe(200);
+      expect(setCookieValues(logout.headers["set-cookie"]).some((cookie) =>
+        cookie.startsWith("customer-token=") && /Expires=/i.test(cookie),
+      )).toBe(true);
+
+      const expiredSession = await request(app)
+        .get("/api/orders/me")
+        .set("Cookie", sessionCookie!);
+      expect(expiredSession.status).toBe(401);
     });
   });
 });

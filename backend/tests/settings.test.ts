@@ -406,6 +406,175 @@ describe("Settings API", () => {
     });
   });
 
+  describe("COD maximum enforcement", () => {
+    it("allows an admin to update codMaxAmount", async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const token = makeAdminToken(admin!._id.toString());
+
+      const response = await request(app)
+        .patch("/api/settings")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ codMaxAmount: 500 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.settings.codMaxAmount).toBe(500);
+    });
+
+    it("allows an admin to clear codMaxAmount (no limit)", async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const token = makeAdminToken(admin!._id.toString());
+
+      await request(app)
+        .patch("/api/settings")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ codMaxAmount: 500 });
+
+      const response = await request(app)
+        .patch("/api/settings")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ codMaxAmount: null });
+
+      expect(response.status).toBe(200);
+      expect(response.body.settings.codMaxAmount).toBeNull();
+    });
+
+    it("rejects COD order above the configured maximum", async () => {
+      const product = await createTestProduct({ price: 1000, stock: 10 });
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const token = makeAdminToken(admin!._id.toString());
+
+      await request(app)
+        .patch("/api/settings")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ codMaxAmount: 500 });
+
+      const body = {
+        ...baseOrderBody,
+        items: [
+          { ...baseOrderBody.items[0], productId: product._id.toString(), quantity: 1 },
+        ],
+        fulfillmentType: "PICKUP",
+        address: undefined,
+        paymentMethod: "COD",
+      };
+      const response = await createTestOrderViaAPI(null, body);
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Please pay online to place this order.");
+
+      // No order was created
+      const orders = await Order.find({});
+      expect(orders).toHaveLength(0);
+
+      // No inventory was reserved
+      const after = await Product.findById(product._id);
+      expect(after?.stock).toBe(10);
+    });
+
+    it("allows COD order within the configured maximum", async () => {
+      const product = await createTestProduct({ price: 100, stock: 10 });
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const token = makeAdminToken(admin!._id.toString());
+
+      await request(app)
+        .patch("/api/settings")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ codMaxAmount: 500 });
+
+      const body = {
+        ...baseOrderBody,
+        items: [
+          { ...baseOrderBody.items[0], productId: product._id.toString(), quantity: 1 },
+        ],
+        fulfillmentType: "PICKUP",
+        address: undefined,
+        paymentMethod: "COD",
+      };
+      const response = await createTestOrderViaAPI(null, body);
+
+      expect(response.status).toBe(201);
+      expect(response.body.order.orderNumber).toBeDefined();
+
+      const orders = await Order.find({});
+      expect(orders).toHaveLength(1);
+    });
+
+    it("rejects COD order when submitted total is manipulated but DB price exceeds max", async () => {
+      // Product costs 1000, but frontend submits quantity 1 with itemTotal that would
+      // appear under the limit. Backend recalculates from DB prices and rejects.
+      const product = await createTestProduct({ price: 1000, stock: 10 });
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const token = makeAdminToken(admin!._id.toString());
+
+      await request(app)
+        .patch("/api/settings")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ codMaxAmount: 500 });
+
+      // Submit order with manipulated low quantity/price - backend uses DB price
+      const body = {
+        ...baseOrderBody,
+        items: [
+          {
+            productId: product._id.toString(),
+            productName: product.name,
+            variantId: "default",
+            quantity: 1,
+          },
+        ],
+        fulfillmentType: "PICKUP",
+        address: undefined,
+        paymentMethod: "COD",
+      };
+      const response = await createTestOrderViaAPI(null, body);
+
+      // Backend recalculates: 1000 * 1 = 1000 > 500, so rejected
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Please pay online to place this order.");
+
+      const orders = await Order.find({});
+      expect(orders).toHaveLength(0);
+    });
+
+    it("rejects COD order above max even for authenticated customers", async () => {
+      const product = await createTestProduct({ price: 1000, stock: 10 });
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const token = makeAdminToken(admin!._id.toString());
+
+      await request(app)
+        .patch("/api/settings")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ codMaxAmount: 500 });
+
+      // Create an authenticated customer
+      const user = await createTestUser({
+        email: `cod-customer-${Date.now()}@example.com`,
+        phone: `9${String(Date.now()).padStart(9, "0")}`,
+        passwordHash: await bcrypt.hash("Password123", 10),
+        active: true,
+      });
+      const customerToken = makeCustomerToken(user._id.toString());
+
+      const body = {
+        ...baseOrderBody,
+        items: [
+          { ...baseOrderBody.items[0], productId: product._id.toString(), quantity: 1 },
+        ],
+        fulfillmentType: "PICKUP",
+        address: undefined,
+        paymentMethod: "COD",
+      };
+      const response = await createTestOrderViaAPI(customerToken, body);
+
+      // Authenticated or not, COD above max is rejected
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Please pay online to place this order.");
+
+      const orders = await Order.find({});
+      expect(orders).toHaveLength(0);
+    });
+  });
+
   describe("Slot fields population (Feature 4)", () => {
     // Construct a future business-hour date/time in Asia/Kolkata (UTC+5:30).
     // 10:00 AM–12:00 PM is within business hours for every day of the week.

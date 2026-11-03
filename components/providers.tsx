@@ -1,10 +1,17 @@
 'use client'
 
+import { useEffect } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { CartProvider } from '@/components/cart/cart-provider'
 import { CartSheet } from '@/components/cart/cart-sheet'
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    try {
+      window.localStorage.removeItem('customer-token')
+    } catch {}
+  }, [])
+
   return (
     <CartProvider>
       {children}

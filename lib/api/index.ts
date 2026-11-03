@@ -116,11 +116,13 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
   const normalizedSlug = slug.trim().toLowerCase()
   if (!normalizedSlug) return null
 
-  const baseUrl = apiBaseUrl()
-
   let response: Response
   try {
-    response = await fetch(`${baseUrl}/api/products/slug/${encodeURIComponent(normalizedSlug)}`, {
+    // Use a relative path so the request is proxied through Next.js's
+    // server-side rewrite (/api/:path* -> backend URL), consistent with the
+    // other catalogue functions. This avoids a hard dependency on
+    // NEXT_PUBLIC_API_URL for product detail pages.
+    response = await fetch(`/api/products/slug/${encodeURIComponent(normalizedSlug)}`, {
       cache: 'no-store',
     })
   } catch {

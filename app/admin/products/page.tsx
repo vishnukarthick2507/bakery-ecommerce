@@ -87,8 +87,8 @@ function availabilityBadge(availability: Availability, active: boolean) {
       className={cn(
         'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold',
         isAvailable
-          ? 'border-primary/20 bg-primary/10 text-primary'
-          : 'border-border/50 bg-muted text-muted-foreground',
+          ? 'border-caramel/20 bg-caramel/10 text-caramel'
+          : 'border-border/50 bg-cream text-muted-foreground',
       )}
     >
       {formatAvailability(availability)}
@@ -623,13 +623,13 @@ function AdminProductsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/20">
+    <main className="min-h-screen bg-cream/30">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
         {/* Header */}
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm font-medium text-primary">
+            <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
               S.V. Bakery Admin
             </p>
 
@@ -640,21 +640,21 @@ function AdminProductsPage() {
               ← Back to Dashboard
             </Link>
 
-            <h1 className="mt-3 text-3xl font-bold text-primary">
+            <h1 className="mt-2 text-3xl font-bold text-primary tracking-tight">
               Products
             </h1>
 
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-3 text-muted-foreground leading-relaxed">
               Manage products, prices, stock and availability.
             </p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={fetchProducts}
               disabled={loading}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 disabled:opacity-60 transition-colors"
             >
               {loading
                 ? 'Refreshing...'
@@ -664,40 +664,40 @@ function AdminProductsPage() {
             <button
               type="button"
               onClick={openAddForm}
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+              className="rounded-xl bg-caramel px-6 py-3 text-sm font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 transition-colors"
             >
               + Add Product
             </button>
             <Link
               href="/"
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
             >
               View Store
             </Link>
           </div>
         </div>
 
-        <AdminNav className="mt-6" />
+        <AdminNav className="mt-8" />
 
         {/* Error */}
         {error && (
-          <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <div className="mt-6 rounded-[2rem] border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
             {error}
           </div>
         )}
 
         {/* Add / Edit form */}
         {showForm && (
-          <section className="mt-8 rounded-xl border border-border bg-white p-6 shadow-sm sm:p-8">
-            <div className="flex items-start justify-between gap-4">
+          <section className="mt-10 rounded-[2rem] border border-border bg-card p-8 sm:p-10 shadow-sm">
+            <div className="flex items-start justify-between gap-5">
               <div>
-                <h2 className="text-2xl font-bold text-primary">
+                <h2 className="text-2xl font-bold text-primary tracking-tight">
                   {editingProduct
                     ? 'Edit Product'
                     : 'Add Product'}
                 </h2>
 
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                   {editingProduct
                     ? 'Update this product and save the changes to MongoDB.'
                     : 'Create a new bakery product in MongoDB.'}
@@ -708,7 +708,7 @@ function AdminProductsPage() {
                 type="button"
                 onClick={closeForm}
                 disabled={saving}
-                className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-muted disabled:opacity-60"
+                className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 disabled:opacity-60 transition-colors"
               >
                 Cancel
               </button>
@@ -716,7 +716,7 @@ function AdminProductsPage() {
 
             <form
               onSubmit={saveProduct}
-              className="mt-8 grid gap-5 md:grid-cols-2"
+              className="mt-10 grid gap-6 md:grid-cols-2"
             >
               {/* Name */}
               <div>
@@ -740,7 +740,7 @@ function AdminProductsPage() {
                     }))
                   }}
                   placeholder="Red Velvet Cake"
-                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                   required
                 />
               </div>
@@ -759,7 +759,7 @@ function AdminProductsPage() {
                       event.target.value,
                     )}
                   placeholder="red-velvet-cake"
-                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                   required
                 />
               </div>
@@ -781,7 +781,7 @@ function AdminProductsPage() {
                       event.target.value,
                     )}
                   placeholder="750"
-                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                   required
                 />
               </div>
@@ -799,7 +799,7 @@ function AdminProductsPage() {
                       'category',
                       event.target.value,
                     )}
-                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                 >
                   {(categories.includes(
                     form.category,
@@ -837,7 +837,7 @@ function AdminProductsPage() {
                       event.target.value,
                     )}
                   placeholder="10"
-                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                   required
                 />
               </div>
@@ -861,7 +861,7 @@ function AdminProductsPage() {
                       event.target.value,
                     )}
                   placeholder="120"
-                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                   required
                 />
               </div>
@@ -879,7 +879,7 @@ function AdminProductsPage() {
                       'availability',
                       event.target.value,
                     )}
-                  className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                 >
                   <option value="AVAILABLE">
                     Available
@@ -910,12 +910,12 @@ function AdminProductsPage() {
                   {form.images.map((img, idx) => (
                     <div
                       key={idx}
-                      className="relative group rounded-lg border border-border bg-muted/50 p-2"
+                      className="relative group rounded-xl border border-border bg-cream/50 p-3"
                     >
                       <img
                         src={img}
                         alt={`Product image ${idx + 1}`}
-                        className="h-24 w-24 rounded object-cover"
+                        className="h-28 w-28 rounded-xl object-cover"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src =
                             '/placeholder.svg';
@@ -927,7 +927,7 @@ function AdminProductsPage() {
                           e.preventDefault()
                           removeImage(img)
                         }}
-                        className="absolute -top-1 -right-1 rounded-full border border-border bg-white px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10"
+                        className="absolute -top-1 -right-1 rounded-full border border-border bg-card px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10"
                         aria-label={`Remove image ${idx + 1}`}
                       >
                         ×
@@ -936,7 +936,7 @@ function AdminProductsPage() {
                   ))}
 
                   {/* Upload area */}
-                  <div className="relative group rounded-lg border border-dashed border-border bg-muted/50 p-4 text-center hover:border-primary/50 cursor-pointer">
+                  <div className="relative group rounded-xl border border-dashed border-border bg-cream/50 p-5 text-center hover:border-caramel/50 cursor-pointer">
                     <input
                       type="file"
                       accept={ACCEPTED_IMAGE_TYPES.join(',')}
@@ -948,7 +948,7 @@ function AdminProductsPage() {
                       type="button"
                       onClick={handleUploadImage}
                       disabled={uploading || !uploadFile}
-                      className="w-full flex flex-col items-center gap-2 px-4 py-4 rounded-lg border border-dashed border-border bg-white hover:bg-primary/5 transition-colors disabled:opacity-60"
+                      className="w-full flex flex-col items-center gap-2 px-5 py-5 rounded-xl border border-dashed border-border bg-card hover:bg-caramel/5 transition-colors disabled:opacity-60"
                     >
                       {uploading ? (
                         <span className="text-sm text-primary">Uploading…</span>
@@ -976,13 +976,13 @@ function AdminProductsPage() {
                     </button>
 
                     {uploadPreview && (
-                      <div className="mt-2 rounded-lg border border-primary bg-primary/10 p-2">
+                      <div className="mt-3 rounded-xl border border-caramel bg-caramel/5 p-3">
                         <img
                           src={uploadPreview}
                           alt="Preview"
-                          className="h-24 w-24 rounded object-cover mx-auto"
+                          className="h-28 w-28 rounded-xl object-cover mx-auto"
                         />
-                        <p className="mt-1 text-xs text-primary">
+                        <p className="mt-2 text-xs text-caramel">
                           Ready to save
                         </p>
                       </div>
@@ -1012,18 +1012,18 @@ function AdminProductsPage() {
                     )}
                   placeholder="Rich, moist red velvet cake with cream cheese frosting."
                   rows={4}
-                  className="mt-2 w-full resize-none rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
+                  className="mt-2 w-full resize-none rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel"
                   required
                 />
               </div>
 
               {/* Submit */}
-              <div className="flex justify-end gap-3 md:col-span-2">
+              <div className="flex justify-end gap-4 md:col-span-2">
                 <button
                   type="button"
                   onClick={closeForm}
                   disabled={saving}
-                  className="rounded-lg border border-border px-6 py-3 font-medium hover:bg-muted disabled:opacity-60"
+                  className="rounded-xl border border-border px-6 py-3.5 font-medium text-caramel hover:bg-cream/50 disabled:opacity-60 transition-colors"
                 >
                   Cancel
                 </button>
@@ -1031,7 +1031,7 @@ function AdminProductsPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-lg bg-primary px-6 py-3 font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-xl bg-caramel px-8 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
                 >
                   {saving
                     ? 'Saving...'
@@ -1149,7 +1149,7 @@ function AdminProductsPage() {
                         updatingProduct ===
                         product._id
                       }
-                      className="w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
+                      className="w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel disabled:opacity-60"
                       onKeyDown={(event) => {
                         if (
                           event.key !==
@@ -1238,7 +1238,7 @@ function AdminProductsPage() {
                         event.target
                           .value as Availability,
                       )}
-                    className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
+                    className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:ring-2 focus:ring-caramel disabled:opacity-60"
                   >
                     <option value="AVAILABLE">
                       Available

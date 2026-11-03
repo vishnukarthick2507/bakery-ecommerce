@@ -17,7 +17,6 @@ import {
   Truck,
   XIcon,
 } from 'lucide-react'
-import { customerAuthHeaders, getCustomerToken } from '@/lib/customer-auth'
 import { cn } from '@/lib/utils'
 
 type OrderItem = {
@@ -234,7 +233,18 @@ function TrackPageContent() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    setIsAuthenticated(Boolean(getCustomerToken()))
+    let active = true
+    void fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (active) setIsAuthenticated(Boolean(data?.user))
+      })
+      .catch(() => {
+        if (active) setIsAuthenticated(false)
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   const fetchOrder = async (
@@ -257,19 +267,12 @@ function TrackPageContent() {
     setOrder(null)
 
     try {
-      const token = getCustomerToken()
+      let response = await fetch(
+        `/api/orders/${encodeURIComponent(trimmed)}`,
+        { credentials: 'include', cache: 'no-store' },
+      )
 
-      let response = token
-        ? await fetch(
-            `/api/orders/${encodeURIComponent(trimmed)}`,
-            {
-              cache: 'no-store',
-              headers: customerAuthHeaders(),
-            },
-          )
-        : null
-
-      if (!response || response.status === 401) {
+      if (response.status === 401) {
         if (!/^[6-9]\d{9}$/.test(effectivePhone)) {
           throw new Error(
             'Enter the 10-digit phone number used at checkout to track a guest order.',
@@ -278,6 +281,7 @@ function TrackPageContent() {
 
         response = await fetch('/api/orders/track', {
           method: 'POST',
+          credentials: 'include',
           cache: 'no-store',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
