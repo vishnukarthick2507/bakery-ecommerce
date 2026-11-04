@@ -66,7 +66,7 @@ export function SiteHeader() {
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <Link
-            href="/account"
+            href="/account/landing"
             aria-label="Customer account"
             title="Customer account"
             className={cn(buttonVariants({ variant: 'outline', size: 'icon-lg' }), 'hidden sm:inline-flex text-primary hover:text-primary')}
@@ -107,7 +107,7 @@ export function SiteHeader() {
             <ul className="flex flex-col gap-1">
               <li>
                 <Link
-                  href="/account"
+                  href="/account/landing"
                   onClick={() => setMenuOpen(false)}
                   className="block rounded-xl px-4 py-3 text-base font-medium text-primary transition-colors hover:bg-cream hover:text-primary"
                 >

@@ -19,16 +19,17 @@ export default function AccountPage() {
       .then(async (response) => {
         if (!response.ok) {
           // A 401/403 means the customer session is genuinely invalid: clear it
-          // and send the user back to login. Any other status (e.g. 5xx) is a
+          // and send the user back to the account landing page, which offers
+          // both sign-in and account creation. Any other status (e.g. 5xx) is a
           // transient server error: keep the valid session and surface the error.
           if (response.status === 401 || response.status === 403) {
-            router.replace('/account/login')
+            router.replace('/account/landing')
           }
           throw new Error('Unable to load account.')
         }
         const data = await response.json()
         if (!data?.user) {
-          router.replace('/account/login')
+          router.replace('/account/landing')
           throw new Error('Unable to load account.')
         }
         setProfile(data.user)
@@ -62,7 +63,7 @@ export default function AccountPage() {
           <>
             <p className="text-destructive">{error}</p>
             <button
-              onClick={() => router.replace('/account/login')}
+              onClick={() => router.replace('/account/landing')}
               className="mt-4 inline-flex rounded-xl border border-border px-5 py-2.5 text-sm font-medium hover:bg-cream/50 text-caramel transition-colors"
             >
               Sign in
