@@ -7,18 +7,14 @@ import { connectTestDB, clearTestDB, disconnectTestDB } from "./testDatabase.js"
 import { createAuthTestApp } from "./authTestApp.js";
 
 vi.mock("../src/services/emailService.js", () => ({
-  verifyBrevoSmtpConnection: vi.fn(),
-  getBrevoSmtpPresenceChecks: vi.fn(),
+  getBrevoPresenceChecks: vi.fn(),
 }));
 
 function setCookieValues(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : value ? [value] : [];
 }
 
-import {
-  verifyBrevoSmtpConnection,
-  getBrevoSmtpPresenceChecks,
-} from "../src/services/emailService.js";
+import { getBrevoPresenceChecks } from "../src/services/emailService.js";
 
 const app = createAuthTestApp();
 
@@ -30,8 +26,7 @@ describe("Admin authentication API", () => {
 
   beforeEach(async () => {
     await clearTestDB();
-    vi.mocked(verifyBrevoSmtpConnection).mockReset();
-    vi.mocked(getBrevoSmtpPresenceChecks).mockReset();
+    vi.mocked(getBrevoPresenceChecks).mockReset();
 
     await Admin.create({
       username: "testadmin",
@@ -113,11 +108,12 @@ describe("Admin authentication API", () => {
   });
 
   describe("GET /api/admin/diagnostics/brevo-smtp", () => {
-    const allPresent = {
-      hostPresent: true,
-      userPresent: true,
-      keyPresent: true,
-      fromEmailPresent: true,
+    const configured = {
+      apiKeyPresent: true,
+    };
+
+    const notConfigured = {
+      apiKeyPresent: false,
     };
 
     const loginAsAdmin = async () => {
@@ -132,8 +128,8 @@ describe("Admin authentication API", () => {
       expect(response.status).toBe(401);
     });
 
-    it("returns individual presence checks for authenticated admin", async () => {
-      vi.mocked(getBrevoSmtpPresenceChecks).mockReturnValue(allPresent);
+    it("returns API key presence check for authenticated admin", async () => {
+      vi.mocked(getBrevoPresenceChecks).mockReturnValue(configured);
 
       const adminCookie = await loginAsAdmin();
 
@@ -143,19 +139,14 @@ describe("Admin authentication API", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.smtpConfigured).toBe(true);
-      expect(response.body.checks).toEqual(allPresent);
-      expect(response.body.smtpConnectionOk).toBeUndefined();
-      expect(response.body.error).toBeUndefined();
+      expect(response.body.checks).toEqual(configured);
       expect(response.body).not.toHaveProperty("password");
       // No env var names or credential values are leaked in the response.
-      expect(JSON.stringify(response.body)).not.toContain("BREVO_SMTP");
+      expect(JSON.stringify(response.body)).not.toContain("BREVO_API_KEY");
     });
 
-    it("returns smtpConfigured false when any presence check is missing", async () => {
-      vi.mocked(getBrevoSmtpPresenceChecks).mockReturnValue({
-        ...allPresent,
-        userPresent: false,
-      });
+    it("returns smtpConfigured false when the API key is missing", async () => {
+      vi.mocked(getBrevoPresenceChecks).mockReturnValue(notConfigured);
 
       const adminCookie = await loginAsAdmin();
 
@@ -165,36 +156,7 @@ describe("Admin authentication API", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.smtpConfigured).toBe(false);
-      expect(response.body.checks).toEqual({
-        hostPresent: true,
-        userPresent: false,
-        keyPresent: true,
-        fromEmailPresent: true,
-      });
-    });
-
-    it("returns all checks false when nothing is configured", async () => {
-      vi.mocked(getBrevoSmtpPresenceChecks).mockReturnValue({
-        hostPresent: false,
-        userPresent: false,
-        keyPresent: false,
-        fromEmailPresent: false,
-      });
-
-      const adminCookie = await loginAsAdmin();
-
-      const response = await request(app)
-        .get("/api/admin/diagnostics/brevo-smtp")
-        .set("Cookie", adminCookie);
-
-      expect(response.status).toBe(200);
-      expect(response.body.smtpConfigured).toBe(false);
-      expect(response.body.checks).toEqual({
-        hostPresent: false,
-        userPresent: false,
-        keyPresent: false,
-        fromEmailPresent: false,
-      });
+      expect(response.body.checks).toEqual(notConfigured);
     });
   });
 });

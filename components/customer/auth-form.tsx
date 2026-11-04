@@ -31,6 +31,20 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const [resendCooldown, setResendCooldown] = useState(0)
   const resendCooldownTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  /**
+   * Reads a response body as JSON, returning null when the body is not valid
+   * JSON (for example a non-JSON error page returned by a proxy/edge when the
+   * upstream request times out). Prevents raw "Unexpected token" JSON parse
+   * exceptions from surfacing to the user.
+   */
+  async function readJsonSafe(response: Response): Promise<unknown> {
+    try {
+      return await response.json()
+    } catch {
+      return null
+    }
+  }
+
   const clearFieldError = (field: keyof typeof fieldErrors) => {
     setFieldErrors((prev) => {
       const next = { ...prev }
@@ -130,9 +144,9 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           }),
         },
       )
-      const data = await response.json()
+      const data = await readJsonSafe(response)
       if (!response.ok) {
-        throw new Error(data.message || 'Unable to authenticate.')
+        throw new Error((data as { message?: string })?.message || 'Unable to authenticate.')
       }
       router.push('/account')
     } catch (authError) {
@@ -197,14 +211,23 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail(email) }),
       })
-      const data = await response.json()
+      const data = await readJsonSafe(response)
       if (!response.ok) {
-        if (response.status === 429 && data.retryAfter) {
-          setResendCooldown(data.retryAfter)
+        const payload = data as {
+          retryAfter?: number
+          message?: string
+          code?: string
+        } | null
+        if (response.status === 429 && payload?.retryAfter) {
+          setResendCooldown(payload.retryAfter)
           startResendCooldownTimer()
-          throw new Error(`Please wait ${data.retryAfter}s before resending OTP.`)
+          throw new Error(
+            `Please wait ${payload.retryAfter}s before resending OTP.`,
+          )
         }
-        throw new Error(otpErrorMessage(response.status, data.message, data.code))
+        throw new Error(
+          otpErrorMessage(response.status, payload?.message, payload?.code),
+        )
       }
       setOtp('')
       setOtpStep('verify')
@@ -254,9 +277,12 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail(email), otp: otp.trim() }),
       })
-      const data = await response.json()
+      const data = await readJsonSafe(response)
       if (!response.ok) {
-        throw new Error(otpErrorMessage(response.status, data.message, data.code))
+        const payload = data as { message?: string; code?: string } | null
+        throw new Error(
+          otpErrorMessage(response.status, payload?.message, payload?.code),
+        )
       }
 
       setOtpStep('register')
@@ -306,9 +332,9 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           email: email.trim().toLowerCase(),
         }),
       })
-      const data = await response.json()
+      const data = await readJsonSafe(response)
       if (!response.ok) {
-        throw new Error(data.message || 'Unable to create account.')
+        throw new Error((data as { message?: string })?.message || 'Unable to create account.')
       }
 
       router.push('/account')

@@ -15,7 +15,7 @@ import {
   releaseOtpSendCooldown,
   verifyOtp as verifyOtpCode,
 } from "../services/otpService.js";
-import { sendOtpEmail, isBrevoSmtpConfigured } from "../services/emailService.js";
+import { sendOtpEmail, isBrevoConfigured } from "../services/emailService.js";
 import { OtpSession } from "../models/OtpSession.js";
 import { CustomerOtpProof } from "../models/CustomerOtpProof.js";
 
@@ -345,7 +345,7 @@ export const sendOtp = async (
       // Production: deliver the OTP via Brevo transactional email before
       // creating an OTP session. Fail closed if email delivery fails - no
       // session and no success response is returned when delivery fails.
-      if (!isBrevoSmtpConfigured()) {
+      if (!isBrevoConfigured()) {
         res.status(503).json({
           message: "Email service is not configured. Please contact support.",
           code: "EMAIL_CONFIG_MISSING",
