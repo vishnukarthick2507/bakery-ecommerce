@@ -3,7 +3,14 @@
 import Link from 'next/link'
 import Script from 'next/script'
 import { useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -57,6 +64,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const [resendCooldown, setResendCooldown] = useState(0)
   const resendCooldownTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   /**
    * Reads a response body as JSON, returning null when the body is not valid
@@ -72,13 +80,16 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     }
   }
 
-  const clearFieldError = (field: keyof typeof fieldErrors) => {
-    setFieldErrors((prev) => {
-      const next = { ...prev }
-      delete next[field]
-      return next
-    })
-  }
+  const clearFieldError = useCallback(
+    (field: keyof typeof fieldErrors) => {
+      setFieldErrors((prev) => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    },
+    [],
+  )
 
   const switchAuthMethod = (method: AuthMethod) => {
     setAuthMethod(method)
@@ -93,6 +104,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     setFieldErrors({})
     setResendCooldown(0)
     setShowPassword(false)
+    setShowConfirmPassword(false)
     if (resendCooldownTimer.current) {
       clearInterval(resendCooldownTimer.current)
       resendCooldownTimer.current = null
@@ -152,11 +164,52 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
 
   const isOtpFlow = authMethod === 'email-otp'
   const isLogin = mode === 'login'
+  const isRegister = mode === 'register'
 
   const isValidIndianPhone = (raw: string): boolean => {
     const cleaned = raw.replace(/\s+/g, "").replace(/-/g, "")
     return /^[6-9]\d{9}$/.test(cleaned)
   }
+
+  // ---- Password strength & requirements ----
+  const passwordRequirements = useMemo(
+    () => [
+      { id: 'length', label: 'Minimum 8 characters', test: (p: string) => p.length >= 8 },
+      { id: 'uppercase', label: 'At least one uppercase letter', test: (p: string) => /[A-Z]/.test(p) },
+      { id: 'lowercase', label: 'At least one lowercase letter', test: (p: string) => /[a-z]/.test(p) },
+      { id: 'number', label: 'At least one number', test: (p: string) => /\d/.test(p) },
+      { id: 'special', label: 'At least one special character', test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+    ],
+    [],
+  )
+
+  const getPasswordStrength = useCallback((pw: string): { score: number; label: string; color: string } => {
+    if (!pw || pw.length === 0) {
+      return { score: 0, label: 'Enter a password', color: 'text-muted-foreground' }
+    }
+    const met = passwordRequirements.filter((r) => r.test(pw)).length
+
+    if (pw.length < 8) {
+      return { score: 1, label: 'Weak', color: 'text-destructive' }
+    }
+    if (met >= 4) {
+      return { score: 3, label: 'Strong', color: 'text-success' }
+    }
+    if (met >= 3) {
+      return { score: 2, label: 'Medium', color: 'text-accent' }
+    }
+    return { score: 1, label: 'Weak', color: 'text-destructive' }
+  }, [passwordRequirements])
+
+  const { score: passwordScore, label: strengthLabel, color: strengthColor } =
+    getPasswordStrength(password)
+
+  const allRequirementsMet = useMemo(() => {
+    if (!password) return true
+    return passwordRequirements.every((r) => r.test(password))
+  }, [password, passwordRequirements])
+
+  const passwordsMatch = password === confirmPassword && confirmPassword.length > 0
 
   // ---- Password flow ----
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -194,6 +247,11 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         hasError = true
       } else {
         clearFieldError('password')
+      }
+
+      if (!allRequirementsMet) {
+        nextFieldErrors.password = 'Please meet all password requirements.'
+        hasError = true
       }
 
       if (password !== confirmPassword) {
@@ -251,7 +309,6 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         throw new Error((data as { message?: string })?.message || 'Unable to authenticate.')
       }
 
-      // Successful sign-in or registration: redirect to account.
       const redirectTo = (data as { redirectTo?: string })?.redirectTo
       if (redirectTo && typeof redirectTo === 'string') {
         router.push(redirectTo)
@@ -396,7 +453,6 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         )
       }
 
-      // Successful OTP verification may return a redirectTo for password registration.
       const redirectTo = (data as { redirectTo?: string })?.redirectTo
       if (redirectTo && typeof redirectTo === 'string') {
         router.push(redirectTo)
@@ -523,7 +579,6 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         throw new Error((data as { message?: string })?.message || 'Unable to process request.')
       }
 
-      // Generic response - never reveals whether email is registered.
       setOtpStep('verify')
       toast.success('If an account exists for this email, a verification code has been sent.')
     } catch (err) {
@@ -536,8 +591,45 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     }
   }
 
+  // ---- Presentational helpers ----
+  const brandName = 'S.V. Sweets & Bakers'
+
+  const inputClass = (field: keyof typeof fieldErrors) =>
+    cn(
+      'mt-2 block w-full rounded-xl border px-4 py-3.5 text-base outline-none transition-all',
+      'placeholder:text-muted-foreground',
+      fieldErrors[field]
+        ? 'border-destructive focus:ring-destructive focus:border-destructive'
+        : 'border-border focus:ring-caramel/20 focus:border-caramel',
+    )
+
+  const eyeButtonClass =
+    'absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-caramel transition-colors focus:outline-none focus:ring-2 focus:ring-caramel rounded-sm'
+
+  const primaryButton = (label: string) => (
+    <button
+      type="submit"
+      disabled={submitting}
+      className={cn(
+        'w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm',
+        'hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed',
+        'transition-all active:scale-[0.98]',
+      )}
+    >
+      {submitting ? (
+        <span className="flex items-center justify-center gap-2">
+          <svg className="size-4 text-caramel-foreground animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6M12 18v6" />
+          </svg>
+          {label}
+        </span>
+      ) : label}
+    </button>
+  )
+
   return (
-    <main className="mx-auto max-w-lg px-4 py-12 sm:px-6">
+    <main className="mx-auto max-w-lg px-4 py-10 sm:px-6 lg:py-16">
       <Script
         id="gis-script"
         src="https://accounts.google.com/gsi/client"
@@ -566,28 +658,32 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           }
         }}
       />
-      <section className="rounded-[2rem] border border-border bg-card p-8 sm:p-10 shadow-sm">
-        <p className="text-sm font-semibold text-primary tracking-wide uppercase">
-          S.V. Bakery
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold text-primary tracking-tight">
-          {mode === 'register' ? 'Create your account' : 'Customer sign in'}
-        </h1>
-        <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-          {mode === 'register'
-            ? 'Keep your account details and orders together.'
-            : 'Sign in to view your account and order history.'}
-        </p>
+
+      <section className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
+        {/* Brand header */}
+        <div className="mb-8 text-center sm:text-left">
+          <p className="text-xs font-semibold text-caramel tracking-widest uppercase">
+            {brandName}
+          </p>
+          <h1 className="mt-1 font-heading text-3xl sm:text-4xl font-semibold text-primary tracking-tight">
+            {isRegister ? 'Create your account' : 'Welcome back'}
+          </h1>
+          <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+            {isRegister
+              ? 'Join us and save your favourite cakes for faster checkout.'
+              : 'Sign in to view your orders and account details.'}
+          </p>
+        </div>
 
         {error && (
-          <div role="alert" className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
+          <div role="alert" className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
             {error}
           </div>
         )}
 
-        {/* Auth method switch */}
-        <div className="mt-8 flex flex-col sm:flex-row gap-2">
-          {mode === 'login' ? (
+        {/* Auth method toggle */}
+        <div className="mb-8 flex flex-col sm:flex-row gap-2">
+          {isLogin ? (
             <button
               type="button"
               onClick={() => switchAuthMethod('password')}
@@ -595,7 +691,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 'flex-1 rounded-xl border px-5 py-3 text-sm font-medium transition-all',
                 authMethod === 'password'
                   ? 'bg-caramel text-caramel-foreground border-caramel shadow-sm'
-                  : 'border-border text-muted-foreground hover:bg-cream/50 hover:border-caramel/20',
+                  : 'border-border text-muted-foreground hover:bg-cream hover:text-caramel hover:border-caramel/20',
               )}
             >
               Password
@@ -608,7 +704,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               'flex-1 rounded-xl border px-5 py-3 text-sm font-medium transition-all',
               authMethod === 'email-otp'
                 ? 'bg-caramel text-caramel-foreground border-caramel shadow-sm'
-                : 'border-border text-muted-foreground hover:bg-cream/50 hover:border-caramel/20',
+                : 'border-border text-muted-foreground hover:bg-cream hover:text-caramel hover:border-caramel/20',
             )}
           >
             Email OTP
@@ -617,15 +713,16 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
 
         {authMethod === 'password' ? (
           // ---- Password form ----
-          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-            {mode === 'register' && (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {isRegister ? (
               <>
+                {/* Full Name */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
                     Full name
                   </label>
                   {fieldErrors.name && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.name}
                     </p>
                   )}
@@ -640,21 +737,17 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       clearFieldError('name')
                     }}
                     placeholder="Priya"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.name
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
+                    className={inputClass('name')}
                   />
                 </div>
 
+                {/* Email Address */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
                     Email address
                   </label>
                   {fieldErrors.email && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.email}
                     </p>
                   )}
@@ -669,21 +762,17 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       clearFieldError('email')
                     }}
                     placeholder="priya@example.com"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.email
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
+                    className={inputClass('email')}
                   />
                 </div>
 
+                {/* Mobile Number */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
                     Mobile number
                   </label>
                   {fieldErrors.phone && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.phone}
                     </p>
                   )}
@@ -698,28 +787,24 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       clearFieldError('phone')
                     }}
                     placeholder="9840916058"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.phone
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
+                    className={inputClass('phone')}
                   />
                 </div>
 
+                {/* Password */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
                     Password
                   </label>
                   {fieldErrors.password && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.password}
                     </p>
                   )}
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
-                      autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                      autoComplete="new-password"
                       required
                       minLength={8}
                       maxLength={72}
@@ -730,62 +815,147 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       }}
                       placeholder="••••••••"
                       className={cn(
-                        'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2 pr-10',
-                        fieldErrors.password
-                          ? 'border-destructive focus:ring-destructive'
-                          : 'border-border focus:ring-caramel',
+                        inputClass('password'),
+                        'pr-12',
                       )}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3.5 text-xs text-muted-foreground hover:text-primary"
+                      className={eyeButtonClass}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
-                      {showPassword ? 'Hide' : 'Show'}
+                      {showPassword ? (
+                        <EyeOff className="size-4" aria-hidden="true" />
+                      ) : (
+                        <Eye className="size-4" aria-hidden="true" />
+                      )}
                     </button>
+                  </div>
+
+                  {/* Password strength meter (register only) */}
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Password strength
+                      </span>
+                      <span
+                        className={cn('text-xs font-semibold', strengthColor)}
+                      >
+                        {strengthLabel}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-muted/50 overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full transition-all duration-300 ease-out',
+                          passwordScore === 0
+                            ? 'w-0 bg-transparent'
+                            : passwordScore === 1
+                              ? 'w-1/3 bg-destructive'
+                              : passwordScore === 2
+                                ? 'w-2/3 bg-accent'
+                                : 'w-full bg-success',
+                        )}
+                      />
+                    </div>
+
+                    {/* Requirements checklist */}
+                    <div className="mt-2 space-y-1">
+                      {passwordRequirements.map((req) => {
+                        const met = password ? req.test(password) : false
+                        return (
+                          <div
+                            key={req.id}
+                            className="flex items-center gap-2"
+                          >
+                            <span
+                              className={cn(
+                                'flex size-3.5 items-center justify-center rounded-full border text-[10px] font-bold transition-colors',
+                                met
+                                  ? 'border-success bg-success text-success-foreground'
+                                  : 'border-border text-muted-foreground',
+                              )}
+                            >
+                              {met ? '✓' : '○'}
+                            </span>
+                            <span
+                              className={cn(
+                                'text-xs leading-none',
+                                met
+                                  ? 'text-muted-foreground'
+                                  : 'text-foreground',
+                              )}
+                            >
+                              {req.label}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
 
+                {/* Confirm Password */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
                     Confirm password
                   </label>
                   {fieldErrors.confirmPassword && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.confirmPassword}
                     </p>
                   )}
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    minLength={8}
-                    maxLength={72}
-                    value={confirmPassword}
-                    onChange={(event) => {
-                      setConfirmPassword(event.target.value)
-                      clearFieldError('confirmPassword')
-                    }}
-                    placeholder="••••••••"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.confirmPassword
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      minLength={8}
+                      maxLength={72}
+                      value={confirmPassword}
+                      onChange={(event) => {
+                        setConfirmPassword(event.target.value)
+                        clearFieldError('confirmPassword')
+                      }}
+                      placeholder="••••••••"
+                      className={cn(
+                        inputClass('confirmPassword'),
+                        'pr-12',
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className={eyeButtonClass}
+                      aria-label={
+                        showConfirmPassword ? 'Hide password' : 'Show password'
+                      }
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="size-4" aria-hidden="true" />
+                      ) : (
+                        <Eye className="size-4" aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                  {!passwordsMatch && confirmPassword.length > 0 && (
+                    <p className="mt-1 text-xs text-destructive">
+                      Passwords do not match.
+                    </p>
+                  )}
                 </div>
               </>
-            )}
-            {mode === 'login' && (
+            ) : (
+              // Login fields
               <>
+                {/* Email Address */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
                     Email address
                   </label>
                   {fieldErrors.email && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.email}
                     </p>
                   )}
@@ -800,21 +970,17 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       clearFieldError('email')
                     }}
                     placeholder="priya@example.com"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.email
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
+                    className={inputClass('email')}
                   />
                 </div>
 
+                {/* Password */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-foreground">
                     Password
                   </label>
                   {fieldErrors.password && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.password}
                     </p>
                   )}
@@ -832,35 +998,31 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       }}
                       placeholder="••••••••"
                       className={cn(
-                        'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2 pr-10',
-                        fieldErrors.password
-                          ? 'border-destructive focus:ring-destructive'
-                          : 'border-border focus:ring-caramel',
+                        inputClass('password'),
+                        'pr-12',
                       )}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3.5 text-xs text-muted-foreground hover:text-primary"
+                      className={eyeButtonClass}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
-                      {showPassword ? 'Hide' : 'Show'}
+                      {showPassword ? (
+                        <EyeOff className="size-4" aria-hidden="true" />
+                      ) : (
+                        <Eye className="size-4" aria-hidden="true" />
+                      )}
                     </button>
                   </div>
                 </div>
               </>
             )}
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-            >
-              {submitting ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Sign in'}
-            </button>
+            {primaryButton(isRegister ? 'Create account' : 'Sign in')}
 
-            {mode === 'login' && (
-              <p className="mt-4 text-sm text-center text-muted-foreground">
+            {isLogin && (
+              <p className="mt-1 text-sm text-center text-muted-foreground">
                 Forgot your password?{' '}
                 <button
                   type="button"
@@ -875,7 +1037,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           </form>
         ) : (
           // ---- Email OTP form ----
-          <div className="mt-8 space-y-6">
+          <div className="mt-8 space-y-5">
             {otpStep === 'send' ? (
               <>
                 <div>
@@ -883,7 +1045,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     Email address
                   </label>
                   {fieldErrors.email && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.email}
                     </p>
                   )}
@@ -898,12 +1060,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       clearFieldError('email')
                     }}
                     placeholder="priya@example.com"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.email
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
+                    className={inputClass('email')}
                   />
                 </div>
 
@@ -911,12 +1068,16 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   type="button"
                   onClick={handleSendOtp}
                   disabled={submitting || !isValidOtpEmail(email) || resendCooldown > 0}
-                  className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  className={cn(
+                    'w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm',
+                    'hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed',
+                    'transition-all active:scale-[0.98]',
+                  )}
                 >
                   {submitting ? 'Sending…' : 'Send OTP'}
                 </button>
 
-                <p className="mt-4 text-sm text-muted-foreground">
+                <p className="mt-3 text-sm text-muted-foreground">
                   A 6-digit code will be sent to your email address.
                 </p>
               </>
@@ -936,7 +1097,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     OTP code
                   </label>
                   {fieldErrors.otp && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.otp}
                     </p>
                   )}
@@ -954,10 +1115,8 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     }}
                     placeholder="123456"
                     className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2 text-center letter-spacing-widest font-mono',
-                      fieldErrors.otp
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
+                      inputClass('otp'),
+                      'text-center letter-spacing-widest font-mono',
                     )}
                   />
                 </div>
@@ -966,7 +1125,11 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   type="button"
                   onClick={handleVerifyOtp}
                   disabled={submitting || otp.trim().length !== 6}
-                  className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  className={cn(
+                    'w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm',
+                    'hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed',
+                    'transition-all active:scale-[0.98]',
+                  )}
                 >
                   {submitting ? 'Verifying…' : 'Verify OTP'}
                 </button>
@@ -974,7 +1137,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={() => setOtpStep('send')}
-                  className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted-foreground hover:bg-cream/50 transition-colors"
+                  className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted-foreground hover:bg-cream transition-colors"
                 >
                   ← Use a different email address
                 </button>
@@ -990,10 +1153,10 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               </>
             ) : (
               // Registration step (new customer after OTP verification)
-              <form onSubmit={handleCompleteRegistration} className="mt-8 space-y-6">
+              <form onSubmit={handleCompleteRegistration} className="space-y-5">
                 <div className="bg-cream rounded-xl p-5">
                   <p className="text-sm text-muted-foreground">
-                    Email verified: <span className="font-medium text-primary">{email}</span>. Enter your details to continue. Any saved profile for this email will remain unchanged.
+                    Email verified: <span className="font-medium text-primary">{email}</span>. Enter your details to continue.
                   </p>
                 </div>
 
@@ -1002,7 +1165,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     Full name
                   </label>
                   {fieldErrors.name && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.name}
                     </p>
                   )}
@@ -1017,12 +1180,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       clearFieldError('name')
                     }}
                     placeholder="Priya"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.name
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
+                    className={inputClass('name')}
                   />
                 </div>
 
@@ -1031,7 +1189,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     Email address
                   </label>
                   {fieldErrors.email && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.email}
                     </p>
                   )}
@@ -1046,12 +1204,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       clearFieldError('email')
                     }}
                     placeholder="priya@example.com"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.email
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
+                    className={inputClass('email')}
                   />
                 </div>
 
@@ -1060,7 +1213,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     Mobile number
                   </label>
                   {fieldErrors.phone && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.phone}
                     </p>
                   )}
@@ -1075,12 +1228,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       clearFieldError('phone')
                     }}
                     placeholder="9840916058"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.phone
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
+                    className={inputClass('phone')}
                   />
                 </div>
 
@@ -1089,7 +1237,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     Password
                   </label>
                   {fieldErrors.password && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.password}
                     </p>
                   )}
@@ -1107,19 +1255,21 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                       }}
                       placeholder="••••••••"
                       className={cn(
-                        'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2 pr-10',
-                        fieldErrors.password
-                          ? 'border-destructive focus:ring-destructive'
-                          : 'border-border focus:ring-caramel',
+                        inputClass('password'),
+                        'pr-12',
                       )}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3.5 text-xs text-muted-foreground hover:text-primary"
+                      className={eyeButtonClass}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
-                      {showPassword ? 'Hide' : 'Show'}
+                      {showPassword ? (
+                        <EyeOff className="size-4" aria-hidden="true" />
+                      ) : (
+                        <Eye className="size-4" aria-hidden="true" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1129,29 +1279,48 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                     Confirm password
                   </label>
                   {fieldErrors.confirmPassword && (
-                    <p className="mb-2 text-xs text-destructive">
+                    <p className="mb-2 text-sm text-destructive">
                       {fieldErrors.confirmPassword}
                     </p>
                   )}
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    minLength={8}
-                    maxLength={72}
-                    value={confirmPassword}
-                    onChange={(event) => {
-                      setConfirmPassword(event.target.value)
-                      clearFieldError('confirmPassword')
-                    }}
-                    placeholder="••••••••"
-                    className={cn(
-                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                      fieldErrors.confirmPassword
-                        ? 'border-destructive focus:ring-destructive'
-                        : 'border-border focus:ring-caramel',
-                    )}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      minLength={8}
+                      maxLength={72}
+                      value={confirmPassword}
+                      onChange={(event) => {
+                        setConfirmPassword(event.target.value)
+                        clearFieldError('confirmPassword')
+                      }}
+                      placeholder="••••••••"
+                      className={cn(
+                        inputClass('confirmPassword'),
+                        'pr-12',
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className={eyeButtonClass}
+                      aria-label={
+                        showConfirmPassword ? 'Hide password' : 'Show password'
+                      }
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="size-4" aria-hidden="true" />
+                      ) : (
+                        <Eye className="size-4" aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                  {!passwordsMatch && confirmPassword.length > 0 && (
+                    <p className="mt-1 text-xs text-destructive">
+                      Passwords do not match.
+                    </p>
+                  )}
                 </div>
 
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -1159,18 +1328,12 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   use a different email, restart OTP verification.
                 </p>
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full rounded-xl bg-caramel px-6 py-4 font-semibold text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                >
-                  {submitting ? 'Continuing…' : 'Continue'}
-                </button>
+                {primaryButton('Continue')}
 
                 <button
                   type="button"
                   onClick={() => setOtpStep('send')}
-                  className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted-foreground hover:bg-cream/50 transition-colors"
+                  className="w-full rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted-foreground hover:bg-cream transition-colors"
                 >
                   ← Use a different email address
                 </button>
@@ -1180,7 +1343,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         )}
 
         {/* Google OAuth divider */}
-        <div className="mt-8 relative">
+        <div className="mt-10 relative">
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t border-border"></span>
           </div>
@@ -1198,45 +1361,34 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           {submitting ? (
             <>
               <svg
-                className="w-5 h-5 animate-spin"
+                className="size-4 text-primary animate-spin"
                 viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
                 aria-hidden="true"
               >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6M12 18v6" />
               </svg>
               Signing in…
             </>
           ) : googleError ? (
             <>
               <svg
-                className="w-5 h-5 text-destructive"
+                className="size-4 text-destructive"
                 viewBox="0 0 24 24"
                 fill="currentColor"
                 aria-hidden="true"
               >
-                <path
-                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
-                ></path>
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
               </svg>
               {googleError}
             </>
           ) : (
             <>
               <svg
-                className="w-5 h-5"
+                className="size-5"
                 viewBox="0 0 24 24"
                 aria-hidden="true"
               >
@@ -1254,7 +1406,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 />
                 <path
                   fill="#EA4335"
-                  d="M12 23c-1.61 0-2.92-1.31-2.92-2.92 0-.24.04-.47.09-.69h2.32c.03-.25.05-.51.05-.77 0-1.61-1.31-2.92-2.92-2.92-1.61 0-2.92 1.31-2.92 2.92 0 .27.02.53.07.78H3.27c.38.71.6 1.56.6 2.47 0 1.61-1.31 2.92-2.92 2.92-.15 0-.31-.01-.46-.02V23c2.61 0 4.82-2.01 4.91-4.62.04-.56.01-1.12-.14-1.63z"
+                  d="M12 23c-1.61 0-2.92-1.31-2.92-2.92 0-.24.04-.47.09-.69h2.32c.03-.25.05-.51.05-.77 0-1.61-1.31-2.92 2.92-2.92-1.61 0-2.92 1.31-2.92 2.92 0 .27.02.53.07.78H3.27c.38.71.6 1.56.6 2.47 0 1.61-1.31 2.92 2.92-2.92-1.61 0-2.92 1.31-2.92 2.92 0 .27.02.53.07.78H3.27c.38.71.6 1.56.6 2.47 0 1.61-1.31 2.92 2.92 2.92-.15 0-.31-.01-.46-.02V23c2.61 0 4.82-2.01 4.91-4.62.04-.56.01-1.12-.14-1.63z"
                 />
               </svg>
               Continue with Google
@@ -1262,9 +1414,9 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           )}
         </button>
 
-        <p className="mt-8 text-sm text-muted-foreground text-center">
-          {mode === 'register' ? 'Already have an account?' : 'New to S.V. Bakery?'}{' '}
-          {mode === 'register' ? (
+        <p className="mt-10 text-sm text-muted-foreground text-center">
+          {isRegister ? 'Already have an account?' : 'New to S.V. Sweets & Bakers?'}{' '}
+          {isRegister ? (
             <Link
               className="font-medium text-caramel underline-offset-4 hover:underline"
               href="/account/login"
