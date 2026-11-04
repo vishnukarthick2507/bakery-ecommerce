@@ -226,7 +226,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           )
         }
         throw new Error(
-          otpErrorMessage(response.status, payload?.message, payload?.code),
+          otpErrorMessage(response.status, payload?.message ?? '', payload?.code),
         )
       }
       setOtp('')
@@ -281,7 +281,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       if (!response.ok) {
         const payload = data as { message?: string; code?: string } | null
         throw new Error(
-          otpErrorMessage(response.status, payload?.message, payload?.code),
+          otpErrorMessage(response.status, payload?.message ?? '', payload?.code),
         )
       }
 
