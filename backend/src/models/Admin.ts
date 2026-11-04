@@ -20,6 +20,11 @@ const adminSchema = new Schema(
       enum: ["ADMIN"],
       default: "ADMIN",
     },
+
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

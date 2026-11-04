@@ -85,6 +85,7 @@ describe("Admin token verification API", () => {
     expect(loginResponse.status).toBe(200);
     const setCookie = loginResponse.headers["set-cookie"];
     expect(setCookie).toBeDefined();
+    if (!setCookie) throw new Error("set-cookie header is missing");
 
     // Extract just the "name=value" pair, dropping cookie attributes
     // (Path, HttpOnly, SameSite, etc.) that a browser would not resend.

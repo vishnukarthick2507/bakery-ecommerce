@@ -17,6 +17,7 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import { getJwtSecret } from "./config/jwt.js";
 import { Order } from "./models/Order.js";
 import { startInventoryExpiryWorker } from "./services/inventoryExpiry.js";
+import { csrfProtection } from "./middleware/csrf.js";
 
 dotenv.config();
 
@@ -27,6 +28,10 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 
 app.use(cookieParser());
+
+// CSRF protection for cookie-authenticated state-changing requests.
+// Must come after cookieParser() to read cookies, and before route handlers.
+app.use(csrfProtection);
 
 app.use(
   cors({

@@ -129,7 +129,9 @@ describe("Settings API", () => {
       const uri = mongoServer.getUri();
       await mongoose.connect(uri, { directConnection: true });
 
-      const adminDb = (mongoose.connection.db as import("mongodb").Db).admin();
+      const db = mongoose.connection.db;
+      if (!db) throw new Error("Database connection not established");
+      const adminDb = db.admin();
       let lastError: unknown;
       for (let i = 0; i < 10; i++) {
         try {
@@ -398,11 +400,11 @@ describe("Settings API", () => {
 
       const customerToken = makeCustomerToken(user._id.toString());
       const response = await request(app)
-        .get(`/api/orders/me/${order.orderNumber}`)
+        .get(`/api/orders/me/${order!.orderNumber}`)
         .set("Authorization", `Bearer ${customerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.order.orderNumber).toBe(order.orderNumber);
+      expect(response.body.order!.orderNumber).toBe(order!.orderNumber);
     });
   });
 
@@ -493,7 +495,7 @@ describe("Settings API", () => {
       const response = await createTestOrderViaAPI(null, body);
 
       expect(response.status).toBe(201);
-      expect(response.body.order.orderNumber).toBeDefined();
+      expect(response.body.order!.orderNumber).toBeDefined();
 
       const orders = await Order.find({});
       expect(orders).toHaveLength(1);
@@ -626,7 +628,7 @@ describe("Settings API", () => {
       expect(response.status).toBe(201);
 
       const order = await Order.findOne({
-        orderNumber: response.body.order.orderNumber,
+        orderNumber: response.body.order!.orderNumber,
       }).lean();
 
       expect(order?.requestedSlot).toBeDefined();
@@ -656,7 +658,7 @@ describe("Settings API", () => {
       expect(response.status).toBe(201);
 
       const order = await Order.findOne({
-        orderNumber: response.body.order.orderNumber,
+        orderNumber: response.body.order!.orderNumber,
       }).lean();
 
       expect(order?.requestedSlot).toBeDefined();
@@ -674,7 +676,7 @@ describe("Settings API", () => {
       expect(response.status).toBe(201);
 
       const order = await Order.findOne({
-        orderNumber: response.body.order.orderNumber,
+        orderNumber: response.body.order!.orderNumber,
       }).lean();
 
       expect(order?.scheduledDate).toBe(slot.date);
@@ -687,7 +689,7 @@ describe("Settings API", () => {
       const { response } = await createOrderWithSlot();
 
       const order = await Order.findOne({
-        orderNumber: response.body.order.orderNumber,
+        orderNumber: response.body.order!.orderNumber,
       }).lean();
       const originalRequestedSlot = order!.requestedSlot!;
       const originalCreatedAt = order!.createdAt!;
@@ -697,19 +699,19 @@ describe("Settings API", () => {
 
       // Advance status through CONFIRMED -> PREPARING -> READY
       await request(app)
-        .patch(`/api/orders/${order.orderNumber}/status`)
+        .patch(`/api/orders/${order!.orderNumber}/status`)
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ status: "CONFIRMED" });
       await request(app)
-        .patch(`/api/orders/${order.orderNumber}/status`)
+        .patch(`/api/orders/${order!.orderNumber}/status`)
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ status: "PREPARING" });
       await request(app)
-        .patch(`/api/orders/${order.orderNumber}/status`)
+        .patch(`/api/orders/${order!.orderNumber}/status`)
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ status: "READY" });
 
-      const updated = await Order.findById(order._id).lean();
+      const updated = await Order.findById(order!._id).lean();
 
       // requestedSlot must remain exactly as created.
       expect(new Date(updated!.requestedSlot!).getTime()).toBe(
@@ -729,7 +731,7 @@ describe("Settings API", () => {
       const { response } = await createOrderWithSlot();
 
       const order = await Order.findOne({
-        orderNumber: response.body.order.orderNumber,
+        orderNumber: response.body.order!.orderNumber,
       }).lean();
       const originalRequestedSlot = order!.requestedSlot!;
       const originalConfirmedSlot = order!.confirmedSlot!;
@@ -752,13 +754,13 @@ describe("Settings API", () => {
       ).toISOString();
 
       // Directly insert a proposedSlot into the database to test accept/decline logic.
-      await Order.findByIdAndUpdate(order._id.toHexString(), {
+      await Order.findByIdAndUpdate(order!._id.toHexString(), {
         orderStatus: "RESCHEDULE_PROPOSED",
-        reschedulePreviousStatus: order.orderStatus,
+        reschedulePreviousStatus: order!.orderStatus,
         proposedSlot: {
           time: proposedIso,
           note: "Suggested later slot",
-          proposedBy: admin._id,
+          proposedBy: admin!._id,
           proposedAt: new Date(),
           status: "PENDING",
           expiresAt: expiresAtIso,
@@ -766,7 +768,7 @@ describe("Settings API", () => {
       } as any);
 
       // Verify proposal persisted.
-      const orderWithProposal = await Order.findById(order._id.toHexString()).lean();
+      const orderWithProposal = await Order.findById(order!._id.toHexString()).lean();
       expect(orderWithProposal?.proposedSlot?.status).toBe("PENDING");
       expect(orderWithProposal?.orderStatus).toBe("RESCHEDULE_PROPOSED");
 
@@ -781,10 +783,10 @@ describe("Settings API", () => {
       });
       const customerToken = makeCustomerToken(user._id.toString());
       await request(app)
-        .post(`/api/orders/${order._id.toHexString()}/proposal/accept`)
+        .post(`/api/orders/${order!._id.toHexString()}/proposal/accept`)
         .set("Authorization", `Bearer ${customerToken}`);
 
-      const updated = await Order.findById(order._id.toHexString()).lean();
+      const updated = await Order.findById(order!._id.toHexString()).lean();
 
       // requestedSlot must remain the original.
       expect(new Date(updated!.requestedSlot!).getTime()).toBe(
@@ -802,7 +804,7 @@ describe("Settings API", () => {
         new Date(proposedIso).toISOString().split("T")[0],
       );
       // slotHistory records the change.
-      expect(updated!.slotHistory.length).toBeGreaterThan(0);
+      expect(updated!.slotHistory!.length).toBeGreaterThan(0);
     });
 
     it("existing orders without slot fields remain accessible", async () => {
@@ -851,11 +853,11 @@ describe("Settings API", () => {
 
       const customerToken = makeCustomerToken(user._id.toString());
       const response = await request(app)
-        .get(`/api/orders/me/${order.orderNumber}`)
+        .get(`/api/orders/me/${order!.orderNumber}`)
         .set("Authorization", `Bearer ${customerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.order.orderNumber).toBe(order.orderNumber);
+      expect(response.body.order!.orderNumber).toBe(order!.orderNumber);
     });
   });
 });

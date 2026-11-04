@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 
 import { Admin } from "../models/Admin.js";
+import type { AuthRequest } from "../middleware/auth.js";
 import { getJwtSecret } from "../config/jwt.js";
 import { getBrevoPresenceChecks } from "../services/emailService.js";
 
@@ -103,6 +104,7 @@ export const adminLogin = async (
         adminId: admin._id,
         username: admin.username,
         role: admin.role,
+        tokenVersion: admin.tokenVersion ?? 0,
       },
       getJwtSecret(),
       { expiresIn: JWT_EXPIRES_IN },
@@ -248,11 +250,72 @@ export const adminMe = async (
 || Clears the httpOnly admin-token cookie.
 */
 export const adminLogout = async (
-  _req: Request,
+  req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  clearAdminTokenCookie(res);
-  res.status(200).json({ message: "Logged out" });
+  try {
+    const token = getTokenFromRequest(req);
+
+    if (!token) {
+      clearAdminTokenCookie(res);
+      res.status(200).json({ message: "Logged out" });
+      return;
+    }
+
+    let decoded: {
+      adminId: string;
+      tokenVersion?: number;
+    };
+    try {
+      decoded = jwt.verify(token, getJwtSecret()) as {
+        adminId: string;
+        tokenVersion?: number;
+      };
+    } catch {
+      res.status(401).json({ message: "Invalid token" });
+      return;
+    }
+
+    const admin = await Admin.findById(decoded.adminId);
+    if (!admin) {
+      res.status(401).json({ message: "Invalid token" });
+      return;
+    }
+
+    const tokenVersion = decoded.tokenVersion ?? 0;
+    const storedVersion = admin.tokenVersion ?? 0;
+    if (tokenVersion !== storedVersion) {
+      res.status(401).json({ message: "Invalid token" });
+      return;
+    }
+
+    const versionFilter =
+      storedVersion === 0
+        ? {
+            $or: [
+              { tokenVersion: 0 },
+              { tokenVersion: { $exists: false } },
+            ],
+          }
+        : { tokenVersion: storedVersion };
+
+    const result = await Admin.findOneAndUpdate(
+      { _id: admin._id, ...versionFilter },
+      { $inc: { tokenVersion: 1 } },
+      { returnDocument: "after" },
+    );
+
+    if (!result) {
+      res.status(401).json({ message: "Invalid token" });
+      return;
+    }
+
+    clearAdminTokenCookie(res);
+    res.status(200).json({ message: "Logged out" });
+  } catch (error) {
+    console.error("Admin logout failed:", error);
+    res.status(500).json({ message: "Unable to logout" });
+  }
 };
 
 /*

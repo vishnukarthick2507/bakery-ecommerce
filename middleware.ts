@@ -33,8 +33,11 @@ export async function middleware(request: NextRequest) {
     try {
       const apiUrl =
         process.env.BACKEND_INTERNAL_URL ||
-        process.env.NEXT_PUBLIC_API_URL ||
-        'https://bakery-ecommerce-staging.onrender.com'
+        process.env.NEXT_PUBLIC_API_URL
+
+      if (!apiUrl) {
+        return NextResponse.redirect(new URL('/admin/login', request.url))
+      }
 
       const response = await fetch(`${apiUrl}/api/auth/verify`, {
         cache: 'no-store',

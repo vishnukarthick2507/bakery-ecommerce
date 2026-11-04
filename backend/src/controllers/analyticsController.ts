@@ -603,7 +603,7 @@ export async function getAnalytics(
     /* ---------------- Custom cake statistics ---------------- */
 
     const customCakeStats = await CustomCakeRequest.aggregate([
-      { $match: dateFilter },
+      { $match: dateFilter ?? {} },
       {
         $group: {
           _id: "$status",

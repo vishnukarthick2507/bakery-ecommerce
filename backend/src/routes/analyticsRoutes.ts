@@ -6,7 +6,7 @@ import {
 } from "../controllers/analyticsController.js";
 import { authenticateAdmin } from "../middleware/auth.js";
 
-const router = Router();
+const router: Router = Router();
 
 // Get analytics data (admin only)
 router.get("/analytics", authenticateAdmin, getAnalytics);

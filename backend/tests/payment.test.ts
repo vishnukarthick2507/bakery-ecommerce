@@ -181,7 +181,9 @@ describe("Payments API", () => {
       await mongoose.connect(uri, { directConnection: true });
 
       // Initiate replica set so transactions work (with retries).
-      const adminDb = (mongoose.connection.db as import("mongodb").Db).admin();
+      const db = mongoose.connection.db;
+      if (!db) throw new Error("Database connection not established");
+      const adminDb = db.admin();
       let lastError: unknown;
       for (let i = 0; i < 10; i++) {
         try {
@@ -467,7 +469,7 @@ describe("Payments API", () => {
     it("handles payment.failed and marks the order FAILED", async () => {
       const user = await createTestUser();
       const { order, product } = await createTestOrder({}, user._id);
-      const stockBefore = (await Product.findById(product._id)).stock; // 49 after reservation
+      const stockBefore = (await Product.findById(product._id))!.stock; // 49 after reservation
 
       const razorpayOrderId = "rzp_order_webhook_fail";
 
@@ -651,7 +653,7 @@ describe("Payments API", () => {
       const token = makeCustomerToken(user._id);
       const { order, product } = await createTestOrder({}, user._id);
 
-      const stockBeforeFailure = (await Product.findById(product._id)).stock; // 49 after reservation
+      const stockBeforeFailure = (await Product.findById(product._id))!.stock; // 49 after reservation
 
       // Simulate failure: inventory released (stock restored to 50)
       await Product.findByIdAndUpdate(product._id, {
@@ -671,7 +673,7 @@ describe("Payments API", () => {
         .send({ orderNumber: order.orderNumber });
 
       // Inventory should be re-reserved (stock decremented again back to 49)
-      const stockAfterRetry = (await Product.findById(product._id)).stock;
+      const stockAfterRetry = (await Product.findById(product._id))!.stock;
       expect(stockAfterRetry).toBe(stockBeforeFailure);
     });
 
@@ -778,7 +780,7 @@ describe("Payments API", () => {
     it("releases inventory exactly once for a failed payment", async () => {
       const user = await createTestUser();
       const { order, product } = await createTestOrder({}, user._id);
-      const stockBefore = (await Product.findById(product._id)).stock; // 49 after reservation
+      const stockBefore = (await Product.findById(product._id))!.stock; // 49 after reservation
 
       const razorpayOrderId = "rzp_order_release_test";
 

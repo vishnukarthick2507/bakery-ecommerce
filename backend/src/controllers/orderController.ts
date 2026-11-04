@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import { z } from "zod";
 
 import { Order } from "../models/Order.js";
-import type { IOrderItem } from "../models/Order.js";
+import type { IOrder, IOrderItem } from "../models/Order.js";
 import { Product } from "../models/Product.js";
 import { Settings } from "../models/Settings.js";
 import type { AuthRequest } from "../middleware/auth.js";
@@ -212,6 +212,7 @@ export const createOrder = async (
   res: Response,
 ): Promise<void> => {
   const parsed = createOrderSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Invalid order data",
@@ -221,6 +222,7 @@ export const createOrder = async (
   }
 
   const idempotencyKey = z.uuid().safeParse(req.get("Idempotency-Key"));
+
   if (!idempotencyKey.success) {
     res.status(400).json({ message: "A valid Idempotency-Key header is required" });
     return;
@@ -259,15 +261,6 @@ export const createOrder = async (
     return;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | ONLINE ORDERING SETTINGS ENFORCEMENT (Feature 3)
-  |--------------------------------------------------------------------------
-  | Backend enforcement is authoritative. The frontend UI must not be the
-  | only protection. Reject before any inventory is reserved.
-  |--------------------------------------------------------------------------
-  */
-
   const settings = await Settings.getSingleton();
 
   if (!settings.onlineOrdersEnabled) {
@@ -291,20 +284,11 @@ export const createOrder = async (
     return;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | PARSE AND VALIDATE SCHEDULED SLOT (Feature 4)
-  |--------------------------------------------------------------------------
-  | Construct the authoritative slot Date on the backend from the
-  | checkout's scheduledDate + scheduledTime strings. Validate it against
-  | business rules before any inventory is reserved.
-  |--------------------------------------------------------------------------
-  */
-
   const parsedSlot = parseCheckoutSlot(
     data.scheduledDate,
     data.scheduledTime,
   );
+
   if (!parsedSlot) {
     res.status(400).json({
       message: "Invalid scheduled date or time.",
@@ -313,6 +297,7 @@ export const createOrder = async (
   }
 
   const slotValidation = validateSlot(parsedSlot, data.fulfillmentType);
+
   if (!slotValidation.valid) {
     res.status(400).json({
       message: slotValidation.error ?? "Invalid slot time.",
@@ -323,80 +308,121 @@ export const createOrder = async (
   const customerSnapshot = req.customer
     ? {
         name: req.customer.name,
-        email: req.customer.email,
-        phone: req.customer.phone,
+        email: req.customer.email ?? "",
+        phone: req.customer.phone ?? "",
       }
     : {
-        name: data.customerName!,
-        email: data.email!,
-        phone: data.phone!,
+        name: data.customerName,
+        email: data.email,
+        phone: data.phone,
       };
 
   const productIds = data.items.map((item) => item.productId);
+
   if (productIds.some((id) => !mongoose.isValidObjectId(id))) {
     res.status(400).json({ message: "Invalid product ID" });
     return;
   }
 
   const quantityByProduct = new Map<string, number>();
+
   for (const item of data.items) {
     quantityByProduct.set(
       item.productId,
       (quantityByProduct.get(item.productId) ?? 0) + item.quantity,
     );
   }
+
   if ([...quantityByProduct.values()].some((quantity) => quantity > 20)) {
     res.status(400).json({ message: "A maximum of 20 units per product can be ordered" });
     return;
   }
 
-  const idempotencyHash = crypto.createHash("sha256").update(JSON.stringify({
-    userId: req.customer?.id ?? null,
-    customer: customerSnapshot,
-    fulfillmentType: data.fulfillmentType,
-    address: data.address ?? null,
-    scheduledDate: data.scheduledDate,
-    scheduledTime: data.scheduledTime,
-    paymentMethod: data.paymentMethod,
-    items: data.items.map(({ productId, variantId, quantity }) => ({ productId, variantId, quantity })),
-  })).digest("hex");
+  const idempotencyHash = crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        userId: req.customer?.id ?? null,
+        customer: customerSnapshot,
+        fulfillmentType: data.fulfillmentType,
+        address: data.address ?? null,
+        scheduledDate: data.scheduledDate,
+        scheduledTime: data.scheduledTime,
+        paymentMethod: data.paymentMethod,
+        items: data.items.map(
+          ({ productId, variantId, quantity }) => ({
+            productId,
+            variantId,
+            quantity,
+          }),
+        ),
+      }),
+    )
+    .digest("hex");
 
-  let order: Awaited<ReturnType<typeof Order.findById>> = null;
-  let replayed = false;
   const session = await mongoose.startSession();
 
   try {
-    await session.withTransaction(async () => {
-      const existingOrder = await Order.findOne({ idempotencyKey: idempotencyKey.data })
+    const result = await session.withTransaction(async () => {
+      const existingOrder = await Order.findOne({
+        idempotencyKey: idempotencyKey.data,
+      })
         .select("+idempotencyHash")
         .session(session);
 
       if (existingOrder) {
-        const sameOwner = (existingOrder.userId?.toString() ?? null) === (req.customer?.id ?? null);
-        if (!sameOwner || existingOrder.idempotencyHash !== idempotencyHash) {
-          throw new OrderRequestError("Idempotency key was already used for a different order", 409);
+        const sameOwner =
+          (existingOrder.userId?.toString() ?? null) ===
+          (req.customer?.id ?? null);
+
+        if (
+          !sameOwner ||
+          existingOrder.idempotencyHash !== idempotencyHash
+        ) {
+          throw new OrderRequestError(
+            "Idempotency key was already used for a different order",
+            409,
+          );
         }
-        order = existingOrder;
-        replayed = true;
-        return;
+
+        return {
+          order: existingOrder,
+          replayed: true,
+        };
       }
 
       const products = (await Product.find({
         _id: { $in: productIds },
         active: true,
-      }).session(session).lean().exec()) as unknown as ProductRecord[];
+      })
+        .session(session)
+        .lean()
+        .exec()) as unknown as ProductRecord[];
 
-      const productMap = new Map(products.map((product) => [product._id.toString(), product]));
+      const productMap = new Map(
+        products.map((product) => [product._id.toString(), product]),
+      );
+
       const orderItems: IOrderItem[] = data.items.map((item) => {
         const product = productMap.get(item.productId);
+
         if (!product) {
-          throw new OrderRequestError(`Product not found: ${item.productName}`, 400);
-        }
-        if (product.availability !== "AVAILABLE") {
-          throw new OrderRequestError(`${product.name} is currently unavailable`, 400);
+          throw new OrderRequestError(
+            `Product not found: ${item.productName}`,
+            400,
+          );
         }
 
-        const requestedQuantity = quantityByProduct.get(item.productId) ?? item.quantity;
+        if (product.availability !== "AVAILABLE") {
+          throw new OrderRequestError(
+            `${product.name} is currently unavailable`,
+            400,
+          );
+        }
+
+        const requestedQuantity =
+          quantityByProduct.get(item.productId) ?? item.quantity;
+
         if (product.stock < requestedQuantity) {
           throw new OrderRequestError(
             `Only ${product.stock} unit(s) of ${product.name} are available`,
@@ -405,6 +431,7 @@ export const createOrder = async (
         }
 
         const itemTotal = product.price * item.quantity;
+
         return {
           productId: product._id,
           productName: product.name,
@@ -416,11 +443,11 @@ export const createOrder = async (
         };
       });
 
-      const subtotal = orderItems.reduce((sum, item) => sum + item.itemTotal, 0);
+      const subtotal = orderItems.reduce(
+        (sum, item) => sum + item.itemTotal,
+        0,
+      );
 
-      // COD maximum enforcement: reject COD orders above the admin-configured limit.
-      // Backend enforcement is authoritative; frontend totals are not trusted.
-      // Order item prices are recalculated from database product prices above.
       if (
         data.paymentMethod === "COD" &&
         settings.codMaxAmount !== null &&
@@ -433,23 +460,37 @@ export const createOrder = async (
       }
 
       await reserveInventory(session, orderItems);
+
       const orderData = {
         orderNumber: generateOrderNumber(),
         idempotencyKey: idempotencyKey.data,
         idempotencyHash,
         inventoryStatus: "RESERVED" as const,
         reconciliationStatus: "NONE" as const,
+
         ...(data.paymentMethod === "ONLINE"
-          ? { reservationExpiresAt: new Date(Date.now() + ONLINE_RESERVATION_TTL_MS) }
+          ? {
+              reservationExpiresAt: new Date(
+                Date.now() + ONLINE_RESERVATION_TTL_MS,
+              ),
+            }
           : {}),
-        ...(req.customer ? { userId: req.customer.id } : {}),
+
+        ...(req.customer
+          ? {
+              userId: new mongoose.Types.ObjectId(req.customer.id),
+            }
+          : {}),
+
         customer: customerSnapshot,
         customerName: customerSnapshot.name,
         phone: customerSnapshot.phone,
         fulfillmentType: data.fulfillmentType,
+
         ...(data.fulfillmentType === "DELIVERY" && data.address
           ? { address: data.address }
           : {}),
+
         scheduledDate: data.scheduledDate,
         scheduledTime: data.scheduledTime,
         requestedSlot: parsedSlot,
@@ -463,16 +504,25 @@ export const createOrder = async (
         totalAmount: subtotal,
       };
 
-      const [createdOrder] = await Order.create([orderData], { session });
-      order = createdOrder;
+      const createdOrder = new Order(orderData);
+      await createdOrder.save({ session });
+
+      return {
+        order: createdOrder,
+        replayed: false,
+      };
     });
 
-    if (!order) {
+    if (!result) {
       throw new Error("Order transaction completed without an order");
     }
 
+    const { order, replayed } = result;
+
     res.status(replayed ? 200 : 201).json({
-      message: replayed ? "Order request already processed" : "Order created successfully",
+      message: replayed
+        ? "Order request already processed"
+        : "Order created successfully",
       order: {
         id: order._id,
         orderNumber: order.orderNumber,
@@ -487,17 +537,34 @@ export const createOrder = async (
       res.status(error.status).json({ message: error.message });
       return;
     }
+
     if (error instanceof InventoryUnavailableError) {
-      res.status(400).json({ message: "Product stock changed; review your cart and try again" });
+      res.status(400).json({
+        message: "Product stock changed; review your cart and try again",
+      });
       return;
     }
 
-    if (error && typeof error === "object" && "code" in error && error.code === 11000) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === 11000
+    ) {
       try {
-        const existingOrder = await Order.findOne({ idempotencyKey: idempotencyKey.data })
-          .select("+idempotencyHash");
-        const sameOwner = (existingOrder?.userId?.toString() ?? null) === (req.customer?.id ?? null);
-        if (existingOrder && sameOwner && existingOrder.idempotencyHash === idempotencyHash) {
+        const existingOrder = await Order.findOne({
+          idempotencyKey: idempotencyKey.data,
+        }).select("+idempotencyHash");
+
+        const sameOwner =
+          (existingOrder?.userId?.toString() ?? null) ===
+          (req.customer?.id ?? null);
+
+        if (
+          existingOrder &&
+          sameOwner &&
+          existingOrder.idempotencyHash === idempotencyHash
+        ) {
           res.status(200).json({
             message: "Order request already processed",
             order: {
@@ -516,14 +583,10 @@ export const createOrder = async (
       }
     }
 
-    console.error(
-      "Create order failed:",
-      error,
-    );
+    console.error("Create order failed:", error);
 
     res.status(500).json({
-      message:
-        "Unable to create order",
+      message: "Unable to create order",
     });
   } finally {
     await session.endSession();
@@ -534,137 +597,77 @@ export const createOrder = async (
 |--------------------------------------------------------------------------
 | GET ORDER BY ORDER NUMBER
 |--------------------------------------------------------------------------
-| GET /api/orders/SV-44171646-7698
-|--------------------------------------------------------------------------
 */
 
-export const getOrderByNumber =
-  async (
-    req: AuthRequest,
-    res: Response,
-  ): Promise<void> => {
-    try {
-      const orderNumber =
-        String(
-          req.params
-            .orderNumber ?? "",
-        ).trim();
+export const getOrderByNumber = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const orderNumber = String(req.params.orderNumber ?? "").trim();
 
-      if (!orderNumber) {
-        res.status(400).json({
-          message:
-            "Order number is required",
-        });
-
-        return;
-      }
-
-      const order =
-        await Order.findOne({
-          orderNumber:
-            orderNumber.toUpperCase(),
-        }).lean();
-
-      if (!order) {
-        res.status(404).json({
-          message:
-            "Order not found",
-        });
-
-        return;
-      }
-
-      if (!order.userId) {
-        res.status(401).json({
-          message: "Guest order tracking requires the phone number used at checkout",
-        });
-        return;
-      }
-
-      if (
-        order.userId &&
-        order.userId.toString() !== req.customer?.id
-      ) {
-        res.status(404).json({ message: "Order not found" });
-        return;
-      }
-
-      res.status(200).json({
-        order: {
-          id: order._id,
-
-          orderNumber:
-            order.orderNumber,
-
-          customerName:
-            order.customer?.name ?? order.customerName,
-
-          customer: order.customer,
-
-          phone:
-            order.customer?.phone ?? order.phone,
-
-          fulfillmentType:
-            order.fulfillmentType,
-
-          address:
-            order.address,
-
-          scheduledDate:
-            order.scheduledDate,
-
-          scheduledTime:
-            order.scheduledTime,
-
-          paymentMethod:
-            order.paymentMethod,
-
-          paymentStatus:
-            order.paymentStatus,
-
-          orderStatus:
-            order.orderStatus,
-
-          inventoryStatus:
-            order.inventoryStatus,
-
-          items:
-            order.items,
-
-          subtotal:
-            order.subtotal,
-
-          deliveryFee:
-            order.deliveryFee,
-
-          totalAmount:
-            order.totalAmount,
-
-          createdAt:
-            order.createdAt,
-
-          updatedAt:
-            order.updatedAt,
-        },
-      });
-    } catch (error) {
-      console.error(
-        "Get order failed:",
-        error,
-      );
-
-      res.status(500).json({
-        message:
-          "Unable to fetch order",
-      });
+    if (!orderNumber) {
+      res.status(400).json({ message: "Order number is required" });
+      return;
     }
-  };
+
+    const order = await Order.findOne({
+      orderNumber: orderNumber.toUpperCase(),
+    }).lean();
+
+    if (!order) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    if (!order.userId) {
+      res.status(401).json({
+        message:
+          "Guest order tracking requires the phone number used at checkout",
+      });
+      return;
+    }
+
+    if (order.userId.toString() !== req.customer?.id) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    res.status(200).json({
+      order: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        customerName: order.customer?.name ?? order.customerName,
+        customer: order.customer,
+        phone: order.customer?.phone ?? order.phone,
+        fulfillmentType: order.fulfillmentType,
+        address: order.address,
+        scheduledDate: order.scheduledDate,
+        scheduledTime: order.scheduledTime,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.orderStatus,
+        inventoryStatus: order.inventoryStatus,
+        items: order.items,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Get order failed:", error);
+    res.status(500).json({ message: "Unable to fetch order" });
+  }
+};
 
 export const trackGuestOrder = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   const parsed = guestTrackingSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Enter a valid order number and checkout phone number",
@@ -678,6 +681,7 @@ export const trackGuestOrder = async (
       phone: parsed.data.phone,
       userId: { $exists: false },
     }).lean();
+
     if (!order) {
       res.status(404).json({ message: "Order not found" });
       return;
@@ -711,14 +715,6 @@ export const trackGuestOrder = async (
   }
 };
 
-/*
-|--------------------------------------------------------------------------
-| GET ALL ORDERS
-|--------------------------------------------------------------------------
-| GET /api/orders
-|--------------------------------------------------------------------------
-*/
-
 export const getMyOrders = async (
   req: AuthRequest,
   res: Response,
@@ -732,6 +728,7 @@ export const getMyOrders = async (
     const orders = await Order.find({ userId: req.customer.id })
       .sort({ createdAt: -1 })
       .lean();
+
     res.status(200).json({ orders });
   } catch (error) {
     console.error("Get customer orders failed:", error);
@@ -749,15 +746,20 @@ export const getMyOrderByNumber = async (
   }
 
   try {
-    const orderNumber = String(req.params.orderNumber ?? "").trim().toUpperCase();
+    const orderNumber = String(req.params.orderNumber ?? "")
+      .trim()
+      .toUpperCase();
+
     const order = await Order.findOne({
       orderNumber,
       userId: req.customer.id,
     }).lean();
+
     if (!order) {
       res.status(404).json({ message: "Order not found" });
       return;
     }
+
     res.status(200).json({ order });
   } catch (error) {
     console.error("Get customer order failed:", error);
@@ -765,231 +767,163 @@ export const getMyOrderByNumber = async (
   }
 };
 
-export const getAllOrders =
-  async (
-    _req: Request,
-    res: Response,
-  ): Promise<void> => {
-    try {
-      const orders =
-        await Order.find()
-          .sort({
-            createdAt: -1,
-          })
-          .lean();
+export const getAllOrders = async (
+  _req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const orders = await Order.find()
+      .sort({ createdAt: -1 })
+      .lean();
 
-      res.status(200).json({
-        orders,
-      });
-    } catch (error) {
-      console.error(
-        "Get all orders failed:",
-        error,
-      );
+    res.status(200).json({ orders });
+  } catch (error) {
+    console.error("Get all orders failed:", error);
+    res.status(500).json({ message: "Unable to fetch orders" });
+  }
+};
 
-      res.status(500).json({
-        message:
-          "Unable to fetch orders",
-      });
+export const updateOrderStatus = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const orderNumber = String(req.params.orderNumber ?? "")
+      .trim()
+      .toUpperCase();
+
+    if (!orderNumber) {
+      res.status(400).json({ message: "Order number is required" });
+      return;
     }
-  };
 
-/*
-|--------------------------------------------------------------------------
-| UPDATE ORDER STATUS
-|--------------------------------------------------------------------------
-| PATCH /api/orders/:orderNumber/status
-|--------------------------------------------------------------------------
-| Body:
-| {
-|   "status": "CONFIRMED"
-| }
-|--------------------------------------------------------------------------
-*/
+    const parsed = updateOrderStatusSchema.safeParse(req.body);
 
-export const updateOrderStatus =
-  async (
-    req: Request,
-    res: Response,
-  ): Promise<void> => {
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid order status",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const nextStatus = parsed.data.status;
+    let order: IOrder | undefined;
+
+    const session = await mongoose.startSession();
+
     try {
-      const orderNumber =
-        String(
-          req.params
-            .orderNumber ?? "",
-        )
-          .trim()
-          .toUpperCase();
-
-      if (!orderNumber) {
-        res.status(400).json({
-          message:
-            "Order number is required",
-        });
-
-        return;
-      }
-
-      // Validate status
-      const parsed =
-        updateOrderStatusSchema.safeParse(
-          req.body,
+      await session.withTransaction(async () => {
+        const currentOrder = await Order.findOne({ orderNumber }).session(
+          session,
         );
 
-      if (!parsed.success) {
-        res.status(400).json({
-          message:
-            "Invalid order status",
-          errors:
-            parsed.error.flatten(),
-        });
-
-        return;
-      }
-
-      const nextStatus =
-        parsed.data.status;
-      let order: Awaited<ReturnType<typeof Order.findById>> = null;
-      const session = await mongoose.startSession();
-      try {
-        await session.withTransaction(async () => {
-          const currentOrder = await Order.findOne({ orderNumber }).session(session);
-          if (!currentOrder) {
-            throw new OrderStatusError("Order not found", 404);
-          }
-
-          const currentStatus = currentOrder.orderStatus as OrderStatusValue;
-          const allowed = allowedStatusTransitions[currentStatus] ?? [];
-          if (!allowed.includes(nextStatus)) {
-            throw new OrderStatusError(
-              `Cannot change order status from ${currentStatus} to ${nextStatus}`,
-              400,
-            );
-          }
-
-          // Fulfillment-type-specific restrictions.
-          if (
-            currentOrder.fulfillmentType === "DELIVERY" &&
-            (nextStatus === "READY_FOR_PICKUP" || nextStatus === "COLLECTED")
-          ) {
-            throw new OrderStatusError(
-              `Delivery orders cannot transition to ${nextStatus}`,
-              400,
-            );
-          }
-
-          if (
-            currentOrder.fulfillmentType === "PICKUP" &&
-            (nextStatus === "READY" ||
-              nextStatus === "OUT_FOR_DELIVERY" ||
-              nextStatus === "DELIVERED")
-          ) {
-            throw new OrderStatusError(
-              `Pickup orders cannot transition to ${nextStatus}`,
-              400,
-            );
-          }
-
-          if (
-            currentOrder.inventoryStatus === "RELEASED" &&
-            nextStatus !== "CANCELLED"
-          ) {
-            throw new OrderStatusError(
-              "Inventory was released; this order cannot progress",
-              409,
-            );
-          }
-
-          if (nextStatus === "CANCELLED" && currentOrder.inventoryStatus === "RESERVED") {
-            await restoreInventory(session, currentOrder.items);
-            currentOrder.inventoryStatus = "RELEASED";
-            currentOrder.reservationExpiresAt = undefined;
-          } else if (
-            (nextStatus === "DELIVERED" || nextStatus === "COLLECTED") &&
-            currentOrder.inventoryStatus === "RESERVED"
-          ) {
-            currentOrder.inventoryStatus = "COMMITTED";
-            currentOrder.reservationExpiresAt = undefined;
-          }
-
-          if (nextStatus === "CANCELLED" && currentOrder.paymentStatus === "PAID") {
-            currentOrder.reconciliationStatus = "REVIEW_REQUIRED";
-            currentOrder.reconciliationReason =
-              "Paid order was cancelled; confirm customer refund or another resolution manually.";
-          }
-
-          currentOrder.orderStatus = nextStatus;
-          await currentOrder.save({ session });
-          order = currentOrder;
-        });
-      } catch (error) {
-        if (error instanceof OrderStatusError) {
-          res.status(error.status).json({ message: error.message });
-          return;
+        if (!currentOrder) {
+          throw new OrderStatusError("Order not found", 404);
         }
-        throw error;
-      } finally {
-        await session.endSession();
-      }
 
-      if (!order) {
-        throw new Error("Order status transaction completed without an order");
-      }
+        const currentStatus = currentOrder.orderStatus as OrderStatusValue;
+        const allowed = allowedStatusTransitions[currentStatus] ?? [];
 
-      res.status(200).json({
-        message:
-          "Order status updated successfully",
+        if (!allowed.includes(nextStatus)) {
+          throw new OrderStatusError(
+            `Cannot change order status from ${currentStatus} to ${nextStatus}`,
+            400,
+          );
+        }
 
-        order: {
-          id: order._id,
+        if (
+          currentOrder.fulfillmentType === "DELIVERY" &&
+          (nextStatus === "READY_FOR_PICKUP" || nextStatus === "COLLECTED")
+        ) {
+          throw new OrderStatusError(
+            `Delivery orders cannot transition to ${nextStatus}`,
+            400,
+          );
+        }
 
-          orderNumber:
-            order.orderNumber,
+        if (
+          currentOrder.fulfillmentType === "PICKUP" &&
+          (nextStatus === "READY" ||
+            nextStatus === "OUT_FOR_DELIVERY" ||
+            nextStatus === "DELIVERED")
+        ) {
+          throw new OrderStatusError(
+            `Pickup orders cannot transition to ${nextStatus}`,
+            400,
+          );
+        }
 
-          orderStatus:
-            order.orderStatus,
+        if (
+          currentOrder.inventoryStatus === "RELEASED" &&
+          nextStatus !== "CANCELLED"
+        ) {
+          throw new OrderStatusError(
+            "Inventory was released; this order cannot progress",
+            409,
+          );
+        }
 
-          inventoryStatus:
-            order.inventoryStatus,
+        if (
+          nextStatus === "CANCELLED" &&
+          currentOrder.inventoryStatus === "RESERVED"
+        ) {
+          await restoreInventory(session, currentOrder.items);
+          currentOrder.inventoryStatus = "RELEASED";
+          currentOrder.reservationExpiresAt = undefined;
+        } else if (
+          (nextStatus === "DELIVERED" || nextStatus === "COLLECTED") &&
+          currentOrder.inventoryStatus === "RESERVED"
+        ) {
+          currentOrder.inventoryStatus = "COMMITTED";
+          currentOrder.reservationExpiresAt = undefined;
+        }
 
-          reconciliationStatus:
-            order.reconciliationStatus,
+        if (
+          nextStatus === "CANCELLED" &&
+          currentOrder.paymentStatus === "PAID"
+        ) {
+          currentOrder.reconciliationStatus = "REVIEW_REQUIRED";
+          currentOrder.reconciliationReason =
+            "Paid order was cancelled; confirm customer refund or another resolution manually.";
+        }
 
-          reconciliationReason:
-            order.reconciliationReason,
-
-          paymentStatus:
-            order.paymentStatus,
-
-          updatedAt:
-            order.updatedAt,
-        },
+        currentOrder.orderStatus = nextStatus;
+        await currentOrder.save({ session });
+        order = currentOrder;
       });
     } catch (error) {
-      console.error(
-        "Update order status failed:",
-        error,
-      );
-
-      res.status(500).json({
-        message:
-          "Unable to update order status",
-      });
+      if (error instanceof OrderStatusError) {
+        res.status(error.status).json({ message: error.message });
+        return;
+      }
+      throw error;
+    } finally {
+      await session.endSession();
     }
-  };
 
-/*
-|--------------------------------------------------------------------------
-| MARK PAYMENT PAID (ADMIN, PAY_AT_STORE ONLY)
-|--------------------------------------------------------------------------
-| POST /api/orders/:orderNumber/mark-paid
-| Body: {}
-|
-| Manually marks a PAY_AT_STORE order as PAID. Records a server-side
-| paidAt timestamp and the admin who performed the action. Idempotent:
-| marking an already-paid order again does not overwrite paidAt.
-|--------------------------------------------------------------------------
-*/
+    if (!order) {
+      throw new Error("Order status transaction completed without an order");
+    }
+
+    res.status(200).json({
+      message: "Order status updated successfully",
+      order: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        orderStatus: order.orderStatus,
+        inventoryStatus: order.inventoryStatus,
+        reconciliationStatus: order.reconciliationStatus,
+        reconciliationReason: order.reconciliationReason,
+        paymentStatus: order.paymentStatus,
+        updatedAt: order.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Update order status failed:", error);
+    res.status(500).json({ message: "Unable to update order status" });
+  }
+};
 
 export const markOrderPaid = async (
   req: AuthRequest,
@@ -1011,11 +945,14 @@ export const markOrderPaid = async (
     }
 
     const adminId = req.admin.id;
-
     const session = await mongoose.startSession();
+
+    let result: { alreadyPaid: boolean; order: IOrder } | undefined;
+
     try {
-      await session.withTransaction(async () => {
+      result = await session.withTransaction(async () => {
         const order = await Order.findOne({ orderNumber }).session(session);
+
         if (!order) {
           throw new OrderStatusError("Order not found", 404);
         }
@@ -1027,22 +964,14 @@ export const markOrderPaid = async (
           );
         }
 
-        // Idempotent: if already paid, do not overwrite paidAt/paidBy.
         if (order.paymentStatus === "PAID") {
           order.paidAt = order.paidAt ?? new Date();
-          order.paidBy = order.paidBy ?? adminId;
+          order.paidBy =
+            order.paidBy ?? new mongoose.Types.ObjectId(adminId);
+
           await order.save({ session });
-          res.status(200).json({
-            message: "Order was already marked as paid",
-            order: {
-              id: order._id,
-              orderNumber: order.orderNumber,
-              paymentStatus: order.paymentStatus,
-              paidAt: order.paidAt,
-              paidBy: order.paidBy,
-            },
-          });
-          return;
+
+          return { alreadyPaid: true, order };
         }
 
         if (order.paymentStatus !== "PENDING") {
@@ -1056,23 +985,14 @@ export const markOrderPaid = async (
         order.paidAt = new Date();
         order.paidBy = new mongoose.Types.ObjectId(adminId);
 
-        // Commit inventory once payment is received.
         if (order.inventoryStatus === "RESERVED") {
           order.inventoryStatus = "COMMITTED";
           order.reservationExpiresAt = undefined;
         }
 
         await order.save({ session });
-        res.status(200).json({
-          message: "Order marked as paid",
-          order: {
-            id: order._id,
-            orderNumber: order.orderNumber,
-            paymentStatus: order.paymentStatus,
-            paidAt: order.paidAt,
-            paidBy: order.paidBy,
-          },
-        });
+
+        return { alreadyPaid: false, order };
       });
     } catch (error) {
       if (error instanceof OrderStatusError) {
@@ -1083,25 +1003,47 @@ export const markOrderPaid = async (
     } finally {
       await session.endSession();
     }
+
+    if (!result) {
+      throw new Error("Mark order paid transaction completed without an order");
+    }
+
+    const { alreadyPaid, order } = result;
+
+    if (alreadyPaid) {
+      res.status(200).json({
+        message: "Order was already marked as paid",
+        order: {
+          id: order._id,
+          orderNumber: order.orderNumber,
+          paymentStatus: order.paymentStatus,
+          paidAt: order.paidAt,
+          paidBy: order.paidBy,
+        },
+      });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Order marked as paid",
+      order: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        paymentStatus: order.paymentStatus,
+        paidAt: order.paidAt,
+        paidBy: order.paidBy,
+      },
+    });
   } catch (error) {
     console.error("Mark order paid failed:", error);
     res.status(500).json({ message: "Unable to mark order as paid" });
   }
 };
 
-/*
-|--------------------------------------------------------------------------
-| PROPOSE SLOT (ADMIN)
-|--------------------------------------------------------------------------
-| POST /api/admin/orders/:id/propose-slot
-| Body: { "time": "ISO string", "note": "optional" }
-|
-| Admin proposes an alternative delivery/pickup time.
-|--------------------------------------------------------------------------
-*/
-
 const proposeSlotSchema = z.object({
-  time: z.string().datetime({ message: "Valid ISO datetime is required" }),
+  time: z.string().datetime({
+    message: "Valid ISO datetime is required",
+  }),
   note: z.string().trim().max(500).optional(),
 });
 
@@ -1122,14 +1064,15 @@ export const proposeSlot = async (
     }
 
     const adminId = req.admin.id;
-
     const orderId = String(req.params.id ?? "").trim();
+
     if (!mongoose.isValidObjectId(orderId)) {
       res.status(400).json({ message: "Invalid order ID" });
       return;
     }
 
     const parsed = proposeSlotSchema.safeParse(req.body);
+
     if (!parsed.success) {
       res.status(400).json({
         message: "Invalid proposal data",
@@ -1140,26 +1083,30 @@ export const proposeSlot = async (
 
     const { time: proposedTimeStr, note } = parsed.data;
     const proposedTime = new Date(proposedTimeStr);
-
     const session = await mongoose.startSession();
+
+    let result: { order: IOrder } | undefined;
+
     try {
-      await session.withTransaction(async () => {
+      result = await session.withTransaction(async () => {
         const order = await Order.findById(orderId).session(session);
+
         if (!order) {
           throw new OrderStatusError("Order not found", 404);
         }
 
-        // Validate slot with actual fulfillment type
         const slotValidation = validateSlot(
           proposedTime,
           order.fulfillmentType,
         );
+
         if (!slotValidation.valid) {
-          throw new OrderStatusError(slotValidation.error ?? "Invalid slot time.", 400);
+          throw new OrderStatusError(
+            slotValidation.error ?? "Invalid slot time.",
+            400,
+          );
         }
 
-        // No existing PENDING proposal (check before eligibility so we
-        // return 409 even if the order is in RESCHEDULE_PROPOSED state)
         if (
           order.proposedSlot &&
           order.proposedSlot.status === "PENDING"
@@ -1170,7 +1117,6 @@ export const proposeSlot = async (
           );
         }
 
-        // Order must be eligible for rescheduling
         if (
           !RESCHEDULE_ELIGIBLE_STATUSES.includes(
             order.orderStatus as OrderStatusValue,
@@ -1182,7 +1128,6 @@ export const proposeSlot = async (
           );
         }
 
-        // Proposed time must not be identical to current confirmed slot
         if (
           order.confirmedSlot &&
           proposedTime.getTime() === order.confirmedSlot.getTime()
@@ -1198,7 +1143,6 @@ export const proposeSlot = async (
           now.getTime() + DEFAULT_PROPOSAL_EXPIRY_MS(),
         );
 
-        // Record previous status for later restoration
         order.reschedulePreviousStatus = order.orderStatus;
         order.orderStatus = "RESCHEDULE_PROPOSED";
         order.proposedSlot = {
@@ -1212,17 +1156,7 @@ export const proposeSlot = async (
 
         await order.save({ session });
 
-        res.status(200).json({
-          message: "Slot proposal created successfully",
-          order: {
-            id: order._id,
-            orderNumber: order.orderNumber,
-            orderStatus: order.orderStatus,
-            proposedSlot: order.proposedSlot,
-            requestedSlot: order.requestedSlot,
-            confirmedSlot: order.confirmedSlot,
-          },
-        });
+        return { order };
       });
     } catch (error) {
       if (error instanceof OrderStatusError) {
@@ -1233,21 +1167,29 @@ export const proposeSlot = async (
     } finally {
       await session.endSession();
     }
+
+    if (!result) {
+      throw new Error("Propose slot transaction completed without an order");
+    }
+
+    const { order } = result;
+
+    res.status(200).json({
+      message: "Slot proposal created successfully",
+      order: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        orderStatus: order.orderStatus,
+        proposedSlot: order.proposedSlot,
+        requestedSlot: order.requestedSlot,
+        confirmedSlot: order.confirmedSlot,
+      },
+    });
   } catch (error) {
     console.error("Propose slot failed:", error);
     res.status(500).json({ message: "Unable to propose slot" });
   }
 };
-
-/*
-|--------------------------------------------------------------------------
-| ACCEPT PROPOSAL (CUSTOMER)
-|--------------------------------------------------------------------------
-| POST /api/orders/:id/proposal/accept
-|
-| Customer accepts the proposed slot.
-|--------------------------------------------------------------------------
-*/
 
 export const acceptProposal = async (
   req: AuthRequest,
@@ -1260,36 +1202,38 @@ export const acceptProposal = async (
     }
 
     const customerId = req.customer.id;
-
     const orderId = String(req.params.id ?? "").trim();
+
     if (!mongoose.isValidObjectId(orderId)) {
       res.status(400).json({ message: "Invalid order ID" });
       return;
     }
 
     const session = await mongoose.startSession();
+
+    let result: { expired: boolean; order: IOrder } | undefined;
+
     try {
-      await session.withTransaction(async () => {
+      result = await session.withTransaction(async () => {
         const order = await Order.findById(orderId).session(session);
+
         if (!order) {
           throw new OrderStatusError("Order not found", 404);
         }
 
-        // Verify customer ownership
-        if (
-          order.userId &&
-          order.userId.toString() !== customerId
-        ) {
-          res.status(404).json({ message: "Order not found" });
-          return;
+        if (order.userId && order.userId.toString() !== customerId) {
+          throw new OrderStatusError("Order not found", 404);
         }
 
-        // Proposal must exist
         if (!order.proposedSlot) {
-          throw new OrderStatusError("No proposal exists for this order", 400);
+          throw new OrderStatusError(
+            "No proposal exists for this order",
+            400,
+          );
         }
 
-        // Proposal must be PENDING
+        const confirmedSlotTime = order.proposedSlot.time;
+
         if (order.proposedSlot.status !== "PENDING") {
           throw new OrderStatusError(
             `Proposal is already ${order.proposedSlot.status.toLowerCase()}`,
@@ -1297,8 +1241,8 @@ export const acceptProposal = async (
           );
         }
 
-        // Proposal must not be expired
         const now = new Date();
+
         if (
           order.proposedSlot.expiresAt &&
           order.proposedSlot.expiresAt.getTime() <= now.getTime()
@@ -1307,10 +1251,9 @@ export const acceptProposal = async (
           order.orderStatus =
             order.reschedulePreviousStatus ?? "CONFIRMED";
           await order.save({ session });
-          throw new OrderStatusError("Proposal has expired", 400);
+          return { expired: true, order };
         }
 
-        // Order must not be in a terminal state
         if (
           ["DELIVERED", "COLLECTED", "CANCELLED"].includes(
             order.orderStatus,
@@ -1322,12 +1265,10 @@ export const acceptProposal = async (
           );
         }
 
-        // Accept the proposal
         const previousConfirmedSlot = order.confirmedSlot;
-        order.confirmedSlot = order.proposedSlot.time;
+        order.confirmedSlot = confirmedSlotTime;
         order.proposedSlot.status = "ACCEPTED";
 
-        // Record history
         order.slotHistory = [
           ...(order.slotHistory ?? []),
           {
@@ -1339,8 +1280,8 @@ export const acceptProposal = async (
           },
         ];
 
-        // Restore appropriate order status
         const previousStatus = order.reschedulePreviousStatus;
+
         if (previousStatus === "PLACED") {
           order.orderStatus = "CONFIRMED";
         } else if (previousStatus === "PAYMENT_CONFIRMED") {
@@ -1349,33 +1290,18 @@ export const acceptProposal = async (
           order.orderStatus = "CONFIRMED";
         }
 
-        // Sync existing scheduledDate/scheduledTime for backward compatibility
-        order.scheduledDate = order.confirmedSlot
-          .toISOString()
-          .split("T")[0];
-        order.scheduledTime = order.confirmedSlot
-          .toISOString()
-          .split("T")[1]?.split(".")[0] ?? "10:00:00";
+        order.scheduledDate =
+          confirmedSlotTime.toISOString().split("T")[0] ?? "";
 
-        // Clear the previous status tracker
+        order.scheduledTime =
+          confirmedSlotTime.toISOString().split("T")[1]?.split(".")[0] ??
+          "10:00:00";
+
         order.reschedulePreviousStatus = undefined;
 
         await order.save({ session });
 
-        res.status(200).json({
-          message: "Proposal accepted successfully",
-          order: {
-            id: order._id,
-            orderNumber: order.orderNumber,
-            orderStatus: order.orderStatus,
-            requestedSlot: order.requestedSlot,
-            confirmedSlot: order.confirmedSlot,
-            scheduledDate: order.scheduledDate,
-            scheduledTime: order.scheduledTime,
-            proposedSlot: order.proposedSlot,
-            slotHistory: order.slotHistory,
-          },
-        });
+        return { expired: false, order };
       });
     } catch (error) {
       if (error instanceof OrderStatusError) {
@@ -1386,21 +1312,37 @@ export const acceptProposal = async (
     } finally {
       await session.endSession();
     }
+
+    if (!result) {
+      throw new Error("Accept proposal transaction completed without an order");
+    }
+
+    const { expired, order } = result;
+
+    if (expired) {
+      res.status(400).json({ message: "Proposal has expired" });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Proposal accepted successfully",
+      order: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        orderStatus: order.orderStatus,
+        requestedSlot: order.requestedSlot,
+        confirmedSlot: order.confirmedSlot,
+        scheduledDate: order.scheduledDate,
+        scheduledTime: order.scheduledTime,
+        proposedSlot: order.proposedSlot,
+        slotHistory: order.slotHistory,
+      },
+    });
   } catch (error) {
     console.error("Accept proposal failed:", error);
     res.status(500).json({ message: "Unable to accept proposal" });
   }
 };
-
-/*
-|--------------------------------------------------------------------------
-| DECLINE PROPOSAL (CUSTOMER)
-|--------------------------------------------------------------------------
-| POST /api/orders/:id/proposal/decline
-|
-| Customer declines the proposed slot.
-|--------------------------------------------------------------------------
-*/
 
 export const declineProposal = async (
   req: AuthRequest,
@@ -1413,36 +1355,36 @@ export const declineProposal = async (
     }
 
     const customerId = req.customer.id;
-
     const orderId = String(req.params.id ?? "").trim();
+
     if (!mongoose.isValidObjectId(orderId)) {
       res.status(400).json({ message: "Invalid order ID" });
       return;
     }
 
     const session = await mongoose.startSession();
+
+    let result: { expired: boolean; order: IOrder } | undefined;
+
     try {
-      await session.withTransaction(async () => {
+      result = await session.withTransaction(async () => {
         const order = await Order.findById(orderId).session(session);
+
         if (!order) {
           throw new OrderStatusError("Order not found", 404);
         }
 
-        // Verify customer ownership
-        if (
-          order.userId &&
-          order.userId.toString() !== customerId
-        ) {
-          res.status(404).json({ message: "Order not found" });
-          return;
+        if (order.userId && order.userId.toString() !== customerId) {
+          throw new OrderStatusError("Order not found", 404);
         }
 
-        // Proposal must exist
         if (!order.proposedSlot) {
-          throw new OrderStatusError("No proposal exists for this order", 400);
+          throw new OrderStatusError(
+            "No proposal exists for this order",
+            400,
+          );
         }
 
-        // Proposal must be PENDING
         if (order.proposedSlot.status !== "PENDING") {
           throw new OrderStatusError(
             `Proposal is already ${order.proposedSlot.status.toLowerCase()}`,
@@ -1450,8 +1392,8 @@ export const declineProposal = async (
           );
         }
 
-        // Proposal must not be expired
         const now = new Date();
+
         if (
           order.proposedSlot.expiresAt &&
           order.proposedSlot.expiresAt.getTime() <= now.getTime()
@@ -1460,10 +1402,9 @@ export const declineProposal = async (
           order.orderStatus =
             order.reschedulePreviousStatus ?? "CONFIRMED";
           await order.save({ session });
-          throw new OrderStatusError("Proposal has expired", 400);
+          return { expired: true, order };
         }
 
-        // Order must not be in a terminal state
         if (
           ["DELIVERED", "COLLECTED", "CANCELLED"].includes(
             order.orderStatus,
@@ -1475,10 +1416,8 @@ export const declineProposal = async (
           );
         }
 
-        // Decline the proposal
         order.proposedSlot.status = "DECLINED";
 
-        // Record history
         order.slotHistory = [
           ...(order.slotHistory ?? []),
           {
@@ -1490,31 +1429,14 @@ export const declineProposal = async (
           },
         ];
 
-        // Restore previous order status
         order.orderStatus =
           order.reschedulePreviousStatus ?? "CONFIRMED";
+
         order.reschedulePreviousStatus = undefined;
 
         await order.save({ session });
 
-        res.status(200).json({
-          message: "Proposal declined",
-          order: {
-            id: order._id,
-            orderNumber: order.orderNumber,
-            orderStatus: order.orderStatus,
-            requestedSlot: order.requestedSlot,
-            confirmedSlot: order.confirmedSlot,
-            proposedSlot: order.proposedSlot,
-            slotHistory: order.slotHistory,
-          },
-          nextAction:
-            order.paymentMethod === "PAY_AT_STORE"
-              ? "Awaiting payment at store"
-              : order.paymentStatus === "PENDING"
-                ? "Complete payment or contact the bakery"
-                : "Order remains active",
-        });
+        return { expired: false, order };
       });
     } catch (error) {
       if (error instanceof OrderStatusError) {
@@ -1525,6 +1447,36 @@ export const declineProposal = async (
     } finally {
       await session.endSession();
     }
+
+    if (!result) {
+      throw new Error("Decline proposal transaction completed without an order");
+    }
+
+    const { expired, order } = result;
+
+    if (expired) {
+      res.status(400).json({ message: "Proposal has expired" });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Proposal declined",
+      order: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        orderStatus: order.orderStatus,
+        requestedSlot: order.requestedSlot,
+        confirmedSlot: order.confirmedSlot,
+        proposedSlot: order.proposedSlot,
+        slotHistory: order.slotHistory,
+      },
+      nextAction:
+        order.paymentMethod === "PAY_AT_STORE"
+          ? "Awaiting payment at store"
+          : order.paymentStatus === "PENDING"
+            ? "Complete payment or contact the bakery"
+            : "Order remains active",
+    });
   } catch (error) {
     console.error("Decline proposal failed:", error);
     res.status(500).json({ message: "Unable to decline proposal" });

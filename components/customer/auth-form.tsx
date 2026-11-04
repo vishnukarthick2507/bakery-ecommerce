@@ -309,6 +309,16 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         throw new Error((data as { message?: string })?.message || 'Unable to authenticate.')
       }
 
+      // If the response indicates an existing account (email or phone already
+      // registered), show the generic message as an error instead of
+      // redirecting. No account was created, so sending the user to /account
+      // would leave them stranded without a session.
+      const message = (data as { message?: string })?.message || ''
+      if (message.includes('does not already exist')) {
+        setError(message)
+        return
+      }
+
       const redirectTo = (data as { redirectTo?: string })?.redirectTo
       if (redirectTo && typeof redirectTo === 'string') {
         router.push(redirectTo)

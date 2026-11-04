@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface ISettings extends Document {
   onlineOrdersEnabled: boolean;
@@ -7,6 +7,10 @@ export interface ISettings extends Document {
   closedMessage: string;
   reopenAt: Date | null;
   codMaxAmount: number | null;
+}
+
+export interface ISettingsModel extends Model<ISettings> {
+  getSingleton(): Promise<ISettings>;
 }
 
 const settingsSchema = new Schema<ISettings>(
@@ -68,4 +72,4 @@ settingsSchema.statics.getSingleton = async function () {
   return settings;
 };
 
-export const Settings = mongoose.model<ISettings>("Settings", settingsSchema);
+export const Settings = mongoose.model<ISettings, ISettingsModel>("Settings", settingsSchema);

@@ -19,7 +19,7 @@ import {
 } from "../middleware/auth.js";
 import { guestTrackingLimiter } from "../middleware/rateLimit.js";
 
-const router = Router();
+const router: Router = Router();
 
 // Create a new order (public)
 router.post("/", optionalCustomerAuth, createOrder);

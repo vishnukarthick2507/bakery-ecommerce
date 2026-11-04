@@ -161,7 +161,9 @@ describe("Fulfillment & PAY_AT_STORE", () => {
       const uri = mongoServer.getUri();
       await mongoose.connect(uri, { directConnection: true });
 
-      const adminDb = (mongoose.connection.db as import("mongodb").Db).admin();
+      const db = mongoose.connection.db;
+      if (!db) throw new Error("Database connection not established");
+      const adminDb = db.admin();
       let lastError: unknown;
       for (let i = 0; i < 10; i++) {
         try {

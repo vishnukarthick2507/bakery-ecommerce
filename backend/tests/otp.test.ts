@@ -267,8 +267,8 @@ describe("OTP service", () => {
         phone: "9840916062",
         password: "Password6",
       });
-      expect(res.status).toBe(400);
-      expect(res.body.message.toLowerCase()).toContain("already exist");
+      expect(res.status).toBe(200);
+      expect(res.body.message.toLowerCase()).toContain("does not already exist");
     });
   });
 

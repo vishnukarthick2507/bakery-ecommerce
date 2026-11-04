@@ -25,7 +25,9 @@ async function connectTestDBWithReplSet(): Promise<void> {
   const uri = mongoServer.getUri();
   await mongoose.connect(uri, { directConnection: true });
 
-  const adminDb = mongoose.connection.db.admin();
+  const db = mongoose.connection.db;
+  if (!db) throw new Error("Database connection not established");
+  const adminDb = db.admin();
   let lastError: unknown;
   for (let i = 0; i < 10; i++) {
     try {
@@ -69,7 +71,17 @@ const baseProduct = {
   active: true,
 };
 
-const baseOrderPayload = {
+const baseOrderPayload: {
+  customerName: string;
+  email: string;
+  phone: string;
+  fulfillmentType: "PICKUP";
+  scheduledDate: string;
+  scheduledTime: string;
+  paymentMethod: "COD";
+  items: { productId: string; productName: string; variantId: string; quantity: number; }[];
+  address?: { addressLine: string; city: string; pincode: string; };
+} = {
   customerName: "Test Customer",
   email: "test@example.com",
   phone: "9840916058",
@@ -120,7 +132,7 @@ describe("Order validation", () => {
     });
 
     const product = await Product.create(baseProduct);
-    baseOrderPayload.items[0].productId = product._id.toString();
+    baseOrderPayload.items[0]!.productId = product._id.toString();
 
     // Set scheduledDate to tomorrow in IST (UTC+5:30)
     const tomorrow = new Date();
@@ -196,7 +208,7 @@ describe("Order validation", () => {
     it("rejects an invalid product ID", async () => {
       const response = await postOrder({
         ...baseOrderPayload,
-        items: [{ ...baseOrderPayload.items[0], productId: "not-an-object-id" }],
+        items: [{ ...baseOrderPayload.items[0]!, productId: "not-an-object-id" }],
       });
 
       expect(response.status).toBe(400);
@@ -204,7 +216,7 @@ describe("Order validation", () => {
     });
 
     it("rejects an inactive product", async () => {
-      const productId = baseOrderPayload.items[0].productId;
+      const productId = baseOrderPayload.items[0]!.productId;
       await Product.findByIdAndUpdate(productId, { active: false });
 
       const response = await postOrder(baseOrderPayload);
@@ -217,19 +229,19 @@ describe("Order validation", () => {
     it("rejects a quantity above the database stock", async () => {
       const response = await postOrder({
         ...baseOrderPayload,
-        items: [{ ...baseOrderPayload.items[0], quantity: 11 }],
+        items: [{ ...baseOrderPayload.items[0]!, quantity: 11 }],
       });
 
       expect(response.status).toBe(400);
       expect(response.body.message).toContain("Only 10 unit(s)");
       expect(await Order.countDocuments()).toBe(0);
-      expect((await Product.findById(baseOrderPayload.items[0].productId))?.stock).toBe(10);
+      expect((await Product.findById(baseOrderPayload.items[0]!.productId))?.stock).toBe(10);
     });
 
     it("rejects quantities above the per-item limit", async () => {
       const response = await postOrder({
         ...baseOrderPayload,
-        items: [{ ...baseOrderPayload.items[0], quantity: 21 }],
+        items: [{ ...baseOrderPayload.items[0]!, quantity: 21 }],
       });
 
       expect(response.status).toBe(400);
@@ -237,7 +249,7 @@ describe("Order validation", () => {
     });
 
     it("rejects duplicate product lines whose combined quantity exceeds the limit", async () => {
-      const item = baseOrderPayload.items[0];
+      const item = baseOrderPayload.items[0]!;
       const response = await postOrder({
         ...baseOrderPayload,
         items: [
@@ -252,14 +264,14 @@ describe("Order validation", () => {
     });
 
     it("allows the maximum quantity when database stock permits it", async () => {
-      await Product.findByIdAndUpdate(baseOrderPayload.items[0].productId, { stock: 20 });
+      await Product.findByIdAndUpdate(baseOrderPayload.items[0]!.productId, { stock: 20 });
       const response = await postOrder({
         ...baseOrderPayload,
-        items: [{ ...baseOrderPayload.items[0], quantity: 20 }],
+        items: [{ ...baseOrderPayload.items[0]!, quantity: 20 }],
       });
 
       expect(response.status).toBe(201);
-      expect((await Product.findById(baseOrderPayload.items[0].productId))?.stock).toBe(0);
+      expect((await Product.findById(baseOrderPayload.items[0]!.productId))?.stock).toBe(0);
     });
 
     it("rejects delivery orders without an address", async () => {
@@ -295,7 +307,7 @@ describe("Order validation", () => {
       expect(replayResponse.status).toBe(200);
       expect(replayResponse.body.order.orderNumber).toBe(firstResponse.body.order.orderNumber);
       expect(await Order.countDocuments()).toBe(1);
-      expect((await Product.findById(baseOrderPayload.items[0].productId))?.stock).toBe(9);
+      expect((await Product.findById(baseOrderPayload.items[0]!.productId))?.stock).toBe(9);
     });
 
     it("rejects reuse of an idempotency key with a changed payload", async () => {
@@ -310,7 +322,7 @@ describe("Order validation", () => {
       expect(conflictResponse.status).toBe(409);
       expect(conflictResponse.body.message).toContain("Idempotency key was already used");
       expect(await Order.countDocuments()).toBe(1);
-      expect((await Product.findById(baseOrderPayload.items[0].productId))?.stock).toBe(9);
+      expect((await Product.findById(baseOrderPayload.items[0]!.productId))?.stock).toBe(9);
     });
   });
 
@@ -521,7 +533,7 @@ describe("Guest order tracking validation", () => {
     }
 
     const product = await Product.create(baseProduct);
-    baseOrderPayload.items[0].productId = product._id.toString();
+    baseOrderPayload.items[0]!.productId = product._id.toString();
 
     // Create an order directly in the DB for tracking tests
     const orderData = {
@@ -535,12 +547,12 @@ describe("Guest order tracking validation", () => {
       },
       customerName: "Test Customer",
       phone: "9840916058",
-      fulfillmentType: "PICKUP",
+      fulfillmentType: "PICKUP" as const,
       scheduledDate: baseOrderPayload.scheduledDate,
       scheduledTime: "10:00 AM - 12:00 PM",
-      paymentMethod: "COD",
-      paymentStatus: "PENDING",
-      orderStatus: "PLACED",
+      paymentMethod: "COD" as const,
+      paymentStatus: "PENDING" as const,
+      orderStatus: "PLACED" as const,
       items: [
         {
           productId: product._id,

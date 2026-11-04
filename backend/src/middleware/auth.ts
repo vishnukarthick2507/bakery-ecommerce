@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { Admin } from "../models/Admin.js";
 import { User } from "../models/User.js";
 import { getJwtSecret } from "../config/jwt.js";
 
@@ -17,11 +18,11 @@ export interface AuthRequest extends Request {
   };
 }
 
-export const authenticateAdmin = (
+export const authenticateAdmin = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction,
-): void => {
+): Promise<void> => {
   try {
     // Prefer the httpOnly admin-token cookie (single source of truth).
     // Fall back to Authorization: Bearer header for API clients.
@@ -47,6 +48,7 @@ export const authenticateAdmin = (
       adminId: string;
       username: string;
       role: string;
+      tokenVersion?: number;
     };
 
     if (!decoded.adminId || "customerId" in decoded) {
@@ -54,10 +56,23 @@ export const authenticateAdmin = (
       return;
     }
 
+    const admin = await Admin.findById(decoded.adminId).lean();
+    if (!admin) {
+      res.status(401).json({ message: "Invalid or expired token" });
+      return;
+    }
+
+    const tokenVersion = decoded.tokenVersion ?? 0;
+    const storedVersion = admin.tokenVersion ?? 0;
+    if (tokenVersion !== storedVersion) {
+      res.status(401).json({ message: "Invalid or expired token" });
+      return;
+    }
+
     req.admin = {
-      id: decoded.adminId,
-      username: decoded.username,
-      role: decoded.role,
+      id: admin._id.toString(),
+      username: admin.username,
+      role: admin.role,
     };
 
     next();
@@ -122,7 +137,7 @@ async function resolveCustomerToken(
       id: customer._id.toString(),
       name: customer.name,
       email: customer.email,
-      phone: customer.phone,
+      phone: customer.phone ?? "",
     };
     next();
   } catch (error) {

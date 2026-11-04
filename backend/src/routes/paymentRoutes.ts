@@ -8,7 +8,7 @@ import {
 } from "../controllers/paymentController.js";
 import { optionalCustomerAuth } from "../middleware/auth.js";
 
-const router = Router();
+const router: Router = Router();
 
 router.post("/create-order", optionalCustomerAuth, createPaymentOrder);
 router.post("/retry", optionalCustomerAuth, retryPayment);

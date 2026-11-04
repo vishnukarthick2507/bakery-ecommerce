@@ -53,9 +53,9 @@ export interface IOrder extends Document {
   idempotencyKey: string;
   idempotencyHash: string;
   inventoryStatus?: InventoryStatus;
-  reservationExpiresAt?: Date;
+  reservationExpiresAt?: Date | undefined;
   reconciliationStatus?: "NONE" | "REVIEW_REQUIRED";
-  reconciliationReason?: string;
+  reconciliationReason?: string | undefined;
   customer?: {
     name: string;
     email: string;
@@ -75,7 +75,7 @@ export interface IOrder extends Document {
   confirmedSlot?: Date;
   proposedSlot?: IProposedSlot;
   slotHistory?: ISlotHistoryEntry[];
-  reschedulePreviousStatus?: OrderStatus;
+  reschedulePreviousStatus?: OrderStatus | undefined;
   paymentMethod: PaymentMethod;
   paymentStatus: "PENDING" | "PAID" | "FAILED";
   razorpayOrderId?: string;

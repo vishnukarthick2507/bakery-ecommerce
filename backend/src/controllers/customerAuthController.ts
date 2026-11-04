@@ -265,11 +265,14 @@ export const registerCustomer = async (
     }
 
     // Check if phone already exists as an active customer or pending registration.
+    // Return the same generic response as email-exists to avoid phone-number
+    // enumeration via status code or message differences.
     const existingPhoneUser = await User.findOne({ phone: normalizePhone(phone) }).lean();
     const existingPendingPhone = await PendingRegistration.findOne({ phone: normalizePhone(phone) }).lean();
     if (existingPhoneUser || existingPendingPhone) {
-      res.status(400).json({
-        message: "An account with this phone number already exists.",
+      res.status(200).json({
+        message:
+          "If an account does not already exist for this email, a verification code has been sent. Please check your email.",
       });
       return;
     }

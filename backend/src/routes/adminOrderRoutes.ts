@@ -3,7 +3,7 @@ import { Router } from "express";
 import { proposeSlot } from "../controllers/orderController.js";
 import { authenticateAdmin } from "../middleware/auth.js";
 
-const router = Router();
+const router: Router = Router();
 
 // Propose a new slot for an order (admin only)
 router.post(

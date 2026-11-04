@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const backendUrl =
   process.env.BACKEND_INTERNAL_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'https://bakery-ecommerce-staging.onrender.com'
+  process.env.NEXT_PUBLIC_API_URL
 
 export async function GET(req: NextRequest) {
+  if (!backendUrl) {
+    return NextResponse.json(
+      { error: 'Backend service unavailable' },
+      { status: 503 }
+    )
+  }
+
   const authorization = req.headers.get('authorization')
 
   const headers: Record<string, string> = {}

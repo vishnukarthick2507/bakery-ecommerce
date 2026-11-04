@@ -6,7 +6,7 @@ import {
 } from "../controllers/settingsController.js";
 import { authenticateAdmin } from "../middleware/auth.js";
 
-const router = Router();
+const router: Router = Router();
 
 // Public read: used by the customer checkout UI to gate fulfilment options.
 // No secrets are exposed (only toggle states, a message, and a date).

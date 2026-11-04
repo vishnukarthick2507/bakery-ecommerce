@@ -7,7 +7,7 @@ import {
 } from "../controllers/customCakeController.js";
 import { authenticateAdmin } from "../middleware/auth.js";
 
-const router = Router();
+const router: Router = Router();
 
 // Create custom cake request (public)
 router.post("/", createCustomCakeRequest);

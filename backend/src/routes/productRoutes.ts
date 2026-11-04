@@ -10,7 +10,7 @@ import {
 } from "../controllers/productController.js";
 import { authenticateAdmin } from "../middleware/auth.js";
 
-const router = Router();
+const router: Router = Router();
 
 /*
 |--------------------------------------------------------------------------

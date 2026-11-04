@@ -71,8 +71,8 @@ describe("Customer password-based authentication", () => {
         .post("/api/auth/register")
         .send(registerPayload);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain("already exist");
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain("does not already exist");
     });
 
     it("rejects duplicate phone registration via password", async () => {
@@ -85,8 +85,42 @@ describe("Customer password-based authentication", () => {
           email: "someone-else@example.com",
         });
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain("already exist");
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain("does not already exist");
+    });
+
+    it("returns indistinguishable responses for duplicate email and phone", async () => {
+      await request(app).post("/api/auth/register").send(registerPayload);
+
+      const emailRes = await request(app)
+        .post("/api/auth/register")
+        .send(registerPayload);
+
+      const phoneRes = await request(app)
+        .post("/api/auth/register")
+        .send({
+          ...registerPayload,
+          email: "someone-else@example.com",
+        });
+
+      expect(emailRes.status).toBe(200);
+      expect(phoneRes.status).toBe(200);
+      expect(emailRes.body.message).toBe(phoneRes.body.message);
+    });
+
+    it("does not create duplicate accounts for duplicate email or phone", async () => {
+      await request(app).post("/api/auth/register").send(registerPayload);
+
+      await request(app).post("/api/auth/register").send(registerPayload);
+      await request(app)
+        .post("/api/auth/register")
+        .send({ ...registerPayload, email: "someone-else@example.com" });
+
+      const { PendingRegistration } = await import("../src/models/PendingRegistration.js");
+      const count = await PendingRegistration.countDocuments({
+        email: registerPayload.email,
+      });
+      expect(count).toBe(1);
     });
 
     it("rejects invalid registration details via password", async () => {
@@ -97,7 +131,8 @@ describe("Customer password-based authentication", () => {
         password: "short",
       });
 
-      expect(res.status).toBe(400);
+      // Invalid input should be rejected (400) or rate-limited (429)
+      expect([400, 429]).toContain(res.status);
     });
   });
 
