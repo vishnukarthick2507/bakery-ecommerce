@@ -8,13 +8,17 @@ import { createAuthTestApp } from "./authTestApp.js";
 
 vi.mock("../src/services/emailService.js", () => ({
   verifyBrevoSmtpConnection: vi.fn(),
+  getBrevoSmtpPresenceChecks: vi.fn(),
 }));
 
 function setCookieValues(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : value ? [value] : [];
 }
 
-import { verifyBrevoSmtpConnection } from "../src/services/emailService.js";
+import {
+  verifyBrevoSmtpConnection,
+  getBrevoSmtpPresenceChecks,
+} from "../src/services/emailService.js";
 
 const app = createAuthTestApp();
 
@@ -27,6 +31,7 @@ describe("Admin authentication API", () => {
   beforeEach(async () => {
     await clearTestDB();
     vi.mocked(verifyBrevoSmtpConnection).mockReset();
+    vi.mocked(getBrevoSmtpPresenceChecks).mockReset();
 
     await Admin.create({
       username: "testadmin",
@@ -108,52 +113,88 @@ describe("Admin authentication API", () => {
   });
 
   describe("GET /api/admin/diagnostics/brevo-smtp", () => {
+    const allPresent = {
+      hostPresent: true,
+      userPresent: true,
+      keyPresent: true,
+      fromEmailPresent: true,
+    };
+
+    const loginAsAdmin = async () => {
+      const login = await request(app)
+        .post("/api/auth/login")
+        .send({ username: "testadmin", password: "CorrectPassword123" });
+      return login.headers["set-cookie"]?.[0]?.split(";")[0]!;
+    };
+
     it("rejects unauthorized access without admin token", async () => {
       const response = await request(app).get("/api/admin/diagnostics/brevo-smtp");
       expect(response.status).toBe(401);
     });
 
-    it("returns diagnostic result for authenticated admin", async () => {
-      vi.mocked(verifyBrevoSmtpConnection).mockResolvedValue({
-        ok: true,
-      });
+    it("returns individual presence checks for authenticated admin", async () => {
+      vi.mocked(getBrevoSmtpPresenceChecks).mockReturnValue(allPresent);
 
-      const login = await request(app)
-        .post("/api/auth/login")
-        .send({ username: "testadmin", password: "CorrectPassword123" });
-      const adminCookie = login.headers["set-cookie"]?.[0]?.split(";")[0];
+      const adminCookie = await loginAsAdmin();
 
       const response = await request(app)
         .get("/api/admin/diagnostics/brevo-smtp")
-        .set("Cookie", adminCookie!);
+        .set("Cookie", adminCookie);
 
       expect(response.status).toBe(200);
       expect(response.body.smtpConfigured).toBe(true);
-      expect(response.body.smtpConnectionOk).toBe(true);
+      expect(response.body.checks).toEqual(allPresent);
+      expect(response.body.smtpConnectionOk).toBeUndefined();
       expect(response.body.error).toBeUndefined();
       expect(response.body).not.toHaveProperty("password");
-      expect(response.body).not.toHaveProperty("BREVO_SMTP");
+      // No env var names or credential values are leaked in the response.
+      expect(JSON.stringify(response.body)).not.toContain("BREVO_SMTP");
     });
 
-    it("returns failure detail when SMTP verification fails", async () => {
-      vi.mocked(verifyBrevoSmtpConnection).mockResolvedValue({
-        ok: false,
-        detail: "Invalid login",
+    it("returns smtpConfigured false when any presence check is missing", async () => {
+      vi.mocked(getBrevoSmtpPresenceChecks).mockReturnValue({
+        ...allPresent,
+        userPresent: false,
       });
 
-      const login = await request(app)
-        .post("/api/auth/login")
-        .send({ username: "testadmin", password: "CorrectPassword123" });
-      const adminCookie = login.headers["set-cookie"]?.[0]?.split(";")[0];
+      const adminCookie = await loginAsAdmin();
 
       const response = await request(app)
         .get("/api/admin/diagnostics/brevo-smtp")
-        .set("Cookie", adminCookie!);
+        .set("Cookie", adminCookie);
 
       expect(response.status).toBe(200);
-      expect(response.body.smtpConfigured).toBe(true);
-      expect(response.body.smtpConnectionOk).toBe(false);
-      expect(response.body.error).toBe("Invalid login");
+      expect(response.body.smtpConfigured).toBe(false);
+      expect(response.body.checks).toEqual({
+        hostPresent: true,
+        userPresent: false,
+        keyPresent: true,
+        fromEmailPresent: true,
+      });
+    });
+
+    it("returns all checks false when nothing is configured", async () => {
+      vi.mocked(getBrevoSmtpPresenceChecks).mockReturnValue({
+        hostPresent: false,
+        userPresent: false,
+        keyPresent: false,
+        fromEmailPresent: false,
+      });
+
+      const adminCookie = await loginAsAdmin();
+
+      const response = await request(app)
+        .get("/api/admin/diagnostics/brevo-smtp")
+        .set("Cookie", adminCookie);
+
+      expect(response.status).toBe(200);
+      expect(response.body.smtpConfigured).toBe(false);
+      expect(response.body.checks).toEqual({
+        hostPresent: false,
+        userPresent: false,
+        keyPresent: false,
+        fromEmailPresent: false,
+      });
     });
   });
 });

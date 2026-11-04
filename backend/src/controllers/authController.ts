@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { Admin } from "../models/Admin.js";
 import { getJwtSecret } from "../config/jwt.js";
-import { verifyBrevoSmtpConnection } from "../services/emailService.js";
+import { getBrevoSmtpPresenceChecks } from "../services/emailService.js";
 
 const JWT_EXPIRES_IN = "7d";
 
@@ -260,19 +260,20 @@ export const adminLogout = async (
 || BREVO SMTP DIAGNOSTIC
 || GET /api/admin/diagnostics/brevo-smtp
 ||--------------------------------------------------------------------------
-|| Protected admin diagnostic. Verifies Brevo SMTP configuration and
-|| connectivity/authentication without sending an email.
-|| Never exposes SMTP credentials, OTPs, customer data, or environment values.
+|| Protected admin diagnostic. Reports the presence of each Brevo SMTP
+|| environment variable without performing a network call or authenticating
+|| against the SMTP server. Never exposes SMTP credentials, OTPs, customer
+|| data, or environment variable values.
 */
 export const brevoSmtpDiagnostic = async (
   _req: Request,
   res: Response,
 ): Promise<void> => {
-  const result = await verifyBrevoSmtpConnection();
-  const smtpConfigured = result.detail !== "Brevo SMTP is not configured";
-  res.status(200).json({
-    smtpConfigured,
-    smtpConnectionOk: result.ok,
-    ...(result.detail ? { error: result.detail } : {}),
-  });
+  const checks = getBrevoSmtpPresenceChecks();
+  const smtpConfigured =
+    checks.hostPresent &&
+    checks.userPresent &&
+    checks.keyPresent &&
+    checks.fromEmailPresent;
+  res.status(200).json({ smtpConfigured, checks });
 };

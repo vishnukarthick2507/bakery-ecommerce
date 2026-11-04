@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sendOtpEmail, isBrevoSmtpConfigured, verifyBrevoSmtpConnection } from "../src/services/emailService.js";
+import {
+  sendOtpEmail,
+  isBrevoSmtpConfigured,
+  verifyBrevoSmtpConnection,
+  getBrevoSmtpPresenceChecks,
+} from "../src/services/emailService.js";
 
 const sendMailMock = vi.fn();
 const verifyMock = vi.fn().mockResolvedValue(true);
@@ -251,6 +256,101 @@ describe("sendOtpEmail (Brevo SMTP via Nodemailer)", () => {
 
     it("returns false when no Brevo vars are set", async () => {
       expect(isBrevoSmtpConfigured()).toBe(false);
+    });
+  });
+
+  describe("getBrevoSmtpPresenceChecks", () => {
+    it("returns true for all checks when all Brevo SMTP vars are set", () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "smtp-key",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      const checks = getBrevoSmtpPresenceChecks();
+      expect(checks).toEqual({
+        hostPresent: true,
+        userPresent: true,
+        keyPresent: true,
+        fromEmailPresent: true,
+      });
+    });
+
+    it("returns hostPresent false when BREVO_SMTP_HOST is missing", () => {
+      setBrevoEnv({
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "smtp-key",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      expect(getBrevoSmtpPresenceChecks().hostPresent).toBe(false);
+    });
+
+    it("returns userPresent false when BREVO_SMTP_USER is missing", () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_KEY: "smtp-key",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      expect(getBrevoSmtpPresenceChecks().userPresent).toBe(false);
+    });
+
+    it("returns keyPresent false when BREVO_SMTP_KEY is missing", () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      expect(getBrevoSmtpPresenceChecks().keyPresent).toBe(false);
+    });
+
+    it("returns fromEmailPresent false when BREVO_FROM_EMAIL is missing", () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "smtp-key",
+      });
+      expect(getBrevoSmtpPresenceChecks().fromEmailPresent).toBe(false);
+    });
+
+    it("returns all checks false when no Brevo vars are set", () => {
+      clearBrevoEnv();
+      expect(getBrevoSmtpPresenceChecks()).toEqual({
+        hostPresent: false,
+        userPresent: false,
+        keyPresent: false,
+        fromEmailPresent: false,
+      });
+    });
+
+    it("treats whitespace-only values as not present", () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "   ",
+        BREVO_SMTP_USER: "\t",
+        BREVO_SMTP_KEY: "\n ",
+        BREVO_FROM_EMAIL: "  ",
+      });
+      expect(getBrevoSmtpPresenceChecks()).toEqual({
+        hostPresent: false,
+        userPresent: false,
+        keyPresent: false,
+        fromEmailPresent: false,
+      });
+    });
+
+    it("never returns environment variable values or credential hints", () => {
+      setBrevoEnv({
+        BREVO_SMTP_HOST: "smtp-relay.brevo.com",
+        BREVO_SMTP_USER: "user@smtp-brevo.com",
+        BREVO_SMTP_KEY: "super-secret-key-value",
+        BREVO_FROM_EMAIL: "noreply@example.com",
+      });
+      const checks = getBrevoSmtpPresenceChecks();
+      const serialized = JSON.stringify(checks);
+      expect(serialized).not.toContain("smtp-relay.brevo.com");
+      expect(serialized).not.toContain("user@smtp-brevo.com");
+      expect(serialized).not.toContain("super-secret-key-value");
+      expect(serialized).not.toContain("noreply@example.com");
+      expect(Object.values(checks).every((value) => typeof value === "boolean")).toBe(true);
     });
   });
 });

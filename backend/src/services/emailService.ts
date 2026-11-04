@@ -32,6 +32,36 @@ export function isBrevoSmtpConfigured(): boolean {
 }
 
 /**
+ * Returns boolean presence checks for the Brevo SMTP environment variables
+ * read by getBrevoSmtpConfig(). Intended for the admin diagnostic endpoint.
+ *
+ * Never returns environment variable values, credential lengths, or partial
+ * secrets. Empty strings and whitespace-only values are treated as not
+ * present, so a space-padded value does not count as configured.
+ */
+export function getBrevoSmtpPresenceChecks(): {
+  hostPresent: boolean;
+  userPresent: boolean;
+  keyPresent: boolean;
+  fromEmailPresent: boolean;
+} {
+  const host = process.env.BREVO_SMTP_HOST;
+  const user = process.env.BREVO_SMTP_USER;
+  const pass = process.env.BREVO_SMTP_KEY;
+  const from = process.env.BREVO_FROM_EMAIL;
+
+  const isPresent = (value: string | undefined): boolean =>
+    Boolean(value && value.trim());
+
+  return {
+    hostPresent: isPresent(host),
+    userPresent: isPresent(user),
+    keyPresent: isPresent(pass),
+    fromEmailPresent: isPresent(from),
+  };
+}
+
+/**
  * Sends a 6-digit OTP to the customer's email address via Brevo SMTP (Nodemailer).
  *
  * @param to - Recipient email address.
