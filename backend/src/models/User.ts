@@ -22,6 +22,16 @@ const userSchema = new Schema(
       type: String,
       select: false,
     },
+    googleId: {
+      type: String,
+      sparse: true,
+      unique: true,
+      trim: true,
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
     active: {
       type: Boolean,
       default: true,

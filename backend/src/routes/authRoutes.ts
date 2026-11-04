@@ -17,6 +17,10 @@ import {
   sendOtp,
   verifyOtp,
   completeRegistration,
+  googleAuth,
+  forgotPassword,
+  verifyResetOtp,
+  resetPassword,
 } from "../controllers/customerAuthController.js";
 import { authenticateCustomer, authenticateAdmin } from "../middleware/auth.js";
 import {
@@ -25,6 +29,8 @@ import {
   customerRegisterLimiter,
   otpSendLimiter,
   otpVerifyLimiter,
+  forgotPasswordLimiter,
+  resetPasswordLimiter,
 } from "../middleware/rateLimit.js";
 import { getJwtSecret } from "../config/jwt.js";
 
@@ -99,16 +105,39 @@ router.get(
   brevoSmtpDiagnostic,
 );
 
+// Customer registration (password-based with email OTP verification)
 router.post("/register", customerRegisterLimiter, registerCustomer);
+
+// Customer login (email/password)
 router.post("/customer/login", customerLoginLimiter, loginCustomer);
+
+// Google OAuth sign-in (ID token verification)
+router.post("/google", customerLoginLimiter, googleAuth);
+
+// OTP send
 router.post("/otp/send", otpSendLimiter, sendOtp);
+
+// OTP verify
 router.post("/otp/verify", otpVerifyLimiter, verifyOtp);
+
+// Registration complete
 router.post(
   "/otp/register-complete",
   setVerifiedEmailForRegistrationLimit,
   otpVerifyLimiter,
   completeRegistration,
 );
+
+// Forgot password
+router.post("/forgot-password", forgotPasswordLimiter, forgotPassword);
+
+// Verify reset OTP
+router.post("/verify-reset-otp", otpVerifyLimiter, verifyResetOtp);
+
+// Reset password
+router.post("/reset-password", resetPasswordLimiter, resetPassword);
+
+// Customer session
 router.get("/me", authenticateCustomer, getCurrentCustomer);
 
 export default router;

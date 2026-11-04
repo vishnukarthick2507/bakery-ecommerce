@@ -199,15 +199,15 @@ describe("OTP service", () => {
       return request(app).post("/api/auth/customer/login").send({ email, password });
     }
 
-    it("rejects password-based registration (disabled)", async () => {
+    it("registers a new customer with email/password", async () => {
       const res = await registerCustomer({
         name: "Alice",
         email: "alice@example.com",
         phone: "9840916058",
         password: "Password1",
       });
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain("disabled");
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain("verification code");
     });
 
     it("authenticates a customer with correct email and password", async () => {
@@ -250,7 +250,8 @@ describe("OTP service", () => {
         phone: "9840916061",
         password: "Password4",
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(res.body.message.toLowerCase()).toContain("already exist");
     });
 
     it("rejects duplicate phone registration via password", async () => {
@@ -266,7 +267,8 @@ describe("OTP service", () => {
         phone: "9840916062",
         password: "Password6",
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(400);
+      expect(res.body.message.toLowerCase()).toContain("already exist");
     });
   });
 

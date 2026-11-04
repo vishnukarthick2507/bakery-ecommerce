@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Script from 'next/script'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -10,11 +11,34 @@ type AuthMode = 'login' | 'register'
 type AuthMethod = 'password' | 'email-otp'
 type OtpStep = 'send' | 'verify' | 'register'
 
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        id?: {
+          initialize: (config: {
+            client_id: string
+            callback: (credentialResponse: { credential: string }) => void
+            context?: string
+          }) => void
+          prompt: () => void
+          renderButton: (element: HTMLElement, options: any) => void
+        }
+      }
+    }
+  }
+}
+
 export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter()
 
+  // ---- Google Identity Services state ----
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null)
+  const [googleCredential, setGoogleCredential] = useState<string | null>(null)
+  const [googleError, setGoogleError] = useState<string | null>(null)
+  const [googleInitialized, setGoogleInitialized] = useState(false)
+
   // ---- Auth method: Password vs Email OTP ----
-  // Password registration is disabled. New customers must use email OTP.
   const [authMethod, setAuthMethod] = useState<AuthMethod>(
     mode === 'register' ? 'email-otp' : 'password',
   )
@@ -25,11 +49,14 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [phone, setPhone] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'email' | 'password' | 'otp', string>>>({})
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'email' | 'password' | 'confirmPassword' | 'phone' | 'otp', string>>>({})
   const [resendCooldown, setResendCooldown] = useState(0)
   const resendCooldownTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   /**
    * Reads a response body as JSON, returning null when the body is not valid
@@ -59,9 +86,13 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     setOtp('')
     setName('')
     setEmail('')
+    setPassword('')
+    setConfirmPassword('')
+    setPhone('')
     setError('')
     setFieldErrors({})
     setResendCooldown(0)
+    setShowPassword(false)
     if (resendCooldownTimer.current) {
       clearInterval(resendCooldownTimer.current)
       resendCooldownTimer.current = null
@@ -78,23 +109,65 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     }
   }, [])
 
+  // ---- Send Google ID token to backend when received from GSI callback ----
+  useEffect(() => {
+    if (!googleCredential || !googleInitialized) return
+
+    const sendCredential = async () => {
+      setSubmitting(true)
+      setError('')
+      try {
+        const response = await fetch('/api/auth/google', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: googleCredential }),
+        })
+        const data = await readJsonSafe(response)
+        if (!response.ok) {
+          throw new Error(
+            (data as { message?: string })?.message || 'Google sign-in failed.',
+          )
+        }
+
+        const redirectTo = (data as { redirectTo?: string })?.redirectTo
+        if (redirectTo && typeof redirectTo === 'string') {
+          router.push(redirectTo)
+        } else {
+          router.push('/account')
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to sign in with Google.'
+        setError(msg)
+        setGoogleError(msg)
+        toast.error(msg)
+      } finally {
+        setSubmitting(false)
+        setGoogleCredential(null)
+      }
+    }
+
+    sendCredential()
+  }, [googleCredential, googleInitialized, router])
+
   const isOtpFlow = authMethod === 'email-otp'
   const isLogin = mode === 'login'
 
-  // ---- Password flow (existing, unchanged) ----
+  const isValidIndianPhone = (raw: string): boolean => {
+    const cleaned = raw.replace(/\s+/g, "").replace(/-/g, "")
+    return /^[6-9]\d{9}$/.test(cleaned)
+  }
+
+  // ---- Password flow ----
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setFieldErrors({})
 
-    const nextFieldErrors: Partial<Record<'name' | 'email' | 'password', string>> = {}
+    const nextFieldErrors: Partial<Record<'name' | 'email' | 'password' | 'confirmPassword' | 'phone', string>> = {}
     let hasError = false
 
     if (mode === 'register') {
-      // Password registration is disabled; new customers register via email OTP.
-      // The password form is not shown in register mode, so no password validation
-      // is needed here. Only name and email are collected for display purposes,
-      // but the actual registration happens via the OTP flow.
       if (!name.trim() || name.trim().length < 2) {
         nextFieldErrors.name = 'Please enter your full name.'
         hasError = true
@@ -107,6 +180,27 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         hasError = true
       } else {
         clearFieldError('email')
+      }
+
+      if (!isValidIndianPhone(phone)) {
+        nextFieldErrors.phone = 'Enter a valid 10-digit Indian mobile number.'
+        hasError = true
+      } else {
+        clearFieldError('phone')
+      }
+
+      if (!password || password.length < 8) {
+        nextFieldErrors.password = 'Password must be at least 8 characters.'
+        hasError = true
+      } else {
+        clearFieldError('password')
+      }
+
+      if (password !== confirmPassword) {
+        nextFieldErrors.confirmPassword = 'Passwords do not match.'
+        hasError = true
+      } else {
+        clearFieldError('confirmPassword')
       }
     } else {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
@@ -138,7 +232,15 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ...(mode === 'register' ? { name: name.trim() } : {}),
+            ...(mode === 'register'
+              ? {
+                  name: name.trim(),
+                  email: email.trim().toLowerCase(),
+                  phone: phone.replace(/\s+/g, "").replace(/-/g, ""),
+                  password,
+                  confirmPassword,
+                }
+              : {}),
             email: email.trim().toLowerCase(),
             password,
           }),
@@ -148,7 +250,14 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       if (!response.ok) {
         throw new Error((data as { message?: string })?.message || 'Unable to authenticate.')
       }
-      router.push('/account')
+
+      // Successful sign-in or registration: redirect to account.
+      const redirectTo = (data as { redirectTo?: string })?.redirectTo
+      if (redirectTo && typeof redirectTo === 'string') {
+        router.push(redirectTo)
+      } else {
+        router.push('/account')
+      }
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : 'Unable to authenticate.')
     } finally {
@@ -171,6 +280,8 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         return "Email service is not configured. Please contact support."
       case "EMAIL_DELIVERY_FAILED":
         return message || "Unable to send OTP. Please try again later."
+      case "GOOGLE_CONFIG_MISSING":
+        return "Google sign-in is not configured. Please contact support."
     }
     switch (status) {
       case 400:
@@ -285,9 +396,15 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         )
       }
 
-      setOtpStep('register')
-      setName('')
-      toast.success('Email verified. Enter your details to continue.')
+      // Successful OTP verification may return a redirectTo for password registration.
+      const redirectTo = (data as { redirectTo?: string })?.redirectTo
+      if (redirectTo && typeof redirectTo === 'string') {
+        router.push(redirectTo)
+      } else {
+        setOtpStep('register')
+        setName('')
+        toast.success('Email verified. Enter your details to continue.')
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to verify OTP.'
       if (msg.includes('already exists') || msg.includes('No account found')) {
@@ -330,6 +447,9 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim().toLowerCase(),
+          phone: phone.replace(/\s+/g, "").replace(/-/g, ""),
+          password,
+          confirmPassword,
         }),
       })
       const data = await readJsonSafe(response)
@@ -337,7 +457,12 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         throw new Error((data as { message?: string })?.message || 'Unable to create account.')
       }
 
-      router.push('/account')
+      const redirectTo = (data as { redirectTo?: string })?.redirectTo
+      if (redirectTo && typeof redirectTo === 'string') {
+        router.push(redirectTo)
+      } else {
+        router.push('/account')
+      }
       toast.success('You’re signed in.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to create account.'
@@ -353,8 +478,94 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     }
   }
 
+  // ---- Google Sign-In via Identity Services ----
+  async function handleGoogleSignIn() {
+    setError('')
+    setGoogleError('')
+
+    if (!googleInitialized || !googleClientId) {
+      setError('Google Sign-In is not available. Please try again later.')
+      return
+    }
+
+    try {
+      ;(window as any).google.accounts.id.prompt()
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Google Sign-In prompt failed.'
+      setGoogleError(msg)
+      setError(msg)
+    }
+  }
+
+  // ---- Forgot password ----
+  async function handleForgotPassword() {
+    setError('')
+    setFieldErrors({})
+
+    if (!isValidOtpEmail(email)) {
+      const msg = 'Enter a valid email address.'
+      setFieldErrors({ email: msg })
+      setError(msg)
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail(email) }),
+      })
+      const data = await readJsonSafe(response)
+      if (!response.ok) {
+        throw new Error((data as { message?: string })?.message || 'Unable to process request.')
+      }
+
+      // Generic response - never reveals whether email is registered.
+      setOtpStep('verify')
+      toast.success('If an account exists for this email, a verification code has been sent.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unable to process request.'
+      setFieldErrors({ email: msg })
+      setError(msg)
+      toast.error(msg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <main className="mx-auto max-w-lg px-4 py-12 sm:px-6">
+      <Script
+        id="gis-script"
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+        onLoad={() => {
+          const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+          if (!clientId) {
+            setGoogleError('Google Sign-In is not configured.')
+            return
+          }
+          setGoogleClientId(clientId)
+
+          const g = (window as any).google
+          if (g?.accounts?.id) {
+            g.accounts.id.initialize({
+              client_id: clientId,
+              callback: (credentialResponse: { credential: string }) => {
+                setGoogleCredential(credentialResponse.credential)
+                setGoogleError(null)
+              },
+              context: 'signin',
+            })
+            setGoogleInitialized(true)
+          } else {
+            setGoogleError('Google Identity Services failed to load.')
+          }
+        }}
+      />
       <section className="rounded-[2rem] border border-border bg-card p-8 sm:p-10 shadow-sm">
         <p className="text-sm font-semibold text-primary tracking-wide uppercase">
           S.V. Bakery
@@ -405,97 +616,240 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         </div>
 
         {authMethod === 'password' ? (
-          // ---- Password form (existing, unchanged logic) ----
+          // ---- Password form ----
           <form onSubmit={handleSubmit} className="mt-8 space-y-6">
             {mode === 'register' && (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">
-                  Full name
-                </label>
-                {fieldErrors.name && (
-                  <p className="mb-2 text-xs text-destructive">
-                    {fieldErrors.name}
-                  </p>
-                )}
-                <input
-                  autoComplete="name"
-                  required
-                  minLength={2}
-                  maxLength={100}
-                  value={name}
-                  onChange={(event) => {
-                    setName(event.target.value)
-                    clearFieldError('name')
-                  }}
-                  placeholder="Priya"
-                  className={cn(
-                    'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                    fieldErrors.name
-                      ? 'border-destructive focus:ring-destructive'
-                      : 'border-border focus:ring-caramel',
+              <>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Full name
+                  </label>
+                  {fieldErrors.name && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.name}
+                    </p>
                   )}
-                />
-              </div>
+                  <input
+                    autoComplete="name"
+                    required
+                    minLength={2}
+                    maxLength={100}
+                    value={name}
+                    onChange={(event) => {
+                      setName(event.target.value)
+                      clearFieldError('name')
+                    }}
+                    placeholder="Priya"
+                    className={cn(
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
+                      fieldErrors.name
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-caramel',
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Email address
+                  </label>
+                  {fieldErrors.email && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.email}
+                    </p>
+                  )}
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    required
+                    maxLength={254}
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value)
+                      clearFieldError('email')
+                    }}
+                    placeholder="priya@example.com"
+                    className={cn(
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
+                      fieldErrors.email
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-caramel',
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Mobile number
+                  </label>
+                  {fieldErrors.phone && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.phone}
+                    </p>
+                  )}
+                  <input
+                    type="tel"
+                    autoComplete="tel"
+                    required
+                    maxLength={15}
+                    value={phone}
+                    onChange={(event) => {
+                      setPhone(event.target.value)
+                      clearFieldError('phone')
+                    }}
+                    placeholder="9840916058"
+                    className={cn(
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
+                      fieldErrors.phone
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-caramel',
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Password
+                  </label>
+                  {fieldErrors.password && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.password}
+                    </p>
+                  )}
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                      required
+                      minLength={8}
+                      maxLength={72}
+                      value={password}
+                      onChange={(event) => {
+                        setPassword(event.target.value)
+                        clearFieldError('password')
+                      }}
+                      placeholder="••••••••"
+                      className={cn(
+                        'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2 pr-10',
+                        fieldErrors.password
+                          ? 'border-destructive focus:ring-destructive'
+                          : 'border-border focus:ring-caramel',
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3.5 text-xs text-muted-foreground hover:text-primary"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Confirm password
+                  </label>
+                  {fieldErrors.confirmPassword && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.confirmPassword}
+                    </p>
+                  )}
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    maxLength={72}
+                    value={confirmPassword}
+                    onChange={(event) => {
+                      setConfirmPassword(event.target.value)
+                      clearFieldError('confirmPassword')
+                    }}
+                    placeholder="••••••••"
+                    className={cn(
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
+                      fieldErrors.confirmPassword
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-caramel',
+                    )}
+                  />
+                </div>
+              </>
             )}
+            {mode === 'login' && (
+              <>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Email address
+                  </label>
+                  {fieldErrors.email && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.email}
+                    </p>
+                  )}
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    required
+                    maxLength={254}
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value)
+                      clearFieldError('email')
+                    }}
+                    placeholder="priya@example.com"
+                    className={cn(
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
+                      fieldErrors.email
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-caramel',
+                    )}
+                  />
+                </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">
-                Email
-              </label>
-              {fieldErrors.email && (
-                <p className="mb-2 text-xs text-destructive">
-                  {fieldErrors.email}
-                </p>
-              )}
-              <input
-                type="email"
-                autoComplete="email"
-                required
-                maxLength={254}
-                value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value)
-                  clearFieldError('email')
-                }}
-                placeholder="priya@example.com"
-                className={cn(
-                  'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                  fieldErrors.email
-                    ? 'border-destructive focus:ring-destructive'
-                    : 'border-border focus:ring-caramel',
-                )}
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">
-                Password
-              </label>
-              {fieldErrors.password && (
-                <p className="mb-2 text-xs text-destructive">
-                  {fieldErrors.password}
-                </p>
-              )}
-              <input
-                type="password"
-                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                required
-                minLength={mode === 'register' ? 8 : undefined}
-                maxLength={72}
-                value={password}
-                onChange={(event) => {
-                  setPassword(event.target.value)
-                  clearFieldError('password')
-                }}
-                placeholder="••••••••"
-                className={cn(
-                  'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
-                  fieldErrors.password
-                    ? 'border-destructive focus:ring-destructive'
-                    : 'border-border focus:ring-caramel',
-                )}
-              />
-            </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Password
+                  </label>
+                  {fieldErrors.password && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.password}
+                    </p>
+                  )}
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      minLength={1}
+                      maxLength={72}
+                      value={password}
+                      onChange={(event) => {
+                        setPassword(event.target.value)
+                        clearFieldError('password')
+                      }}
+                      placeholder="••••••••"
+                      className={cn(
+                        'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2 pr-10',
+                        fieldErrors.password
+                          ? 'border-destructive focus:ring-destructive'
+                          : 'border-border focus:ring-caramel',
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3.5 text-xs text-muted-foreground hover:text-primary"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             <button
               type="submit"
@@ -504,9 +858,23 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
             >
               {submitting ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Sign in'}
             </button>
+
+            {mode === 'login' && (
+              <p className="mt-4 text-sm text-center text-muted-foreground">
+                Forgot your password?{' '}
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="font-medium text-caramel underline-offset-4 hover:underline"
+                  disabled={submitting}
+                >
+                  Reset password
+                </button>
+              </p>
+            )}
           </form>
         ) : (
-          // ---- Phone OTP form (unified: no LOGIN/REGISTER choice) ----
+          // ---- Email OTP form ----
           <div className="mt-8 space-y-6">
             {otpStep === 'send' ? (
               <>
@@ -625,7 +993,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               <form onSubmit={handleCompleteRegistration} className="mt-8 space-y-6">
                 <div className="bg-cream rounded-xl p-5">
                   <p className="text-sm text-muted-foreground">
-                    Email verified: <span className="font-medium text-primary">{email}</span>. Enter your name to continue. Any saved profile for this email will remain unchanged.
+                    Email verified: <span className="font-medium text-primary">{email}</span>. Enter your details to continue. Any saved profile for this email will remain unchanged.
                   </p>
                 </div>
 
@@ -687,6 +1055,105 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   />
                 </div>
 
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Mobile number
+                  </label>
+                  {fieldErrors.phone && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.phone}
+                    </p>
+                  )}
+                  <input
+                    type="tel"
+                    autoComplete="tel"
+                    required
+                    maxLength={15}
+                    value={phone}
+                    onChange={(event) => {
+                      setPhone(event.target.value)
+                      clearFieldError('phone')
+                    }}
+                    placeholder="9840916058"
+                    className={cn(
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
+                      fieldErrors.phone
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-caramel',
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Password
+                  </label>
+                  {fieldErrors.password && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.password}
+                    </p>
+                  )}
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      minLength={8}
+                      maxLength={72}
+                      value={password}
+                      onChange={(event) => {
+                        setPassword(event.target.value)
+                        clearFieldError('password')
+                      }}
+                      placeholder="••••••••"
+                      className={cn(
+                        'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2 pr-10',
+                        fieldErrors.password
+                          ? 'border-destructive focus:ring-destructive'
+                          : 'border-border focus:ring-caramel',
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3.5 text-xs text-muted-foreground hover:text-primary"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Confirm password
+                  </label>
+                  {fieldErrors.confirmPassword && (
+                    <p className="mb-2 text-xs text-destructive">
+                      {fieldErrors.confirmPassword}
+                    </p>
+                  )}
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    maxLength={72}
+                    value={confirmPassword}
+                    onChange={(event) => {
+                      setConfirmPassword(event.target.value)
+                      clearFieldError('confirmPassword')
+                    }}
+                    placeholder="••••••••"
+                    className={cn(
+                      'mt-2 w-full rounded-xl border px-4 py-3.5 outline-none focus:ring-2',
+                      fieldErrors.confirmPassword
+                        ? 'border-destructive focus:ring-destructive'
+                        : 'border-border focus:ring-caramel',
+                    )}
+                  />
+                </div>
+
                 <p className="mt-2 text-xs text-muted-foreground">
                   Your email address is verified and cannot be changed here. To
                   use a different email, restart OTP verification.
@@ -711,6 +1178,89 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
             )}
           </div>
         )}
+
+        {/* Google OAuth divider */}
+        <div className="mt-8 relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-border"></span>
+          </div>
+          <span className="relative flex justify-center text-xs uppercase tracking-widest text-muted-foreground bg-card px-4">
+            Or continue with
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={submitting || !googleInitialized || !googleClientId}
+          className="mt-4 w-full rounded-xl border border-border bg-background px-6 py-4 font-semibold text-primary shadow-sm hover:bg-cream transition-colors flex items-center justify-center gap-2"
+        >
+          {submitting ? (
+            <>
+              <svg
+                className="w-5 h-5 animate-spin"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              Signing in…
+            </>
+          ) : googleError ? (
+            <>
+              <svg
+                className="w-5 h-5 text-destructive"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
+                ></path>
+              </svg>
+              {googleError}
+            </>
+          ) : (
+            <>
+              <svg
+                className="w-5 h-5"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66v-2.77c-1.16-.78-1.95-1.88-2.21-3.31H12v3.73c-1.32 0-2.52-.26-3.59-.72v-2.2c0-.26.02-.52.05-.77h2.32c.05.21.09.42.09.66 0 1.61-1.31 2.92-2.92 2.92z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M12 5.38c1.61 0 2.92 1.31 2.92 2.92 0 .24-.04.47-.09.69h-2.32c-.03-.25-.05-.51-.05-.77 0-1.61 1.31-2.92 2.92-2.92zM3.27 7.27c.26 1.04.62 2.01 1.12 2.85v2.32c0 .27.02.53.07.78H3.27c-.38-.71-.6-1.56-.6-2.47 0-1.61 1.31-2.92 2.92-2.92 1.31 0 2.45.84 2.79 2.02h2.32c-.27-.8-.84-1.48-1.6-1.96C7.43 5.02 5.86 5 4.19 5c-2.61 0-4.82 2.01-4.91 4.62-.04.56-.01 1.12.14 1.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 23c-1.61 0-2.92-1.31-2.92-2.92 0-.24.04-.47.09-.69h2.32c.03-.25.05-.51.05-.77 0-1.61-1.31-2.92-2.92-2.92-1.61 0-2.92 1.31-2.92 2.92 0 .27.02.53.07.78H3.27c.38.71.6 1.56.6 2.47 0 1.61-1.31 2.92-2.92 2.92-.15 0-.31-.01-.46-.02V23c2.61 0 4.82-2.01 4.91-4.62.04-.56.01-1.12-.14-1.63z"
+                />
+              </svg>
+              Continue with Google
+            </>
+          )}
+        </button>
 
         <p className="mt-8 text-sm text-muted-foreground text-center">
           {mode === 'register' ? 'Already have an account?' : 'New to S.V. Bakery?'}{' '}

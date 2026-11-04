@@ -9,3 +9,4 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@next/*'
   - next
+  - google-auth-library@11.3.3

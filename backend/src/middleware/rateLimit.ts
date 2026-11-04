@@ -67,6 +67,44 @@ export const guestTrackingLimiter = rateLimit({
   },
 });
 
+export const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 5, // 5 forgot-password requests per email/IP per 15 minutes
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  message: {
+    message:
+      "Too many password reset requests from this IP, please try again after 15 minutes.",
+  },
+  handler: (_req, res, _next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+  keyGenerator: (req) => {
+    const email = normalizeEmail(req.body?.email);
+    const ipKey = ipKeyGenerator(req.ip ?? "127.0.0.1");
+    return `${email}:${ipKey}`;
+  },
+});
+
+export const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 10, // 10 reset password attempts per email/IP per 15 minutes
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  message: {
+    message:
+      "Too many password reset attempts from this IP, please try again after 15 minutes.",
+  },
+  handler: (_req, res, _next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+  keyGenerator: (req) => {
+    const email = normalizeEmail(req.body?.email);
+    const ipKey = ipKeyGenerator(req.ip ?? "127.0.0.1");
+    return `${email}:${ipKey}`;
+  },
+});
+
 /*
 |--------------------------------------------------------------------------
 | EMAIL NORMALIZATION FOR RATE-LIMIT KEYS

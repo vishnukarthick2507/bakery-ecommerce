@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import type { AuthRequest } from "../middleware/auth.js";
 import { User } from "../models/User.js";
+import { PendingRegistration } from "../models/PendingRegistration.js";
 import { getJwtSecret } from "../config/jwt.js";
 import {
   createOtpSession,
@@ -16,6 +17,10 @@ import {
   verifyOtp as verifyOtpCode,
 } from "../services/otpService.js";
 import { sendOtpEmail, isBrevoConfigured } from "../services/emailService.js";
+import {
+  verifyGoogleIdToken,
+  isGoogleConfigured,
+} from "../services/googleAuth.js";
 import { OtpSession } from "../models/OtpSession.js";
 import { CustomerOtpProof } from "../models/CustomerOtpProof.js";
 
@@ -23,13 +28,13 @@ const PHONE_PATTERN = /^[6-9]\d{9}$/;
 
 const otpSendSchema = z.object({
   email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
-  purpose: z.enum(["LOGIN", "REGISTER", "AUTH", "GUEST_CHECKOUT"]).optional(),
+  purpose: z.enum(["LOGIN", "REGISTER", "AUTH", "GUEST_CHECKOUT", "PASSWORD_RESET"]).optional(),
 });
 
 const otpVerifySchema = z.object({
   email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
   otp: z.string().length(6, "OTP must be a 6-digit code"),
-  purpose: z.enum(["LOGIN", "REGISTER", "AUTH", "GUEST_CHECKOUT"]).optional(),
+  purpose: z.enum(["LOGIN", "REGISTER", "AUTH", "GUEST_CHECKOUT", "PASSWORD_RESET"]).optional(),
 });
 
 const registrationCompleteSchema = z.object({
@@ -40,6 +45,39 @@ const registrationCompleteSchema = z.object({
   email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()).optional(),
 });
 
+const registerSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
+  phone: z.string().regex(PHONE_PATTERN, "Enter a valid 10-digit Indian mobile number"),
+  password: z.string().min(8).max(72).regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, "Password must include a letter and a number"),
+  confirmPassword: z.string().optional(),
+}).refine((data) => !data.confirmPassword || data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+const loginSchema = z.object({
+  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
+  password: z.string().min(1).max(72),
+});
+
+const googleAuthSchema = z.object({
+  idToken: z.string().min(1),
+  redirectTo: z.string().optional(),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
+});
+
+const resetPasswordSchema = z.object({
+  newPassword: z.string().min(8).max(72).regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, "Password must include a letter and a number"),
+  confirmPassword: z.string(),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
 function normalizePhone(phone: string): string {
   const cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");
   return cleaned.replace(/^(\+91|91)/, "");
@@ -48,18 +86,6 @@ function normalizePhone(phone: string): string {
 function isValidIndianPhone(phone: string): boolean {
   return PHONE_PATTERN.test(phone);
 }
-
-const registerSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
-  phone: z.string().regex(PHONE_PATTERN, "Enter a valid 10-digit Indian mobile number"),
-  password: z.string().min(8).max(72).regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, "Password must include a letter and a number"),
-});
-
-const loginSchema = z.object({
-  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
-  password: z.string().min(1).max(72),
-});
 
 function createCustomerToken(customerId: string, tokenVersion: number): string {
   return jwt.sign(
@@ -117,8 +143,12 @@ function clearCustomerTokenCookie(res: Response): void {
 }
 
 const REGISTRATION_TOKEN_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const RESET_TOKEN_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const INVALID_REGISTRATION_PROOF_MESSAGE = "Invalid or expired registration session. Please request OTP again.";
+const INVALID_RESET_PROOF_MESSAGE = "Invalid or expired reset session. Please request password reset again.";
 const GENERIC_AUTH_COMPLETION_RESPONSE = { message: "Authentication request processed" };
+const GENERIC_RESET_RESPONSE = { message: "If an account exists for this email, a reset code has been sent." };
+const GENERIC_FORGOT_RESPONSE = { message: "If an account exists for this email, a verification code has been sent." };
 
 async function createRegistrationToken(email: string): Promise<string> {
   const proofId = randomUUID();
@@ -167,17 +197,139 @@ function clearRegistrationTokenCookie(res: Response): void {
   });
 }
 
+function setResetTokenCookie(res: Response, token: string): void {
+  const isProd = process.env.NODE_ENV === "production";
+  res.cookie("otp-reset-token", token, {
+    httpOnly: true,
+    path: "/",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
+    maxAge: RESET_TOKEN_EXPIRY_MS,
+  });
+}
+
+function clearResetTokenCookie(res: Response): void {
+  const isProd = process.env.NODE_ENV === "production";
+  res.clearCookie("otp-reset-token", {
+    path: "/",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
+  });
+}
+
+async function createResetToken(email: string): Promise<string> {
+  const proofId = randomUUID();
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
+  await CustomerOtpProof.create({ proofId, phone: email, expiresAt });
+
+  return jwt.sign(
+    { email, purpose: "PASSWORD_RESET", accountType: "PASSWORD_RESET" },
+    getJwtSecret(),
+    { expiresIn: "10m", jwtid: proofId },
+  );
+}
+
+async function consumeResetProof(
+  proofId: string,
+  email: string,
+): Promise<boolean> {
+  const proof = await CustomerOtpProof.findOneAndDelete({
+    proofId,
+    phone: email,
+    expiresAt: { $gt: new Date() },
+  });
+  return proof !== null;
+}
+
 export const registerCustomer = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  // Password-based customer registration is disabled.
-  // New customers must register via phone OTP (/api/auth/otp/register-complete).
-  // Existing customers can still log in with email/password via loginCustomer.
-  res.status(403).json({
-    message:
-      "Password registration is disabled. Please use phone OTP to register, or sign in if you already have an account.",
-  });
+  const parsed = registerSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request", errors: parsed.error.flatten() });
+    return;
+  }
+
+  const { name, email, phone, password } = parsed.data;
+
+  try {
+    // Check if email already exists as an active customer - generic response
+    // to avoid email enumeration.
+    const existingUser = await User.findOne({ email }).lean();
+    if (existingUser) {
+      res.status(200).json({
+        message: "If an account does not already exist for this email, a verification code has been sent. Please check your email.",
+      });
+      return;
+    }
+
+    // Check if phone already exists as an active customer or pending registration.
+    const existingPhoneUser = await User.findOne({ phone: normalizePhone(phone) }).lean();
+    const existingPendingPhone = await PendingRegistration.findOne({ phone: normalizePhone(phone) }).lean();
+    if (existingPhoneUser || existingPendingPhone) {
+      res.status(400).json({
+        message: "An account with this phone number already exists.",
+      });
+      return;
+    }
+
+    // Check if there is already a pending registration for this email.
+    const existingPending = await PendingRegistration.findOne({ email }).lean();
+    if (existingPending) {
+      res.status(200).json({
+        message: "An account with this email already exists. Please check your email for the verification code.",
+      });
+      return;
+    }
+
+    // Remove any existing pending registration for this email.
+    await PendingRegistration.deleteOne({ email });
+
+    // Hash the password now so it's ready when OTP is verified.
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Store pending registration data.
+    await PendingRegistration.create({
+      email,
+      name: name.trim(),
+      phone: normalizePhone(phone),
+      passwordHash,
+      expiresAt: new Date(Date.now() + REGISTRATION_TOKEN_EXPIRY_MS),
+    });
+
+    // Send OTP via Brevo.
+    if (!isBrevoConfigured()) {
+      // Clean up pending registration if email is not configured.
+      await PendingRegistration.deleteOne({ email });
+      res.status(503).json({
+        message: "Email service is not configured. Please contact support.",
+        code: "EMAIL_CONFIG_MISSING",
+      });
+      return;
+    }
+
+    const otp = generateOtp();
+    const emailSent = await sendOtpEmail(email, otp, "REGISTER");
+    if (!emailSent) {
+      await PendingRegistration.deleteOne({ email });
+      res.status(502).json({
+        message: "Unable to send verification email. Please try again later.",
+        code: "EMAIL_DELIVERY_FAILED",
+      });
+      return;
+    }
+
+    // Create OTP session for verification.
+    await createOtpSession(email, "REGISTER", otp);
+
+    res.status(200).json({
+      message: "verification code sent to your email. Please check your inbox.",
+    });
+  } catch (error) {
+    console.error("Customer registration failed:", error);
+    res.status(500).json({ message: "Unable to register" });
+  }
 };
 
 export const loginCustomer = async (
@@ -211,6 +363,82 @@ export const loginCustomer = async (
   } catch (error) {
     console.error("Customer login failed:", error);
     res.status(500).json({ message: "Unable to login" });
+  }
+};
+
+export const googleAuth = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!isGoogleConfigured()) {
+    res.status(503).json({
+      message: "Google sign-in is not configured. Please contact support.",
+      code: "GOOGLE_CONFIG_MISSING",
+    });
+    return;
+  }
+
+  const parsed = googleAuthSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const { idToken, redirectTo = "/account" } = parsed.data;
+
+  try {
+    const { googleId, email, emailVerified, name } = await verifyGoogleIdToken(idToken);
+
+    if (!emailVerified) {
+      res.status(400).json({ message: "Google email is not verified. Please verify your email with Google." });
+      return;
+    }
+
+    // Find existing user by Google ID or email.
+    let user: any = await User.findOne({ $or: [{ googleId }, { email }] }).select("+passwordHash +tokenVersion").lean();
+
+    if (!user) {
+      // Create new customer account from Google profile.
+      const googleName: string = name;
+      const displayName = googleName || email.split("@")[0];
+      const created = await User.create({
+        name: String(displayName),
+        email,
+        googleId,
+        emailVerified: true,
+        active: true,
+      });
+      user = created.toObject();
+    } else if (!user.googleId) {
+      // Link Google account to existing email-based account.
+      await User.updateOne(
+        { _id: user._id },
+        { $set: { googleId, emailVerified: true } },
+      );
+      user = { ...user, googleId, emailVerified: true };
+    }
+
+    if (!user) {
+      res.status(500).json({ message: "Unable to create account" });
+      return;
+    }
+
+    const token = createCustomerToken(user._id.toString(), user.tokenVersion ?? 0);
+    setCustomerTokenCookie(res, token);
+
+    // Validate redirectTo to prevent open redirects.
+    let safeRedirect = redirectTo;
+    if (!safeRedirect || !safeRedirect.startsWith("/")) {
+      safeRedirect = "/account";
+    }
+
+    res.status(200).json({
+      message: "Google sign-in successful",
+      redirectTo: safeRedirect,
+    });
+  } catch (error) {
+    console.error("Google auth failed:", error);
+    res.status(401).json({ message: "Invalid Google credentials" });
   }
 };
 
@@ -261,9 +489,6 @@ export const logoutCustomer = async (
 ||--------------------------------------------------------------------------
 || OTP SEND COOLDOWN CHECK
 ||--------------------------------------------------------------------------
-|| Returns the number of seconds remaining before the next OTP send is
-|| allowed for the given phone number and purpose, or null if no cooldown
-|| is active. Enforced in addition to the IP+phone rate limiter.
 */
 async function checkOtpCooldown(
   phone: string,
@@ -290,11 +515,6 @@ async function checkOtpCooldown(
 || OTP SEND
 || POST /api/auth/otp/send
 ||--------------------------------------------------------------------------
-|| Creates a 6-digit OTP session for the given customer email address.
-|| Rate limited: 3 sends per email/IP per hour (otpSendLimiter).
-|| Cooldown: minimum 60 seconds between sends for the same email+purpose.
-|| In development/test mode the OTP is returned in the response so it can
-|| be used without a real email provider. Never exposes the OTP in production.
 */
 export const sendOtp = async (
   req: AuthRequest,
@@ -308,7 +528,7 @@ export const sendOtp = async (
 
   const { email } = parsed.data;
 
-  const purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" =
+  const purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET" =
     parsed.data.purpose ?? "AUTH";
 
   // Enforce 60-second cooldown between OTP sends for the same email+purpose.
@@ -342,9 +562,6 @@ export const sendOtp = async (
   let providerAccepted = false;
   try {
     if (process.env.NODE_ENV === "production") {
-      // Production: deliver the OTP via Brevo transactional email before
-      // creating an OTP session. Fail closed if email delivery fails - no
-      // session and no success response is returned when delivery fails.
       if (!isBrevoConfigured()) {
         res.status(503).json({
           message: "Email service is not configured. Please contact support.",
@@ -365,7 +582,7 @@ export const sendOtp = async (
 
       providerAccepted = true;
       await commitOtpSendCooldown(cooldownClaim.claim);
-      await createOtpSession(email, purpose, otp);
+      await createOtpSession(email, purpose as "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET", otp);
       res.status(200).json({ message: "OTP sent successfully" });
       return;
     }
@@ -373,7 +590,7 @@ export const sendOtp = async (
     // Development/test: create the session and return the OTP so it can be
     // used without configuring a real email provider.
     await commitOtpSendCooldown(cooldownClaim.claim);
-    await createOtpSession(email, purpose, otp);
+    await createOtpSession(email, purpose as "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET", otp);
     res.status(200).json({ message: "OTP sent successfully", otp });
   } catch (error) {
     if (!providerAccepted) {
@@ -394,9 +611,10 @@ export const sendOtp = async (
 || POST /api/auth/otp/verify
 ||--------------------------------------------------------------------------
 || Verifies a 6-digit OTP for the given customer email address.
-|| On success, finds or creates the customer by email and issues the
-|| existing secure customer JWT cookie. Rate limited: 10 attempts per
-|| identifier/IP per 15 minutes (otpVerifyLimiter).
+|| For REGISTER purpose with pending registration, creates the account
+|| directly and sets the customer JWT cookie.
+|| Otherwise, sets the otp-registration-token cookie for subsequent
+|| registration completion (preserving existing behavior).
 */
 export const verifyOtp = async (
   req: AuthRequest,
@@ -409,7 +627,7 @@ export const verifyOtp = async (
   }
 
   const { email, otp } = parsed.data;
-  const purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" =
+  const purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET" =
     parsed.data.purpose ?? "AUTH";
 
   try {
@@ -420,8 +638,40 @@ export const verifyOtp = async (
       return;
     }
 
-    // Keep the response and proof cookie identical regardless of account state.
-    // The verified email is carried only in this short-lived HTTP-only cookie.
+    // If this is a REGISTER verification with a pending registration,
+    // create the account directly and set the customer JWT cookie.
+    if (purpose === "REGISTER") {
+      const pending = await PendingRegistration.findOne({ email }).lean();
+      if (pending) {
+        // Create the customer account with the stored hashed password.
+        const created = await User.create({
+          name: pending.name,
+          email: pending.email,
+          phone: pending.phone,
+          passwordHash: pending.passwordHash,
+          emailVerified: true,
+          active: true,
+        });
+        const user = created.toObject();
+
+        await PendingRegistration.deleteOne({ email });
+
+        const customerToken = createCustomerToken(
+          user._id.toString(),
+          user.tokenVersion ?? 0,
+        );
+        setCustomerTokenCookie(res, customerToken);
+
+        res.status(200).json({
+          message: "Account created and signed in successfully",
+          redirectTo: "/account",
+        });
+        return;
+      }
+    }
+
+    // Preserve existing behavior: set the otp-registration-token cookie
+    // for subsequent registration completion.
     const regToken = await createRegistrationToken(email);
     setRegistrationTokenCookie(res, regToken);
     res.status(200).json({
@@ -435,14 +685,233 @@ export const verifyOtp = async (
 
 /*
 ||--------------------------------------------------------------------------
-|| REGISTRATION COMPLETE
-|| POST /api/auth/otp/register-complete
+|| FORGOT PASSWORD
+|| POST /api/auth/forgot-password
 ||--------------------------------------------------------------------------
-|| Completes phone-only customer registration after OTP verification.
-|| The verified phone identity comes exclusively from the signed
-|| otp-registration-token httpOnly cookie - never from the request body.
-|| Rate limited: 10 registrations per identifier/IP per 15 minutes.
+|| Sends a password reset OTP to the customer's email.
+|| Never reveals whether an email address is registered.
 */
+export const forgotPassword = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    // Generic response to avoid email enumeration.
+    res.status(200).json(GENERIC_FORGOT_RESPONSE);
+    return;
+  }
+
+  const { email } = parsed.data;
+
+  // Only send OTP if the email is registered.
+  const user = await User.findOne({ email }).lean();
+  if (!user) {
+    res.status(200).json(GENERIC_FORGOT_RESPONSE);
+    return;
+  }
+
+  // Enforce cooldown.
+  const retryAfter = await checkOtpCooldown(email, "PASSWORD_RESET");
+  if (retryAfter !== null) {
+    res.status(429).json({
+      message: "Please wait before requesting another reset code.",
+      retryAfter,
+    });
+    return;
+  }
+
+  let cooldownClaim;
+  try {
+    cooldownClaim = await claimOtpSendCooldown(email, "PASSWORD_RESET");
+  } catch (error) {
+    console.error("Password reset OTP reservation failed:", error);
+    res.status(500).json({ message: "Unable to process request" });
+    return;
+  }
+
+  if (!("claim" in cooldownClaim)) {
+    res.status(429).json({
+      message: "Please wait before requesting another reset code.",
+      retryAfter: cooldownClaim.retryAfter,
+    });
+    return;
+  }
+
+  const otp = generateOtp();
+  try {
+    if (process.env.NODE_ENV === "production") {
+      if (!isBrevoConfigured()) {
+        await releaseOtpSendCooldown(cooldownClaim.claim);
+        res.status(503).json({
+          message: "Email service is not configured. Please contact support.",
+          code: "EMAIL_CONFIG_MISSING",
+        });
+        return;
+      }
+
+      const emailSent = await sendOtpEmail(email, otp, "PASSWORD_RESET");
+      if (!emailSent) {
+        await releaseOtpSendCooldown(cooldownClaim.claim);
+        res.status(502).json({
+          message: "Unable to send reset email. Please try again later.",
+          code: "EMAIL_DELIVERY_FAILED",
+        });
+        return;
+      }
+    }
+
+    await commitOtpSendCooldown(cooldownClaim.claim);
+    await createOtpSession(email, "PASSWORD_RESET" as "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET", otp);
+
+    res.status(200).json(GENERIC_FORGOT_RESPONSE);
+  } catch (error) {
+    try {
+      await releaseOtpSendCooldown(cooldownClaim.claim);
+    } catch {
+      // The claim expires automatically if it cannot be released.
+    }
+    console.error("Forgot password failed:", error);
+    res.status(200).json(GENERIC_FORGOT_RESPONSE);
+  }
+};
+
+/*
+||--------------------------------------------------------------------------
+|| VERIFY RESET OTP
+|| POST /api/auth/verify-reset-otp
+||--------------------------------------------------------------------------
+|| Verifies the password reset OTP and sets a reset proof cookie.
+*/
+export const verifyResetOtp = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  const parsed = otpVerifySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request", errors: parsed.error.flatten() });
+    return;
+  }
+
+  const { email, otp } = parsed.data;
+
+  try {
+    const isValid = await verifyOtpCode(email, otp, "PASSWORD_RESET");
+
+    if (!isValid) {
+      res.status(401).json({ message: "Invalid or expired OTP" });
+      return;
+    }
+
+    const resetToken = await createResetToken(email);
+    setResetTokenCookie(res, resetToken);
+
+    res.status(200).json({
+      message: "Reset code verified successfully",
+    });
+  } catch (error) {
+    console.error("Reset OTP verification failed:", error);
+    res.status(500).json({ message: "Unable to verify reset code" });
+  }
+};
+
+/*
+||--------------------------------------------------------------------------
+|| RESET PASSWORD
+|| POST /api/auth/reset-password
+||--------------------------------------------------------------------------
+|| Resets the customer's password after OTP verification.
+|| Invalidates existing sessions by incrementing tokenVersion.
+*/
+export const resetPassword = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  const token = req.cookies?.["otp-reset-token"];
+  if (!token) {
+    clearResetTokenCookie(res);
+    res.status(401).json({ message: INVALID_RESET_PROOF_MESSAGE });
+    return;
+  }
+
+  let decoded: {
+    email?: string;
+    purpose?: string;
+    accountType?: string;
+    jti?: string;
+  };
+  try {
+    decoded = jwt.verify(token, getJwtSecret()) as {
+      email?: string;
+      purpose?: string;
+      accountType?: string;
+      jti?: string;
+    };
+  } catch {
+    clearResetTokenCookie(res);
+    res.status(401).json({ message: INVALID_RESET_PROOF_MESSAGE });
+    return;
+  }
+
+  if (
+    decoded.accountType !== "PASSWORD_RESET" ||
+    decoded.purpose !== "PASSWORD_RESET" ||
+    !decoded.email ||
+    !decoded.jti
+  ) {
+    clearResetTokenCookie(res);
+    res.status(401).json({ message: INVALID_RESET_PROOF_MESSAGE });
+    return;
+  }
+
+  const email = decoded.email.toLowerCase();
+
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      code: "INVALID_PASSWORD",
+      message: "Please provide a valid password.",
+    });
+    return;
+  }
+
+  const { newPassword } = parsed.data;
+
+  // Consume the reset proof (single-use).
+  const proofConsumed = await consumeResetProof(decoded.jti, email);
+  if (!proofConsumed) {
+    clearResetTokenCookie(res);
+    res.status(401).json({ message: INVALID_RESET_PROOF_MESSAGE });
+    return;
+  }
+
+  clearResetTokenCookie(res);
+
+  try {
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    const updated = await User.findOneAndUpdate(
+      { email },
+      {
+        $set: { passwordHash },
+        $inc: { tokenVersion: 1 },
+      },
+    );
+
+    if (!updated) {
+      res.status(404).json({ message: "Account not found" });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Password reset successfully. Please sign in with your new password.",
+    });
+  } catch (error) {
+    console.error("Password reset failed:", error);
+    res.status(500).json({ message: "Unable to reset password" });
+  }
+};
+
 export const completeRegistration = async (
   req: AuthRequest,
   res: Response,

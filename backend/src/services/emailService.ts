@@ -62,7 +62,7 @@ export function getBrevoPresenceChecks(): {
 }
 
 function otpPurposeLabel(
-  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT",
+  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET",
 ): string {
   if (purpose === "LOGIN") {
     return "sign in to your S.V. Sweets & Bakers account";
@@ -73,12 +73,15 @@ function otpPurposeLabel(
   if (purpose === "GUEST_CHECKOUT") {
     return "confirm your guest checkout";
   }
+  if (purpose === "PASSWORD_RESET") {
+    return "reset your S.V. Sweets & Bakers account password";
+  }
   return "complete your request";
 }
 
 function buildOtpHtml(
   otp: string,
-  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT",
+  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET",
 ): string {
   const label = otpPurposeLabel(purpose);
   return `
@@ -149,7 +152,7 @@ function buildOtpHtml(
 export async function sendOtpEmail(
   to: string,
   otp: string,
-  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" = "LOGIN",
+  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET" = "LOGIN",
 ): Promise<boolean> {
   if (!isBrevoConfigured()) {
     console.error(

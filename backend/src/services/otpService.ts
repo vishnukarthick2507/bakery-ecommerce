@@ -48,7 +48,7 @@ export function generateSalt(): string {
 
 export async function claimOtpSendCooldown(
   identifier: string,
-  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT",
+  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET",
 ): Promise<{ claim: OtpSendCooldownClaim } | { retryAfter: number }> {
   const normalizedIdentifier = identifier.toLowerCase().trim();
   const key = `${purpose}:${normalizedIdentifier}`;
@@ -98,7 +98,7 @@ export async function releaseOtpSendCooldown(
 
 export async function createOtpSession(
   identifier: string,
-  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT",
+  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET",
   otp?: string,
 ): Promise<{ otp: string }> {
   const resolvedOtp = otp ?? generateOtp();
@@ -128,7 +128,7 @@ export async function createOtpSession(
 export async function verifyOtp(
   identifier: string,
   otp: string,
-  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT",
+  purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET",
 ): Promise<boolean> {
   const normId = identifier.toLowerCase().trim();
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll, beforeEach, afterAll } from "vitest";
+import { describe, expect, it, beforeAll, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -9,6 +9,12 @@ import {
 } from "./testDatabase.js";
 import { createAuthTestApp } from "./authTestApp.js";
 import { Admin } from "../src/models/Admin.js";
+import { sendOtpEmail, isBrevoConfigured } from "../src/services/emailService.js";
+
+vi.mock("../src/services/emailService.js", () => ({
+  sendOtpEmail: vi.fn(),
+  isBrevoConfigured: vi.fn(() => true),
+}));
 
 function setCookieValues(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : value ? [value] : [];
@@ -26,12 +32,15 @@ describe("Customer password-based authentication", () => {
   beforeAll(async () => {
     process.env.JWT_SECRET =
       "test-jwt-secret-that-is-at-least-32-chars-long";
+    process.env.OTP_SECRET = "test-otp-secret-that-is-at-least-16-chars";
     await connectTestDB();
     app = createAuthTestApp();
   });
 
   beforeEach(async () => {
     await clearTestDB();
+    (sendOtpEmail as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (isBrevoConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
   });
 
   afterAll(async () => {
@@ -46,13 +55,13 @@ describe("Customer password-based authentication", () => {
   };
 
   describe("POST /api/auth/register", () => {
-    it("rejects password-based registration (disabled)", async () => {
+    it("registers a new customer with email/password", async () => {
       const res = await request(app)
         .post("/api/auth/register")
         .send(registerPayload);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain("disabled");
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain("verification code");
     });
 
     it("rejects duplicate email registration via password", async () => {
@@ -62,8 +71,8 @@ describe("Customer password-based authentication", () => {
         .post("/api/auth/register")
         .send(registerPayload);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain("disabled");
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain("already exist");
     });
 
     it("rejects duplicate phone registration via password", async () => {
@@ -76,8 +85,8 @@ describe("Customer password-based authentication", () => {
           email: "someone-else@example.com",
         });
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain("disabled");
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain("already exist");
     });
 
     it("rejects invalid registration details via password", async () => {
@@ -88,7 +97,7 @@ describe("Customer password-based authentication", () => {
         password: "short",
       });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(400);
     });
   });
 
