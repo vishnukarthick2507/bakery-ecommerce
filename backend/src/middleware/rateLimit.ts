@@ -159,3 +159,17 @@ export const otpVerifyLimiter = rateLimit({
     return `${email}:${ipKey}`;
   },
 });
+
+export const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 10, // 10 password change attempts per IP per 15 minutes
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  message: {
+    message:
+      "Too many password change attempts. Please try again after 15 minutes.",
+  },
+  handler: (_req, res, _next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+});

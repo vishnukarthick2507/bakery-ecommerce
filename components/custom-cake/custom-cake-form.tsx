@@ -1,9 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowLeftIcon, CheckCircle2, MessageCircleIcon } from 'lucide-react'
 
 import { ApiError, submitCustomCakeRequest } from '@/lib/api'
+import {
+  fetchUploadSignature,
+  uploadFileToCloudinary,
+  type UploadSignature,
+} from '@/lib/upload'
 import { siteConfig, whatsappLink } from '@/lib/site-config'
 import { cn } from '@/lib/utils'
 
@@ -28,6 +33,9 @@ const emptyForm: FormState = {
   instructions: '',
   referenceImageUrl: '',
 }
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
 
 type Step = 'contact' | 'cake-details' | 'design' | 'reference' | 'review'
 
@@ -61,12 +69,105 @@ export function CustomCakeForm() {
   const [error, setError] = useState('')
   const [referenceNumber, setReferenceNumber] = useState<string | null>(null)
 
+  // Reference photo upload state
+  const [referenceFile, setReferenceFile] = useState<File | null>(null)
+  const [referencePreview, setReferencePreview] = useState<string | null>(null)
+  const [referenceUploading, setReferenceUploading] = useState(false)
+  const [referenceUploadProgress, setReferenceUploadProgress] = useState(0)
+  const [referenceUploadError, setReferenceUploadError] = useState('')
+  const referenceUrlsRef = useRef<string[]>([])
+
   const clearFieldError = (field: keyof FormState) => {
     setFieldErrors((prev) => {
       const next = { ...prev }
       delete next[field]
       return next
     })
+  }
+
+  function revokeReferencePreview() {
+    referenceUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+    referenceUrlsRef.current = []
+  }
+
+  function clearReferenceSelection() {
+    revokeReferencePreview()
+    setReferenceFile(null)
+    setReferencePreview(null)
+    setReferenceUploadProgress(0)
+    setReferenceUploadError('')
+  }
+
+  async function handleReferenceChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setReferenceUploadError(
+        'Please upload a JPG, PNG or WebP image only.',
+      )
+      setReferenceFile(null)
+      setReferencePreview(null)
+      return
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setReferenceUploadError('Image must be smaller than 5 MB.')
+      setReferenceFile(null)
+      setReferencePreview(null)
+      return
+    }
+
+    revokeReferencePreview()
+    const url = URL.createObjectURL(file)
+    referenceUrlsRef.current = [url]
+
+    setReferenceFile(file)
+    setReferencePreview(url)
+    setReferenceUploadError('')
+    setReferenceUploadProgress(0)
+    // A new file selection replaces any previously linked URL.
+    setForm((current) => ({ ...current, referenceImageUrl: '' }))
+    clearFieldError('referenceImageUrl')
+  }
+
+  async function uploadReferenceFile(): Promise<string | null> {
+    if (!referenceFile) return null
+
+    setReferenceUploading(true)
+    setReferenceUploadError('')
+    setReferenceUploadProgress(0)
+
+    try {
+      const signature = await fetchUploadSignature(
+        '/api/customer/uploads/signature',
+      )
+
+      const secureUrl = await uploadFileToCloudinary(
+        referenceFile,
+        signature,
+        {
+          onProgress: (percent) => {
+            setReferenceUploadProgress(percent)
+          },
+        },
+      )
+
+      setReferenceUploadProgress(100)
+      revokeReferencePreview()
+      setReferenceFile(null)
+      setReferencePreview(null)
+      return secureUrl
+    } catch (err) {
+      setReferenceUploadError(
+        err instanceof Error ? err.message : 'Unable to upload reference photo',
+      )
+      return null
+    } finally {
+      setReferenceUploading(false)
+    }
   }
 
   function update(field: keyof FormState, value: string) {
@@ -145,6 +246,18 @@ export function CustomCakeForm() {
     if (hasError) {
       setFieldErrors(nextFieldErrors)
       return
+    }
+
+    // Upload a selected reference photo that has not been uploaded yet, so
+    // the photo travels with the request even if the customer never clicked
+    // the standalone upload button. A failed upload is non-fatal: the photo
+    // is optional and the request can still be submitted without it.
+    if (referenceFile && !form.referenceImageUrl.trim()) {
+      const secureUrl = await uploadReferenceFile()
+      if (secureUrl) {
+        setForm((current) => ({ ...current, referenceImageUrl: secureUrl }))
+        clearFieldError('referenceImageUrl')
+      }
     }
 
     try {
@@ -533,6 +646,59 @@ export function CustomCakeForm() {
               </p>
             </div>
 
+            {/* Reference photo upload from computer/mobile */}
+            <div>
+              <label htmlFor="cc-reference-file" className="mb-2 block text-sm font-medium text-foreground">
+                Upload Reference Photo
+              </label>
+              <input
+                id="cc-reference-file"
+                type="file"
+                accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                onChange={handleReferenceChange}
+                disabled={referenceUploading}
+                className="mt-2 w-full rounded-lg border border-border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
+              />
+              {referenceFile && (
+                <div className="mt-3 rounded-lg border border-caramel bg-caramel/5 p-3 flex flex-col items-center gap-3">
+                  {referencePreview && (
+                    <img
+                      src={referencePreview}
+                      alt="Reference preview"
+                      className="h-32 w-32 rounded-xl object-cover"
+                    />
+                  )}
+                  <div className="w-full bg-cream/20 rounded-full h-2">
+                    <div
+                      className="bg-primary h-full rounded-full transition-all duration-300"
+                      style={{ width: `${referenceUploadProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate max-w-xs">
+                    {referenceFile.name}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={uploadReferenceFile}
+                    disabled={referenceUploading}
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                  >
+                    {referenceUploading ? 'Uploading…' : 'Upload to Cloudinary'}
+                  </button>
+                </div>
+              )}
+              {referenceUploadError && (
+                <p className="mt-1 text-xs text-destructive">
+                  {referenceUploadError}
+                </p>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                Optional. Requires signing in to your account. Or paste a design
+                link below instead.
+              </p>
+            </div>
+
+            {/* Or paste an image link */}
             <div>
               <label htmlFor="cc-image" className="mb-2 block text-sm font-medium text-foreground">
                 Reference Image URL
@@ -551,7 +717,7 @@ export function CustomCakeForm() {
                 className={fieldErrorClass(Boolean(fieldErrors.referenceImageUrl))}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Optional. Prefer to send a photo? Message us on WhatsApp
+                Optional. A public link to a photo or design for inspiration.
               </p>
             </div>
 

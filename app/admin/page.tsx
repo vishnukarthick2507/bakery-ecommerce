@@ -52,6 +52,8 @@ function StatCard({ label, value }: { label: string; value: string }) {
 function AdminPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [customersCount, setCustomersCount] = useState<number>(0)
+  const [customersLoading, setCustomersLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [productsLoading, setProductsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -118,8 +120,31 @@ function AdminPage() {
       }
     }
 
+    const fetchCustomersCount = async () => {
+      try {
+        const response = await fetch('/api/admin/customers?page=1&limit=1', {
+          cache: 'no-store',
+          credentials: 'include',
+        })
+
+        if (!response.ok) {
+          // Non-fatal: customer count is supplemental data
+          setCustomersCount(0)
+          return
+        }
+
+        const data = await response.json()
+        setCustomersCount(data.pagination?.total ?? 0)
+      } catch {
+        setCustomersCount(0)
+      } finally {
+        setCustomersLoading(false)
+      }
+    }
+
     fetchOrders()
     fetchProducts()
+    fetchCustomersCount()
   }, [])
 
   const totalOrders = orders.length
@@ -224,6 +249,8 @@ function AdminPage() {
         <section className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total Orders" value={loading || error ? '—' : totalOrders.toLocaleString('en-IN')} />
           <StatCard label="Today's Orders" value={loading || error ? '—' : todaysOrders.length.toLocaleString('en-IN')} />
+          <StatCard label="Total Customers" value={customersLoading || error ? '—' : customersCount.toLocaleString('en-IN')} />
+          <StatCard label="Total Products" value={productsLoading || productsError ? '—' : products.length.toLocaleString('en-IN')} />
           <StatCard label="Pending Orders" value={loading || error ? '—' : pendingOrders.toLocaleString('en-IN')} />
           <StatCard label="Preparing" value={loading || error ? '—' : preparingOrders.toLocaleString('en-IN')} />
           <StatCard label="Ready" value={loading || error ? '—' : readyOrders.toLocaleString('en-IN')} />

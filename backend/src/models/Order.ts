@@ -45,6 +45,9 @@ export interface IOrderItem {
   unitPrice: number;
   itemTotal: number;
   totalPrice: number;
+  // Cost snapshot captured at order creation time for profitability reporting.
+  // Optional so existing orders remain backward-compatible.
+  costSnapshot?: number;
 }
 
 export interface IOrder extends Document {
@@ -89,6 +92,13 @@ export interface IOrder extends Document {
   totalAmount: number;
   paidAt?: Date;
   paidBy?: mongoose.Types.ObjectId;
+  razorpaySettlementId?: string;
+  razorpayFee?: number;
+  taxAmount?: number;
+  readyAt?: Date;
+  dispatchedAt?: Date;
+  deliveredAt?: Date;
+  acquisitionSource?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -128,6 +138,12 @@ const orderItemSchema = new Schema<IOrderItem>(
     totalPrice: {
       type: Number,
       required: true,
+      min: 0,
+    },
+
+    // Cost snapshot captured at order creation time.
+    costSnapshot: {
+      type: Number,
       min: 0,
     },
   },
@@ -358,10 +374,52 @@ const orderSchema = new Schema<IOrder>(
       required: true,
       min: 0,
     },
+
+    // Financial fields for reconciliation and profitability (Phase 1 data foundation).
+    // All optional so existing orders remain backward-compatible.
+    razorpaySettlementId: {
+      type: String,
+      trim: true,
+    },
+
+    razorpayFee: {
+      type: Number,
+      min: 0,
+    },
+
+    taxAmount: {
+      type: Number,
+      min: 0,
+    },
+
+    // Order lifecycle timestamps for fulfilment SLA reporting.
+    readyAt: {
+      type: Date,
+    },
+
+    dispatchedAt: {
+      type: Date,
+    },
+
+    deliveredAt: {
+      type: Date,
+    },
+
+    // Customer acquisition source attribution (optional, for marketing analytics).
+    acquisitionSource: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ phone: 1 });
+orderSchema.index({ paymentStatus: 1 });
+orderSchema.index({ orderStatus: 1 });
 
 export const Order = mongoose.model<IOrder>("Order", orderSchema);

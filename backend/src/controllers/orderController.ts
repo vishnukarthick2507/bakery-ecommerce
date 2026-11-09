@@ -13,6 +13,7 @@ import {
   reserveInventory,
   restoreInventory,
 } from "../services/inventory.js";
+import { recalculateCustomerMetrics } from "../services/customerMetrics.js";
 import { getRazorpayKeyId, getRazorpayKeySecret } from "../services/razorpay.js";
 import { ONLINE_RESERVATION_TTL_MS } from "../services/inventoryExpiry.js";
 import {
@@ -26,6 +27,7 @@ type ProductRecord = {
   name: string;
   price: number;
   stock: number;
+  cost?: number;
   availability:
     | "AVAILABLE"
     | "OUT_OF_STOCK"
@@ -71,6 +73,9 @@ const createOrderSchema = z.object({
   ]),
 
   items: z.array(orderItemSchema).min(1).max(20),
+
+  // Optional customer acquisition source attribution (marketing analytics).
+  acquisitionSource: z.string().trim().max(100).optional(),
 });
 
 const guestTrackingSchema = z.object({
@@ -440,6 +445,9 @@ export const createOrder = async (
           unitPrice: product.price,
           itemTotal,
           totalPrice: itemTotal,
+          // Capture the current product cost at order creation time.
+          // Optional — missing if product cost was never recorded.
+          ...(product.cost !== undefined ? { costSnapshot: product.cost } : {}),
         };
       });
 
@@ -459,7 +467,12 @@ export const createOrder = async (
         );
       }
 
-      await reserveInventory(session, orderItems);
+      await reserveInventory(
+        session,
+        orderItems,
+        undefined,
+        req.customer ? new mongoose.Types.ObjectId(req.customer.id) : undefined,
+      );
 
       const orderData = {
         orderNumber: generateOrderNumber(),
@@ -502,6 +515,9 @@ export const createOrder = async (
         subtotal,
         deliveryFee: 0,
         totalAmount: subtotal,
+
+        // Optional acquisition source attribution.
+        ...(data.acquisitionSource ? { acquisitionSource: data.acquisitionSource } : {}),
       };
 
       const createdOrder = new Order(orderData);
@@ -518,6 +534,18 @@ export const createOrder = async (
     }
 
     const { order, replayed } = result;
+
+    // Recalculate customer metrics for authenticated customers.
+    // Best-effort: metrics recalculation failure must not block order creation.
+    if (!replayed && req.customer) {
+      try {
+        await recalculateCustomerMetrics(
+          new mongoose.Types.ObjectId(req.customer.id),
+        );
+      } catch {
+        // Non-fatal: metrics can be recalculated via scheduled job.
+      }
+    }
 
     res.status(replayed ? 200 : 201).json({
       message: replayed
@@ -767,16 +795,119 @@ export const getMyOrderByNumber = async (
   }
 };
 
+const orderQuerySchema = z.object({
+  page: z.string().optional(),
+  limit: z.string().optional(),
+  search: z.string().optional(),
+  paymentMethod: z
+    .enum(["COD", "ONLINE", "PAY_AT_STORE"])
+    .optional(),
+  paymentStatus: z.enum(["PENDING", "PAID", "FAILED"]).optional(),
+  orderStatus: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+});
+
 export const getAllOrders = async (
-  _req: Request,
+  req: AuthRequest,
   res: Response,
 ): Promise<void> => {
   try {
-    const orders = await Order.find()
+    const parsed = orderQuerySchema.safeParse(req.query);
+
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const {
+      page,
+      limit,
+      search,
+      paymentMethod,
+      paymentStatus,
+      orderStatus,
+      startDate,
+      endDate,
+    } = parsed.data;
+
+    const pageNum = page !== undefined ? parseInt(page, 10) : undefined;
+    const limitNum = limit !== undefined ? parseInt(limit, 10) : undefined;
+    const DEFAULT_LIMIT = 20;
+    const MAX_LIMIT = 100;
+    const effectivePage = pageNum ?? 1;
+    const effectiveLimit = limitNum ?? DEFAULT_LIMIT;
+    const hasPagination = true;
+
+    const filter: Record<string, unknown> = {};
+
+    if (search) {
+      const searchTerm = search.trim();
+      filter.$or = [
+        { orderNumber: { $regex: searchTerm, $options: "i" } },
+        { customerName: { $regex: searchTerm, $options: "i" } },
+        { phone: { $regex: searchTerm, $options: "i" } },
+      ];
+    }
+
+    if (paymentMethod) {
+      filter.paymentMethod = paymentMethod;
+    }
+
+    if (paymentStatus) {
+      filter.paymentStatus = paymentStatus;
+    }
+
+    if (orderStatus) {
+      filter.orderStatus = orderStatus;
+    }
+
+    if (startDate || endDate) {
+      const dateFilter: Record<string, unknown> = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        dateFilter.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dateFilter.$lte = end;
+      }
+      filter.createdAt = dateFilter;
+    }
+
+    const countQuery = Order.countDocuments(filter);
+    let safePage = Math.max(1, effectivePage);
+    let safeLimit = Math.min(MAX_LIMIT, Math.max(1, effectiveLimit));
+
+    const findQuery = Order.find(filter)
       .sort({ createdAt: -1 })
       .lean();
 
-    res.status(200).json({ orders });
+    if (hasPagination) {
+      const skip = (safePage - 1) * safeLimit;
+      findQuery.skip(skip).limit(safeLimit);
+    }
+
+    const [orders, total] = await Promise.all([findQuery, countQuery]);
+
+    if (hasPagination) {
+      res.status(200).json({
+        orders,
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total,
+          totalPages: Math.ceil(total / safeLimit),
+        },
+      });
+    } else {
+      res.status(200).json({ orders });
+    }
   } catch (error) {
     console.error("Get all orders failed:", error);
     res.status(500).json({ message: "Unable to fetch orders" });
@@ -868,7 +999,11 @@ export const updateOrderStatus = async (
           nextStatus === "CANCELLED" &&
           currentOrder.inventoryStatus === "RESERVED"
         ) {
-          await restoreInventory(session, currentOrder.items);
+          await restoreInventory(
+            session,
+            currentOrder.items,
+            new mongoose.Types.ObjectId(currentOrder._id),
+          );
           currentOrder.inventoryStatus = "RELEASED";
           currentOrder.reservationExpiresAt = undefined;
         } else if (

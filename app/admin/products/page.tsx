@@ -1,8 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+
+import {
+  fetchUploadSignature,
+  uploadFileToCloudinary,
+  type UploadSignature,
+} from '@/lib/upload'
 
 import { withAdminAuth } from '@/components/admin/admin-auth'
 import AdminNav from '@/components/admin/admin-nav'
@@ -115,10 +121,22 @@ function AdminProductsPage() {
     useState<string | null>(null)
 
   // Image upload state
-  const [uploadFile, setUploadFile] = useState<File | null>(null)
-  const [uploadPreview, setUploadPreview] = useState<string | null>(null)
+  const [uploadFiles, setUploadFiles] = useState<File[]>([])
+  const [uploadPreviews, setUploadPreviews] = useState<string[]>([])
+  const [uploadProgress, setUploadProgress] = useState<Record<number, number>>(
+    {},
+  )
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+
+  // Revoke object URLs when the component unmounts or the form closes.
+  const objectUrlsRef = useRef<string[]>([])
+
+  // Pagination state
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(20)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
 
   async function fetchProducts() {
     try {
@@ -126,7 +144,7 @@ function AdminProductsPage() {
       setError('')
 
       const response = await fetch(
-        '/api/products?includeInactive=true',
+        `/api/products?page=${page}&limit=${limit}&includeInactive=true`,
         {
           cache: 'no-store',
           credentials: 'include',
@@ -142,8 +160,24 @@ function AdminProductsPage() {
         )
       }
 
-      const fetchedProducts = data as Product[]
+      // Handle both paginated object and plain array (backward compatible)
+      let fetchedProducts: Product[] = []
+      let fetchedTotal = 0
+      let fetchedTotalPages = 0
+
+      if (Array.isArray(data)) {
+        fetchedProducts = data
+        fetchedTotal = data.length
+        fetchedTotalPages = 1
+      } else {
+        fetchedProducts = data.products ?? []
+        fetchedTotal = data.pagination?.total ?? 0
+        fetchedTotalPages = data.pagination?.totalPages ?? 1
+      }
+
       setProducts(fetchedProducts)
+      setTotal(fetchedTotal)
+      setTotalPages(fetchedTotalPages)
       setCategories(
         Array.from(new Set(fetchedProducts.map((product) => product.category)))
           .sort((first, second) => first.localeCompare(second)),
@@ -163,17 +197,25 @@ function AdminProductsPage() {
     fetchProducts()
   }, [])
 
+  function revokePreviews() {
+    objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+    objectUrlsRef.current = []
+  }
+
   function openAddForm() {
+    revokePreviews()
     setEditingProduct(null)
     setForm(emptyForm)
-    setUploadFile(null)
-    setUploadPreview(null)
+    setUploadFiles([])
+    setUploadPreviews([])
+    setUploadProgress({})
     setUploadError('')
     setShowForm(true)
     setError('')
   }
 
   function openEditForm(product: Product) {
+    revokePreviews()
     setEditingProduct(product)
 
     setForm({
@@ -190,8 +232,9 @@ function AdminProductsPage() {
       images: product.images ?? [],
     })
 
-    setUploadFile(null)
-    setUploadPreview(null)
+    setUploadFiles([])
+    setUploadPreviews([])
+    setUploadProgress({})
     setUploadError('')
     setShowForm(true)
     setError('')
@@ -200,11 +243,13 @@ function AdminProductsPage() {
   function closeForm() {
     if (saving) return
 
+    revokePreviews()
     setShowForm(false)
     setEditingProduct(null)
     setForm(emptyForm)
-    setUploadFile(null)
-    setUploadPreview(null)
+    setUploadFiles([])
+    setUploadPreviews([])
+    setUploadProgress({})
     setUploadError('')
   }
 
@@ -231,95 +276,136 @@ function AdminProductsPage() {
       )
     }
 
-    return response.json()
-  }
-
-  async function uploadToCloudinary(file: File): Promise<string> {
-    const { signature } = await fetchUploadSignature()
-
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('api_key', signature.apiKey)
-    formData.append('timestamp', String(signature.timestamp))
-    formData.append('signature', signature.signature)
-    formData.append('folder', signature.folder)
-
-    const uploadResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${signature.cloudName}/image/upload`,
-      {
-        method: 'POST',
-        body: formData,
-      },
-    )
-
-    const result = await uploadResponse.json()
-
-    if (!uploadResponse.ok || !result.secure_url) {
-      throw new Error(
-        result.error?.message || 'Image upload failed',
-      )
-    }
-
-    return result.secure_url
+    const payload = await response.json()
+    return payload.signature
   }
 
   async function handleImageChange(
     event: React.ChangeEvent<HTMLInputElement>,
   ) {
-    const file = event.target.files?.[0]
-    if (!file) return
+    const files = Array.from(event.target.files ?? [])
+    if (files.length === 0) return
 
-    // Client-side validation
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+    // Client-side validation for every selected file.
+    const invalidType = files.find(
+      (file) => !ACCEPTED_IMAGE_TYPES.includes(file.type),
+    )
+    if (invalidType) {
       setUploadError(
         'Please upload a JPG, PNG or WebP image only.',
       )
-      setUploadFile(null)
-      setUploadPreview(null)
+      setUploadFiles([])
+      setUploadPreviews([])
+      setUploadProgress({})
       return
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      setUploadError(
-        'Image must be smaller than 5 MB.',
-      )
-      setUploadFile(null)
-      setUploadPreview(null)
+    const tooLarge = files.find((file) => file.size > MAX_FILE_SIZE)
+    if (tooLarge) {
+      setUploadError('Each image must be smaller than 5 MB.')
+      setUploadFiles([])
+      setUploadPreviews([])
+      setUploadProgress({})
       return
     }
 
-    setUploadFile(file)
+    // Revoke any previews from a previous selection.
+    objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+
+    const previews = files.map((file) => URL.createObjectURL(file))
+    objectUrlsRef.current = previews
+
+    setUploadFiles(files)
+    setUploadPreviews(previews)
+    setUploadProgress({})
     setUploadError('')
-    setUploadPreview(URL.createObjectURL(file))
   }
 
-  async function handleUploadImage() {
-    if (!uploadFile) return
+  async function handleUploadImages() {
+    if (uploadFiles.length === 0) return
 
     setUploading(true)
     setUploadError('')
+    const progress: Record<number, number> = {}
+    uploadFiles.forEach((_, index) => {
+      progress[index] = 0
+    })
+    setUploadProgress(progress)
 
+    let signature: UploadSignature | null = null
     try {
-      const secureUrl = await uploadToCloudinary(uploadFile)
-
-      setForm((current) => {
-        const images = current.images.filter((img) => img !== secureUrl)
-        return {
-          ...current,
-          images: [secureUrl, ...images],
-        }
-      })
-
-      setUploadPreview(secureUrl)
+      signature = await fetchUploadSignature()
     } catch (err) {
       setUploadError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to upload image',
+        err instanceof Error ? err.message : 'Unable to get upload authorization',
+      )
+      setUploading(false)
+      return
+    }
+
+    if (!signature) {
+      setUploadError('Unable to get upload authorization')
+      setUploading(false)
+      return
+    }
+
+    try {
+      for (let index = 0; index < uploadFiles.length; index++) {
+        const file = uploadFiles[index]
+
+        const secureUrl = await uploadFileToCloudinary(
+          file,
+          signature,
+          {
+            onProgress: (percent) => {
+              setUploadProgress((current) => ({
+                ...current,
+                [index]: percent,
+              }))
+            },
+          },
+        )
+
+        setUploadProgress((current) => ({
+          ...current,
+          [index]: 100,
+        }))
+
+        setForm((current) => {
+          if (current.images.includes(secureUrl)) {
+            return current
+          }
+          return {
+            ...current,
+            images: [...current.images, secureUrl],
+          }
+        })
+      }
+
+      // Clear the pending selection once every file has uploaded.
+      setUploadFiles([])
+      setUploadPreviews([])
+      setUploadProgress({})
+      revokePreviews()
+    } catch (err) {
+      setUploadError(
+        err instanceof Error ? err.message : 'Unable to upload image',
       )
     } finally {
       setUploading(false)
     }
+  }
+
+  function moveImage(index: number, direction: 'up' | 'down') {
+    setForm((current) => {
+      const images = [...current.images]
+      const target = direction === 'up' ? index - 1 : index + 1
+      if (target < 0 || target >= images.length) {
+        return current
+      }
+      ;[images[index], images[target]] = [images[target], images[index]]
+      return { ...current, images }
+    })
   }
 
   function removeImage(url: string) {
@@ -327,9 +413,6 @@ function AdminProductsPage() {
       ...current,
       images: current.images.filter((img) => img !== url),
     }))
-    if (uploadPreview === url) {
-      setUploadPreview(null)
-    }
   }
 
   async function saveProduct(
@@ -906,18 +989,38 @@ function AdminProductsPage() {
                 </p>
 
                 <div className="mt-3 grid gap-3">
-                  {/* Existing images preview */}
+                  {/* Existing images preview (with reorder + removal) */}
                   {form.images.map((img, idx) => (
                     <div
-                      key={idx}
-                      className="relative group rounded-xl border border-border bg-cream/50 p-3"
+                      key={img}
+                      className="relative group flex items-center gap-3 rounded-xl border border-border bg-cream/50 p-3"
                     >
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <button
+                          type="button"
+                          onClick={() => moveImage(idx, 'up')}
+                          disabled={idx === 0}
+                          className="rounded border border-border px-1.5 py-0.5 disabled:opacity-40 disabled:pointer-events-none hover:bg-cream"
+                          aria-label={`Move image ${idx + 1} up`}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveImage(idx, 'down')}
+                          disabled={idx === form.images.length - 1}
+                          className="rounded border border-border px-1.5 py-0.5 disabled:opacity-40 disabled:pointer-events-none hover:bg-cream"
+                          aria-label={`Move image ${idx + 1} down`}
+                        >
+                          ↓
+                        </button>
+                      </div>
                       <img
                         src={img}
                         alt={`Product image ${idx + 1}`}
-                        className="h-28 w-28 rounded-xl object-cover"
+                        className="h-24 w-24 rounded-xl object-cover flex-shrink-0"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src =
+                          ;(e.target as HTMLImageElement).src =
                             '/placeholder.svg';
                         }}
                       />
@@ -927,7 +1030,7 @@ function AdminProductsPage() {
                           e.preventDefault()
                           removeImage(img)
                         }}
-                        className="absolute -top-1 -right-1 rounded-full border border-border bg-card px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10"
+                        className="ml-auto rounded-full border border-border bg-card px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10"
                         aria-label={`Remove image ${idx + 1}`}
                       >
                         ×
@@ -935,32 +1038,61 @@ function AdminProductsPage() {
                     </div>
                   ))}
 
+                  {/* Pending uploads (preview + progress) */}
+                  {uploadFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex flex-col items-center gap-2 rounded-xl border border-caramel/50 bg-caramel/5 p-3"
+                    >
+                      <img
+                        src={uploadPreviews[idx]}
+                        alt={`Preview ${idx + 1}`}
+                        className="h-24 w-24 rounded-xl object-cover"
+                      />
+                      <div className="w-full bg-cream/20 rounded-full h-2">
+                        <div
+                          className="bg-primary h-full rounded-full transition-all duration-300"
+                          style={{ width: `${uploadProgress[idx] ?? 0}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate w-full max-w-xs">
+                        {file.name}
+                      </p>
+                    </div>
+                  ))}
+
                   {/* Upload area */}
-                  <div className="relative group rounded-xl border border-dashed border-border bg-cream/50 p-5 text-center hover:border-caramel/50 cursor-pointer">
+                  <div
+                    className="relative group rounded-xl border border-dashed border-border bg-cream/50 p-5 text-center hover:border-caramel/50 cursor-pointer"
+                  >
                     <input
                       type="file"
                       accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                      multiple
                       onChange={handleImageChange}
                       className="sr-only"
-                      disabled={uploading}
+                      disabled={uploading || uploadFiles.length > 0}
                     />
                     <button
                       type="button"
-                      onClick={handleUploadImage}
-                      disabled={uploading || !uploadFile}
+                      onClick={handleUploadImages}
+                      disabled={
+                        uploading ||
+                        uploadFiles.length === 0
+                      }
                       className="w-full flex flex-col items-center gap-2 px-5 py-5 rounded-xl border border-dashed border-border bg-card hover:bg-caramel/5 transition-colors disabled:opacity-60"
                     >
                       {uploading ? (
-                        <span className="text-sm text-primary">Uploading…</span>
-                      ) : uploadFile ? (
+                        <span className="text-sm text-primary">
+                          Uploading {uploadFiles.length} image{uploadFiles.length === 1 ? '' : 's'}…
+                        </span>
+                      ) : uploadFiles.length > 0 ? (
                         <>
                           <span className="text-sm font-medium text-primary">
-                            Upload {uploadFile.name}
+                            Upload {uploadFiles.length} image{uploadFiles.length === 1 ? '' : 's'}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {(
-                              uploadFile.size / 1024 / 1024
-                            ).toFixed(2)} MB
+                            Selected from computer
                           </span>
                         </>
                       ) : (
@@ -974,19 +1106,6 @@ function AdminProductsPage() {
                         </>
                       )}
                     </button>
-
-                    {uploadPreview && (
-                      <div className="mt-3 rounded-xl border border-caramel bg-caramel/5 p-3">
-                        <img
-                          src={uploadPreview}
-                          alt="Preview"
-                          className="h-28 w-28 rounded-xl object-cover mx-auto"
-                        />
-                        <p className="mt-2 text-xs text-caramel">
-                          Ready to save
-                        </p>
-                      </div>
-                    )}
 
                     {uploadError && (
                       <p className="mt-1 text-xs text-destructive">
@@ -1313,6 +1432,59 @@ function AdminProductsPage() {
           </div>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-8 flex items-center justify-between gap-4">
+          <div className="text-sm text-muted-foreground">
+            Showing {total} product{' '}
+            {total !== 1 ? 's' : ''}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            >
+              Previous
+            </button>
+
+            <span className="text-sm font-medium text-muted-foreground">
+              Page {page} of {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || loading}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            >
+              Next
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-muted-foreground">
+              Per page:
+            </label>
+            <select
+              value={limit}
+              onChange={(event) => {
+                setPage(1)
+                setLimit(Number(event.target.value))
+              }}
+              className="rounded-lg border border-border px-3 py-2 text-sm"
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

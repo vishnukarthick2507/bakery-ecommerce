@@ -36,7 +36,7 @@ export const getUploadSignatureController = async (
       return;
     }
 
-    const signature = getUploadSignature();
+    const signature = getUploadSignature({ folder: "sv-bakery/products" });
 
     res.status(200).json({
       message: "Upload signature generated",
@@ -49,7 +49,58 @@ export const getUploadSignatureController = async (
       },
     });
   } catch (error) {
-    console.error("Upload signature failed:", error);
+    console.error("Admin upload signature failed:", error);
+    res.status(500).json({ message: "Unable to generate upload signature" });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| CUSTOMER UPLOAD SIGNATURE (CUSTOMER ONLY)
+|--------------------------------------------------------------------------
+| POST /api/customer/uploads/signature
+|
+| Generates a server-side Cloudinary signed upload signature so an
+| authenticated customer can upload a custom-cake reference photo
+| directly to Cloudinary. The Cloudinary API secret is never returned
+| to the browser.
+|--------------------------------------------------------------------------
+*/
+
+export const getCustomerUploadSignatureController = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.customer) {
+      res.status(401).json({ message: "Customer authentication required" });
+      return;
+    }
+
+    if (!isCloudinaryConfigured()) {
+      res.status(503).json({
+        message:
+          "Image upload is not configured. Please contact the bakery administrator.",
+      });
+      return;
+    }
+
+    const signature = getUploadSignature({
+      folder: "sv-bakery/custom-cakes",
+    });
+
+    res.status(200).json({
+      message: "Upload signature generated",
+      signature: {
+        timestamp: signature.timestamp,
+        signature: signature.signature,
+        apiKey: signature.apiKey,
+        cloudName: signature.cloudName,
+        folder: signature.folder,
+      },
+    });
+  } catch (error) {
+    console.error("Customer upload signature failed:", error);
     res.status(500).json({ message: "Unable to generate upload signature" });
   }
 };

@@ -50,16 +50,29 @@ function AdminCustomCakesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(20)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [search, setSearch] = useState('')
 
   async function fetchRequests() {
     try {
       setLoading(true)
       setError('')
 
-      const response = await fetch('/api/custom-cake-requests', {
-        cache: 'no-store',
-        credentials: 'include',
-      })
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('limit', String(limit))
+      if (search.trim()) params.set('search', search.trim())
+
+      const response = await fetch(
+        `/api/custom-cake-requests?${params}`,
+        {
+          cache: 'no-store',
+          credentials: 'include',
+        },
+      )
 
       const data = await response.json()
 
@@ -67,7 +80,24 @@ function AdminCustomCakesPage() {
         throw new Error(data.message || 'Unable to fetch requests')
       }
 
-      setRequests(data.requests ?? [])
+      // Handle both paginated object and plain array (backward compatible)
+      let fetchedRequests: CustomCakeRequest[] = []
+      let fetchedTotal = 0
+      let fetchedTotalPages = 0
+
+      if (Array.isArray(data)) {
+        fetchedRequests = data
+        fetchedTotal = data.length
+        fetchedTotalPages = 1
+      } else {
+        fetchedRequests = data.requests ?? []
+        fetchedTotal = data.pagination?.total ?? 0
+        fetchedTotalPages = data.pagination?.totalPages ?? 1
+      }
+
+      setRequests(fetchedRequests)
+      setTotal(fetchedTotal)
+      setTotalPages(fetchedTotalPages)
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Unable to load requests',
@@ -158,6 +188,16 @@ function AdminCustomCakesPage() {
             >
               {loading ? 'Refreshing...' : 'Refresh'}
             </button>
+            <label className="grid gap-2 text-sm font-semibold text-foreground">
+              Search
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Name, phone, reference number"
+                className="h-11 rounded-xl border border-border bg-card px-3 font-normal outline-none focus:ring-2 focus:ring-caramel"
+              />
+            </label>
             <Link
               href="/"
               className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
@@ -366,6 +406,59 @@ function AdminCustomCakesPage() {
           </div>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-8 flex items-center justify-between gap-4">
+          <div className="text-sm text-muted-foreground">
+            Showing {total} custom cake request{' '}
+            {total !== 1 ? 's' : ''}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            >
+              Previous
+            </button>
+
+            <span className="text-sm font-medium text-muted-foreground">
+              Page {page} of {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || loading}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            >
+              Next
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-muted-foreground">
+              Per page:
+            </label>
+            <select
+              value={limit}
+              onChange={(event) => {
+                setPage(1)
+                setLimit(Number(event.target.value))
+              }}
+              className="rounded-lg border border-border px-3 py-2 text-sm"
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

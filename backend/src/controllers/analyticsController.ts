@@ -8,6 +8,29 @@ import { Product } from "../models/Product.js";
 import { CustomCakeRequest } from "../models/CustomCakeRequest.js";
 import { User } from "../models/User.js";
 import type { AuthRequest } from "../middleware/auth.js";
+import {
+  buildSalesReport,
+  buildProductReport,
+  buildCustomerReport,
+  buildFinancialReport,
+  generatePdfReport,
+} from "../services/pdfReportService.js";
+import {
+  getSalesAnalytics as getSalesAnalyticsService,
+  getProductAnalytics as getProductAnalyticsService,
+  getCustomerAnalytics as getCustomerAnalyticsService,
+  getFinancialAnalytics as getFinancialAnalyticsService,
+  getInventoryAnalytics as getInventoryAnalyticsService,
+} from "../services/analyticsService.js";
+import { logAnalyticsAccess } from "../services/analyticsService.js";
+
+function formatCurrency(value: number): string {
+  return `₹${value.toLocaleString("en-IN")}`;
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString("en-IN");
+}
 
 /* ---------------------------------------------------------------
    Types
@@ -272,7 +295,7 @@ export async function getAnalytics(
                 orderStatus: { $ne: "CANCELLED" },
                 $or: [
                   { paymentMethod: "ONLINE", paymentStatus: "PAID" },
-                  { paymentMethod: "COD" },
+                  { paymentMethod: "COD", orderStatus: "DELIVERED" },
                   { paymentMethod: "PAY_AT_STORE", paymentStatus: "PAID" },
                 ],
               },
@@ -1541,5 +1564,479 @@ export async function exportAnalytics(
     if (!res.headersSent) {
       res.status(500).json({ message: "Unable to export analytics" });
     }
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| PDF REPORT CONTROLLERS
+|--------------------------------------------------------------------------
+*/
+
+export async function getSalesReportPdf(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const parsed = analyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { range, startDate, endDate } = parsed.data;
+    const dateRange = buildDateFilter(
+      range,
+      parseDate(startDate),
+      parseDate(endDate),
+    );
+
+    if (!dateRange) {
+      res.status(400).json({ message: "Invalid date range" });
+      return;
+    }
+
+    const sales = await getSalesAnalyticsService(dateRange);
+
+    // Build daily sales data
+    const salesData = sales.revenueOverTime.map((d) => ({
+      date: d.date,
+      orders: d.orders,
+      revenue: d.revenue,
+      collected: d.revenue, // Approximation - collected revenue is per-day
+      pendingCod: 0,
+    }));
+
+    const report = buildSalesReport({
+      title: "Sales Report",
+      subtitle: "S.V. Bakery - Sales Analytics",
+      periodLabel: range,
+      generatedAt: new Date(),
+      kpis: [
+        { label: "Gross Sales", value: formatCurrency(sales.grossSales) },
+        { label: "Collected Revenue", value: formatCurrency(sales.collectedRevenue) },
+        { label: "Pending COD", value: formatCurrency(sales.pendingCod) },
+        { label: "Total Orders", value: sales.totalOrders.toString() },
+        { label: "Average Order Value", value: formatCurrency(sales.averageOrderValue) },
+      ],
+      salesData,
+      paymentBreakdown: sales.paymentBreakdown.map((p) => ({
+        method: p.method,
+        label: p.label,
+        count: p.count,
+        amount: p.amount,
+        collected: p.collected,
+        pendingCod: p.pendingCod,
+      })),
+    });
+
+    const pdfBuffer = generatePdfReport(report);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="S.V. Bakery Sales Report.pdf"',
+    );
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Sales report PDF failed:", error);
+    res.status(500).json({ message: "Unable to generate sales report PDF" });
+  }
+}
+
+export async function getProductReportPdf(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const parsed = analyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { range, startDate, endDate } = parsed.data;
+    const dateRange = buildDateFilter(
+      range,
+      parseDate(startDate),
+      parseDate(endDate),
+    );
+
+    if (!dateRange) {
+      res.status(400).json({ message: "Invalid date range" });
+      return;
+    }
+
+    const result = await getProductAnalyticsService(dateRange);
+
+    const report = buildProductReport({
+      title: "Product Performance Report",
+      subtitle: "S.V. Bakery - Product Analytics",
+      periodLabel: range,
+      generatedAt: new Date(),
+      kpis: [
+        { label: "Total Revenue", value: formatCurrency(result.totalRevenue) },
+        { label: "Total Units Sold", value: result.totalUnits.toString() },
+        { label: "Total COGS", value: formatCurrency(result.totalCogs) },
+        { label: "Gross Profit", value: formatCurrency(result.totalGrossProfit) },
+        { label: "Gross Profit Margin", value: `${result.totalGrossProfitMargin?.toFixed(1) ?? 0}%` },
+      ],
+      products: result.products.map((p) => ({
+        productName: p.productName,
+        category: p.category,
+        unitsSold: p.unitsSold,
+        revenue: p.revenue,
+        cogs: p.cogs,
+        grossProfit: p.grossProfit,
+        grossProfitMargin: p.grossProfitMargin,
+      })),
+    });
+
+    const pdfBuffer = generatePdfReport(report);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="S.V. Bakery Product Report.pdf"',
+    );
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Product report PDF failed:", error);
+    res.status(500).json({ message: "Unable to generate product report PDF" });
+  }
+}
+
+export async function getCustomerReportPdf(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const parsed = analyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { range, startDate, endDate } = parsed.data;
+    const dateRange = buildDateFilter(
+      range,
+      parseDate(startDate),
+      parseDate(endDate),
+    );
+
+    if (!dateRange) {
+      res.status(400).json({ message: "Invalid date range" });
+      return;
+    }
+
+    const result = await getCustomerAnalyticsService(dateRange);
+
+    const report = buildCustomerReport({
+      title: "Customer Intelligence Report",
+      subtitle: "S.V. Bakery - Customer Analytics",
+      periodLabel: range,
+      generatedAt: new Date(),
+      kpis: [
+        { label: "Total Customers", value: result.totalCustomers.toString() },
+        { label: "Paid Customers", value: result.paidCustomers.toString() },
+        { label: "Repeat Customers", value: result.repeatCustomers.toString() },
+        { label: "Guest Customers", value: result.guestCustomers.toString() },
+        { label: "Customer LTV", value: formatCurrency(result.customerLTV) },
+      ],
+      customers: result.customers.map((c) => ({
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        orderCount: c.orderCount,
+        totalSpent: c.totalSpent,
+        averageOrderValue: c.averageOrderValue,
+        firstOrderAt: c.firstOrderAt,
+        lastOrderAt: c.lastOrderAt,
+        isGuest: c.isGuest,
+      })),
+    });
+
+    const pdfBuffer = generatePdfReport(report);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="S.V. Bakery Customer Report.pdf"',
+    );
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Customer report PDF failed:", error);
+    res.status(500).json({ message: "Unable to generate customer report PDF" });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/admin/analytics/reports/financial
+|--------------------------------------------------------------------------
+*/
+
+export async function getFinancialReportPdf(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const parsed = analyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { range, startDate, endDate } = parsed.data;
+    const dateRange = buildDateFilter(
+      range,
+      parseDate(startDate),
+      parseDate(endDate),
+    );
+
+    if (!dateRange) {
+      res.status(400).json({ message: "Invalid date range" });
+      return;
+    }
+
+    logAnalyticsAccess(
+      req.admin?.id,
+      "/api/admin/analytics/reports/financial",
+      dateRange,
+    );
+
+    const financial = await getFinancialAnalyticsService(dateRange);
+
+    const report = buildFinancialReport({
+      title: "Financial Report",
+      subtitle: "S.V. Bakery - Financial Analytics",
+      periodLabel: range,
+      generatedAt: new Date(),
+      kpis: [
+        { label: "Gross Revenue", value: formatCurrency(financial.grossRevenue) },
+        { label: "Collected Revenue", value: formatCurrency(financial.collectedRevenue) },
+        { label: "Pending COD", value: formatCurrency(financial.pendingCod) },
+        { label: "Outstanding Amount", value: formatCurrency(financial.outstandingAmount) },
+        { label: "Gross Profit", value: formatCurrency(financial.grossProfit) },
+        { label: "Gross Profit Margin", value: financial.grossProfitMargin !== null ? `${financial.grossProfitMargin.toFixed(1)}%` : "N/A" },
+        { label: "Net Contribution", value: formatCurrency(financial.netContribution) },
+        { label: "Razorpay Fees", value: formatCurrency(financial.totalRazorpayFees) },
+        { label: "Tax Amount", value: formatCurrency(financial.totalTaxAmount) },
+        { label: "Total COGS", value: formatCurrency(financial.totalCogs) },
+      ],
+    });
+
+    const pdfBuffer = generatePdfReport(report);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="S.V. Bakery Financial Report.pdf"',
+    );
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Financial report PDF failed:", error);
+    res.status(500).json({ message: "Unable to generate financial report PDF" });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/admin/analytics/sales
+|--------------------------------------------------------------------------
+*/
+
+export async function getSalesAnalytics(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const parsed = analyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { range, startDate, endDate } = parsed.data;
+    const dateRange = buildDateFilter(
+      range,
+      parseDate(startDate),
+      parseDate(endDate),
+    );
+
+    if (!dateRange) {
+      res.status(400).json({ message: "Invalid date range" });
+      return;
+    }
+
+    logAnalyticsAccess(req.admin?.id, "/api/admin/analytics/sales", dateRange);
+
+    const result = await getSalesAnalyticsService(dateRange);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Sales analytics failed:", error);
+    res.status(500).json({ message: "Unable to generate sales analytics" });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/admin/analytics/products
+|--------------------------------------------------------------------------
+*/
+
+export async function getProductAnalyticsController(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const parsed = analyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { range, startDate, endDate } = parsed.data;
+    const dateRange = buildDateFilter(
+      range,
+      parseDate(startDate),
+      parseDate(endDate),
+    );
+
+    if (!dateRange) {
+      res.status(400).json({ message: "Invalid date range" });
+      return;
+    }
+
+    logAnalyticsAccess(req.admin?.id, "/api/admin/analytics/products", dateRange);
+
+    const result = await getProductAnalyticsService(dateRange);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Product analytics failed:", error);
+    res.status(500).json({ message: "Unable to generate product analytics" });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/admin/analytics/customers
+|--------------------------------------------------------------------------
+*/
+
+export async function getCustomerAnalyticsController(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const parsed = analyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { range, startDate, endDate } = parsed.data;
+    const dateRange = buildDateFilter(
+      range,
+      parseDate(startDate),
+      parseDate(endDate),
+    );
+
+    if (!dateRange) {
+      res.status(400).json({ message: "Invalid date range" });
+      return;
+    }
+
+    logAnalyticsAccess(req.admin?.id, "/api/admin/analytics/customers", dateRange);
+
+    const result = await getCustomerAnalyticsService(dateRange);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Customer analytics failed:", error);
+    res.status(500).json({ message: "Unable to generate customer analytics" });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/admin/analytics/financial
+|--------------------------------------------------------------------------
+*/
+
+export async function getFinancialAnalyticsController(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const parsed = analyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { range, startDate, endDate } = parsed.data;
+    const dateRange = buildDateFilter(
+      range,
+      parseDate(startDate),
+      parseDate(endDate),
+    );
+
+    if (!dateRange) {
+      res.status(400).json({ message: "Invalid date range" });
+      return;
+    }
+
+    logAnalyticsAccess(req.admin?.id, "/api/admin/analytics/financial", dateRange);
+
+    const result = await getFinancialAnalyticsService(dateRange);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Financial analytics failed:", error);
+    res.status(500).json({ message: "Unable to generate financial analytics" });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/admin/analytics/inventory
+|--------------------------------------------------------------------------
+*/
+
+export async function getInventoryAnalyticsController(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    logAnalyticsAccess(req.admin?.id, "/api/admin/analytics/inventory", undefined);
+
+    const result = await getInventoryAnalyticsService();
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Inventory analytics failed:", error);
+    res.status(500).json({ message: "Unable to generate inventory analytics" });
   }
 }

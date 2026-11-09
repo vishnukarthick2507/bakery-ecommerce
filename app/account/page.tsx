@@ -133,6 +133,13 @@ export default function AccountPage() {
       >
         View my orders
       </Link>
+
+      <Link
+        href="/account/edit-profile"
+        className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-border px-6 py-3.5 font-medium text-foreground hover:bg-cream transition-colors"
+      >
+        Edit profile
+      </Link>
     </main>
   )
 }

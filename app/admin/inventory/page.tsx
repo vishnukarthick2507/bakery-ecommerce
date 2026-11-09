@@ -22,6 +22,21 @@ function AdminInventoryPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [movementsTab, setMovementsTab] = useState<'stock' | 'movements'>('stock')
+  const [movements, setMovements] = useState<Array<{
+    id: string
+    productId: string
+    productName: string
+    quantityChange: number
+    previousStock: number
+    newStock: number
+    reason: string
+    relatedOrderId: string | null
+    relatedUserId: string | null
+    createdAt: string
+  }>>([])
+  const [movementsLoading, setMovementsLoading] = useState(false)
+  const [movementsError, setMovementsError] = useState('')
 
   async function fetchProducts() {
     try {
@@ -49,6 +64,12 @@ function AdminInventoryPage() {
   useEffect(() => {
     fetchProducts()
   }, [])
+
+  useEffect(() => {
+    if (movementsTab === 'movements') {
+      fetchMovements()
+    }
+  }, [movementsTab])
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase()
@@ -98,6 +119,26 @@ function AdminInventoryPage() {
     }
   }
 
+  async function fetchMovements() {
+    try {
+      setMovementsLoading(true)
+      setMovementsError('')
+      const response = await fetch('/api/admin/inventory/movements', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      if (!response.ok) {
+        throw new Error('Unable to fetch inventory movements')
+      }
+      const data = await response.json()
+      setMovements(data.movements ?? [])
+    } catch (err) {
+      setMovementsError(err instanceof Error ? err.message : 'Unable to fetch movements')
+    } finally {
+      setMovementsLoading(false)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-muted/20">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -128,6 +169,13 @@ function AdminInventoryPage() {
               className="h-11 rounded-lg border border-border bg-white px-4 text-sm font-medium hover:bg-muted disabled:opacity-60"
             >
               Refresh
+            </button>
+            <button
+              type="button"
+              onClick={() => setMovementsTab('movements')}
+              className="h-11 rounded-lg border border-border bg-white px-4 text-sm font-medium hover:bg-muted"
+            >
+              Movement History
             </button>
             <Link
               href="/"
@@ -203,6 +251,65 @@ function AdminInventoryPage() {
             })}
           </div>
         ) : null}
+
+        {/* Inventory Movements Tab */}
+        {movementsTab === 'movements' && (
+          <div className="mt-10 rounded-xl border border-border bg-white shadow-sm">
+            <div className="flex items-center justify-between p-6">
+              <h2 className="text-xl font-bold text-primary">Inventory Movement History</h2>
+              <button
+                type="button"
+                onClick={() => setMovementsTab('stock')}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
+              >
+                ← Back to Stock
+              </button>
+            </div>
+            {movementsLoading && (
+              <div className="p-10 text-center">
+                Loading movement history...
+              </div>
+            )}
+            {movementsError && (
+              <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert">
+                {movementsError}
+              </div>
+            )}
+            {!movementsLoading && !movementsError && movements.length === 0 && (
+              <div className="p-10 text-center text-muted-foreground">
+                No inventory movements recorded yet.
+              </div>
+            )}
+            {!movementsLoading && !movementsError && movements.length > 0 && (
+              <div className="divide-y divide-border">
+                {movements.map((m) => (
+                  <article key={m.id} className="p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="font-semibold text-primary">{m.productName}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {m.quantityChange > 0 ? '+' : ''}{m.quantityChange} units
+                      </p>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <span className="block">Reason: {m.reason.replaceAll('_', ' ')}</span>
+                      {m.relatedOrderId && (
+                        <span className="block">Order: {m.relatedOrderId}</span>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <span className="block">
+                        Stock: {m.previousStock} → {m.newStock}
+                      </span>
+                      <span className="block">
+                        {new Date(m.createdAt).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </main>
   )

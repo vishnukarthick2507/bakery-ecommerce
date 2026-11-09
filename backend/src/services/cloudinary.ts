@@ -42,6 +42,10 @@ export function configureCloudinary(): void {
 |--------------------------------------------------------------------------
 */
 
+export interface UploadSignatureOptions {
+  folder?: string;
+}
+
 export interface UploadSignature {
   timestamp: number;
   signature: string;
@@ -50,11 +54,13 @@ export interface UploadSignature {
   folder: string;
 }
 
-export function getUploadSignature(): UploadSignature {
+export function getUploadSignature(
+  options: UploadSignatureOptions = {},
+): UploadSignature {
   configureCloudinary();
 
   const timestamp = Math.round(new Date().getTime() / 1000);
-  const folder = "sv-bakery/products";
+  const folder = options.folder ?? "sv-bakery/products";
 
   const signature = cloudinary.utils.api_sign_request(
     {
@@ -71,6 +77,39 @@ export function getUploadSignature(): UploadSignature {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME!.trim(),
     folder,
   };
+}
+
+/*
+|--------------------------------------------------------------------------
+| DELETE CLOUDINARY ASSET
+|--------------------------------------------------------------------------
+| Destroys an uploaded asset by its public ID. Used to clean up product
+| images that are removed or replaced during editing, and to avoid
+| orphaned files in Cloudinary. Never throws on "not found" results.
+|--------------------------------------------------------------------------
+*/
+
+export async function deleteAsset(
+  publicId: string,
+): Promise<{ result: string; deleted: boolean }> {
+  configureCloudinary();
+
+  try {
+    const result = await cloudinary.uploader.destroy(publicId, {
+      invalidate: true,
+    });
+
+    const resultStr = result.result ?? "unknown";
+    return {
+      result: resultStr,
+      deleted: resultStr === "deleted",
+    };
+  } catch (error) {
+    return {
+      result: "error",
+      deleted: false,
+    };
+  }
 }
 
 /*

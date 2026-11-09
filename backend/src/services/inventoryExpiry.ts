@@ -36,7 +36,11 @@ export async function expireOnlineReservations(now = new Date()): Promise<number
 
         if (!order) return;
 
-        await restoreInventory(session, order.items);
+        await restoreInventory(
+          session,
+          order.items,
+          new mongoose.Types.ObjectId(order._id),
+        );
         order.inventoryStatus = "RELEASED";
         order.paymentStatus = "FAILED";
         order.orderStatus = "CANCELLED";
@@ -52,6 +56,8 @@ export async function expireOnlineReservations(now = new Date()): Promise<number
   return releasedCount;
 }
 
+let expiryTimer: ReturnType<typeof setInterval> | null = null;
+
 export function startInventoryExpiryWorker(): void {
   const runSweep = (): void => {
     void expireOnlineReservations().catch(() => {
@@ -60,6 +66,13 @@ export function startInventoryExpiryWorker(): void {
   };
 
   runSweep();
-  const timer = setInterval(runSweep, EXPIRY_SCAN_INTERVAL_MS);
-  timer.unref();
+  expiryTimer = setInterval(runSweep, EXPIRY_SCAN_INTERVAL_MS);
+  expiryTimer.unref();
+}
+
+export function stopInventoryExpiryWorker(): void {
+  if (expiryTimer) {
+    clearInterval(expiryTimer);
+    expiryTimer = null;
+  }
 }

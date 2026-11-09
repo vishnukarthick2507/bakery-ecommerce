@@ -21,6 +21,8 @@ import {
   forgotPassword,
   verifyResetOtp,
   resetPassword,
+  updateProfile,
+  changePassword,
 } from "../controllers/customerAuthController.js";
 import { authenticateCustomer, authenticateAdmin } from "../middleware/auth.js";
 import {
@@ -31,6 +33,7 @@ import {
   otpVerifyLimiter,
   forgotPasswordLimiter,
   resetPasswordLimiter,
+  changePasswordLimiter,
 } from "../middleware/rateLimit.js";
 import { getJwtSecret } from "../config/jwt.js";
 
@@ -139,5 +142,16 @@ router.post("/reset-password", resetPasswordLimiter, resetPassword);
 
 // Customer session
 router.get("/me", authenticateCustomer, getCurrentCustomer);
+
+// Customer profile update
+router.patch("/profile", authenticateCustomer, updateProfile);
+
+// Customer password change
+router.post(
+  "/change-password",
+  authenticateCustomer,
+  changePasswordLimiter,
+  changePassword,
+);
 
 export default router;

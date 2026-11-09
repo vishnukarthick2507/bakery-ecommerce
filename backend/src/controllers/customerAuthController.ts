@@ -472,6 +472,145 @@ export const getCurrentCustomer = async (
   });
 };
 
+const updateProfileSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  phone: z.string().regex(PHONE_PATTERN, "Enter a valid 10-digit Indian mobile number").optional(),
+});
+
+export const updateProfile = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!req.customer) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      message: "Invalid request",
+      errors: parsed.error.flatten(),
+    });
+    return;
+  }
+
+  const { name, phone } = parsed.data;
+
+  try {
+    const normalizedPhone = phone ? normalizePhone(phone) : undefined;
+
+    if (normalizedPhone) {
+      const existingUser = await User.findOne({
+        phone: normalizedPhone,
+        _id: { $ne: req.customer.id },
+      }).lean();
+      if (existingUser) {
+        res.status(409).json({
+          message: "A customer with this phone number already exists.",
+        });
+        return;
+      }
+    }
+
+    const updated = await User.findByIdAndUpdate(
+      req.customer.id,
+      {
+        $set: {
+          name: name.trim(),
+          ...(normalizedPhone !== undefined ? { phone: normalizedPhone } : {}),
+        },
+      },
+      { new: true, select: "name email phone createdAt updatedAt" },
+    ).lean();
+
+    if (!updated) {
+      res.status(404).json({ message: "Customer not found" });
+      return;
+    }
+
+    res.status(200).json({
+      user: {
+        id: updated._id.toString(),
+        name: updated.name,
+        email: updated.email,
+        phone: updated.phone,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Profile update failed:", error);
+    res.status(500).json({ message: "Unable to update profile" });
+  }
+};
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(72),
+  newPassword: z.string().min(8).max(72).regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, "Password must include a letter and a number"),
+  confirmPassword: z.string(),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+export const changePassword = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!req.customer) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      message: "Invalid request",
+      errors: parsed.error.flatten(),
+    });
+    return;
+  }
+
+  const { currentPassword, newPassword } = parsed.data;
+
+  try {
+    const user = await User.findById(req.customer.id)
+      .select("+passwordHash +tokenVersion")
+      .lean();
+
+    if (
+      !user ||
+      !user.passwordHash ||
+      !(await bcrypt.compare(currentPassword, user.passwordHash))
+    ) {
+      res.status(401).json({ message: "Current password is incorrect" });
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      res.status(400).json({
+        message: "New password must be different from the current password",
+      });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await User.findByIdAndUpdate(req.customer.id, {
+      $set: { passwordHash },
+      $inc: { tokenVersion: 1 },
+    });
+
+    res.status(200).json({
+      message: "Password changed successfully. Please sign in again.",
+    });
+  } catch (error) {
+    console.error("Password change failed:", error);
+    res.status(500).json({ message: "Unable to change password" });
+  }
+};
+
 export const logoutCustomer = async (
   req: AuthRequest,
   res: Response,

@@ -15,6 +15,7 @@ import {
   Settings,
   Menu,
   X,
+  FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -33,6 +34,12 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/custom-cakes', label: 'Custom Cakes', icon: Cake },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart },
+  { href: '/admin/analytics/sales', label: 'Sales Analytics', icon: BarChart },
+  { href: '/admin/analytics/products', label: 'Product Performance', icon: Package },
+  { href: '/admin/analytics/customers', label: 'Customer Intelligence', icon: Users },
+  { href: '/admin/analytics/financial', label: 'Financial Analytics', icon: CreditCard },
+  { href: '/admin/analytics/inventory', label: 'Inventory Analytics', icon: Package },
+  { href: '/admin/analytics/reports', label: 'Reports', icon: FileText },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 

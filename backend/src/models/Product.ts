@@ -63,8 +63,31 @@ const productSchema = new Schema(
       type: Boolean,
       default: true,
     },
+
+    // Optional cost basis for profitability reporting (Phase 1 data foundation).
+    // Optional so existing products remain backward-compatible.
+    cost: {
+      type: Number,
+      min: 0,
+    },
+
+    reorderLevel: {
+      type: Number,
+      min: 0,
+    },
+
+    leadTimeDays: {
+      type: Number,
+      min: 0,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    indexes: [
+      { fields: { active: 1 } },
+      { fields: { category: 1 } },
+    ],
+  }
 );
 
 export const Product = mongoose.model("Product", productSchema);

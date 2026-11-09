@@ -107,22 +107,98 @@ export const createCustomCakeRequest = async (
 
 /*
 |--------------------------------------------------------------------------
-| GET ALL CUSTOM CAKE REQUESTS
+| GET ALL CUSTOM CAKE REQUESTS (PAGINATED)
 |--------------------------------------------------------------------------
-| GET /api/custom-cake-requests
+| GET /api/custom-cake-requests?page=1&limit=20
+|--------------------------------------------------------------------------
+| Backward-compatible pagination. When page/limit are omitted, returns
+| all requests (existing behavior preserved).
 |--------------------------------------------------------------------------
 */
+
+const customCakePaginationSchema = z
+  .object({
+    page: z.string().optional(),
+    limit: z.string().optional(),
+    search: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.page !== undefined) {
+        const n = parseInt(data.page, 10);
+        if (!Number.isFinite(n) || n < 1) return false;
+      }
+      if (data.limit !== undefined) {
+        const n = parseInt(data.limit, 10);
+        if (!Number.isFinite(n) || n < 1) return false;
+      }
+      return true;
+    },
+    {
+      message: "Page and limit must be positive integers",
+    },
+  );
 
 export const getAllCustomCakeRequests = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
-    const requests = await CustomCakeRequest.find()
+    const parsed = customCakePaginationSchema.safeParse(req.query);
+
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid query parameters",
+        errors: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { page, limit, search } = parsed.data;
+    const pageNum = page !== undefined ? parseInt(page, 10) : undefined;
+    const limitNum = limit !== undefined ? parseInt(limit, 10) : undefined;
+    const hasPagination = pageNum !== undefined && limitNum !== undefined;
+
+    const searchTerm = search?.trim() ?? "";
+    const filter: Record<string, unknown> = {};
+
+    if (searchTerm) {
+      filter.$or = [
+        { name: { $regex: searchTerm, $options: "i" } },
+        { phone: { $regex: searchTerm, $options: "i" } },
+        { referenceNumber: { $regex: searchTerm, $options: "i" } },
+        { flavour: { $regex: searchTerm, $options: "i" } },
+      ];
+    }
+
+    const countQuery = CustomCakeRequest.countDocuments(filter);
+    const findQuery = CustomCakeRequest.find(filter)
       .sort({ createdAt: -1 })
       .lean();
 
-    res.status(200).json({ requests });
+    if (hasPagination) {
+      const safePage = Math.max(1, pageNum);
+      const safeLimit = Math.min(100, Math.max(1, limitNum));
+      const skip = (safePage - 1) * safeLimit;
+
+      findQuery.skip(skip).limit(safeLimit);
+    }
+
+    const [requests, total] = await Promise.all([findQuery, countQuery]);
+
+    if (hasPagination) {
+      res.status(200).json({
+        requests,
+        pagination: {
+          page: Math.max(1, pageNum),
+          limit: Math.min(100, Math.max(1, limitNum)),
+          total,
+          totalPages: Math.ceil(total / Math.min(100, Math.max(1, limitNum))),
+        },
+      });
+    } else {
+      res.status(200).json({ requests });
+    }
   } catch (error) {
     console.error("Get custom cake requests failed:", error);
 

@@ -15,7 +15,14 @@ if (!backendUrl) {
 
 const nextConfig = {
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        pathname: '/**',
+      },
+    ],
+    unoptimized: false,
   },
   async rewrites() {
     return [
@@ -24,6 +31,18 @@ const nextConfig = {
         destination: `${backendUrl.replace(/\/+$/, '')}/api/:path*`,
       },
     ]
+  },
+  async sitemap() {
+    return []
+  },
+  async robots() {
+    return {
+      rules: {
+        userAgent: '*',
+        allow: '/',
+      },
+      sitemap: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/sitemap.xml`,
+    }
   },
 }
 

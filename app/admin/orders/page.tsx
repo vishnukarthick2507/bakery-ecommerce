@@ -124,6 +124,10 @@ function AdminOrdersPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | OrderStatus>('ALL')
   const [fulfillmentFilter, setFulfillmentFilter] = useState<FulfillmentFilter>('ALL')
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<'ALL' | 'COD' | 'ONLINE' | 'PAY_AT_STORE'>('ALL')
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'ALL' | 'PENDING' | 'PAID' | 'FAILED'>('ALL')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [proposingOrder, setProposingOrder] = useState<string | null>(null)
   const [proposeDate, setProposeDate] = useState('')
   const [proposeTime, setProposeTime] = useState('')
@@ -135,7 +139,16 @@ function AdminOrdersPage() {
       setLoading(true)
       setError('')
 
-      const response = await fetch('/api/orders', {
+      const params = new URLSearchParams()
+      if (search.trim()) params.set('search', search.trim())
+      if (statusFilter !== 'ALL') params.set('orderStatus', statusFilter)
+      if (fulfillmentFilter !== 'ALL') params.set('fulfillmentType', fulfillmentFilter)
+      if (paymentMethodFilter !== 'ALL') params.set('paymentMethod', paymentMethodFilter)
+      if (paymentStatusFilter !== 'ALL') params.set('paymentStatus', paymentStatusFilter)
+      if (startDate) params.set('startDate', startDate)
+      if (endDate) params.set('endDate', endDate)
+
+      const response = await fetch(`/api/orders?${params}`, {
         cache: 'no-store',
         credentials: 'include',
       })
@@ -381,6 +394,54 @@ function AdminOrdersPage() {
               <option value="DELIVERY">Delivery</option>
               <option value="PICKUP">Pickup</option>
             </select>
+          </label>
+
+          <label className="grid gap-2 text-sm font-semibold text-foreground">
+            Payment Method
+            <select
+              value={paymentMethodFilter}
+              onChange={(event) => setPaymentMethodFilter(event.target.value as 'ALL' | 'COD' | 'ONLINE' | 'PAY_AT_STORE')}
+              className="h-11 rounded-xl border border-border bg-card px-3 font-normal outline-none focus:ring-2 focus:ring-caramel"
+            >
+              <option value="ALL">All methods</option>
+              <option value="COD">Cash on Delivery</option>
+              <option value="ONLINE">Online Payment</option>
+              <option value="PAY_AT_STORE">Pay at Store</option>
+            </select>
+          </label>
+
+          <label className="grid gap-2 text-sm font-semibold text-foreground">
+            Payment Status
+            <select
+              value={paymentStatusFilter}
+              onChange={(event) => setPaymentStatusFilter(event.target.value as 'ALL' | 'PENDING' | 'PAID' | 'FAILED')}
+              className="h-11 rounded-xl border border-border bg-card px-3 font-normal outline-none focus:ring-2 focus:ring-caramel"
+            >
+              <option value="ALL">All payment statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="PAID">Paid</option>
+              <option value="FAILED">Failed</option>
+            </select>
+          </label>
+
+          <label className="grid gap-2 text-sm font-semibold text-foreground">
+            From Date
+            <input
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              className="h-11 rounded-xl border border-border bg-card px-3 font-normal outline-none focus:ring-2 focus:ring-caramel"
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-semibold text-foreground">
+            To Date
+            <input
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              className="h-11 rounded-xl border border-border bg-card px-3 font-normal outline-none focus:ring-2 focus:ring-caramel"
+            />
           </label>
         </div>
 

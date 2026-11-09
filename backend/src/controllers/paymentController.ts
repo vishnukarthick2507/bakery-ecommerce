@@ -12,6 +12,7 @@ import {
   restoreInventory,
 } from "../services/inventory.js";
 import { ONLINE_RESERVATION_TTL_MS } from "../services/inventoryExpiry.js";
+import { recalculateCustomerMetrics } from "../services/customerMetrics.js";
 import {
   getRazorpayClient,
   getRazorpayKeyId,
@@ -132,6 +133,19 @@ export async function markOrderPaid(
       }
       order.reservationExpiresAt = undefined;
       await order.save({ session });
+
+      // Recalculate customer metrics after successful payment confirmation.
+      // Best-effort: metrics failure must not invalidate a confirmed payment.
+      if (order.userId) {
+        try {
+          await recalculateCustomerMetrics(order.userId);
+        } catch (metricsError) {
+          console.error(
+            `Customer metrics recalculation failed for user ${order.userId}:`,
+            metricsError,
+          );
+        }
+      }
     });
   } finally {
     await session.endSession();
@@ -158,6 +172,19 @@ export async function markOrderPaymentFailed(
       order.reservationExpiresAt = undefined;
       order.paymentStatus = "FAILED";
       await order.save({ session });
+
+      // Recalculate customer metrics after payment failure.
+      // Best-effort: metrics failure must not block failure recording.
+      if (order.userId) {
+        try {
+          await recalculateCustomerMetrics(order.userId);
+        } catch (metricsError) {
+          console.error(
+            `Customer metrics recalculation failed for user ${order.userId}:`,
+            metricsError,
+          );
+        }
+      }
     });
   } finally {
     await session.endSession();
@@ -181,6 +208,19 @@ async function markOrderPaymentFailedById(orderId: string): Promise<void> {
       order.reservationExpiresAt = undefined;
       order.paymentStatus = "FAILED";
       await order.save({ session });
+
+      // Recalculate customer metrics after payment failure.
+      // Best-effort: metrics failure must not block failure recording.
+      if (order.userId) {
+        try {
+          await recalculateCustomerMetrics(order.userId);
+        } catch (metricsError) {
+          console.error(
+            `Customer metrics recalculation failed for user ${order.userId}:`,
+            metricsError,
+          );
+        }
+      }
     });
   } finally {
     await session.endSession();
