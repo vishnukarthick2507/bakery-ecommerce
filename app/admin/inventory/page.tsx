@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
 
 type Product = {
   _id: string
@@ -140,9 +140,9 @@ function AdminInventoryPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/20">
+    <AdminLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <p className="text-sm font-medium text-primary">S.V. Bakery Admin</p>
+        <p className="text-sm font-medium text-primary">Bluebell Bakehouse Admin</p>
         <Link href="/admin" className="mt-2 inline-block text-sm text-muted-foreground hover:underline">
           ← Back to Dashboard
         </Link>
@@ -185,8 +185,6 @@ function AdminInventoryPage() {
             </Link>
           </div>
         </div>
-
-        <AdminNav className="mt-6" />
 
         {error && (
           <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert">
@@ -311,7 +309,7 @@ function AdminInventoryPage() {
           </div>
         )}
       </div>
-    </main>
+    </AdminLayout>
   )
 }
 

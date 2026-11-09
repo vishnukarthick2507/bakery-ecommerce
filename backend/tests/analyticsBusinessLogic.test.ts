@@ -9,6 +9,7 @@ import { Order } from "../src/models/Order.js";
 import {
   getFinancialAnalytics,
   getSalesAnalytics,
+  getProductAnalytics,
 } from "../src/services/analyticsService.js";
 import { buildFinancialReport } from "../src/services/pdfReportService.js";
 import {
@@ -38,6 +39,7 @@ const orderSchema = z.object({
       unitPrice: z.number(),
       itemTotal: z.number(),
       totalPrice: z.number(),
+      costSnapshot: z.number().optional(),
     }),
   ),
   subtotal: z.number(),
@@ -73,6 +75,23 @@ async function createOrder(overrides: Record<string, unknown> = {}) {
   const parsed = orderSchema.safeParse(data);
   if (!parsed.success) throw new Error(`Invalid order: ${parsed.error}`);
   return Order.create(parsed.data as any) as Promise<
+    mongoose.Document & { _id: mongoose.Types.ObjectId }
+  >;
+}
+
+async function createProduct(overrides: Record<string, unknown> = {}) {
+  const data = {
+    name: "Test Product",
+    slug: `test-product-${Date.now()}`,
+    description: "A test product",
+    price: 100,
+    category: "Cakes",
+    stock: 10,
+    availability: "AVAILABLE" as const,
+    preparationTime: 30,
+    ...overrides,
+  };
+  return Product.create(data) as Promise<
     mongoose.Document & { _id: mongoose.Types.ObjectId }
   >;
 }
@@ -221,5 +240,169 @@ describe("Analytics business logic — COD revenue recognition", () => {
     const sectionTitles = report.sections.map((s) => s.title);
     expect(sectionTitles).not.toContain("Daily Sales Summary");
     expect(sectionTitles).not.toContain("Payment Method Breakdown");
+  });
+});
+
+describe("Product analytics — null/missing cost data handling", () => {
+  let mongoServer: any;
+
+  beforeAll(async () => {
+    const { MongoMemoryServer } = await import("mongodb-memory-server");
+    mongoServer = await MongoMemoryServer.create();
+    await mongoose.connect(mongoServer.getUri());
+  });
+
+  beforeEach(async () => {
+    await clearTestDB();
+  });
+
+  afterAll(async () => {
+    await mongoose.disconnect();
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  });
+
+  it("returns null cogs/grossProfit when order items lack costSnapshot", async () => {
+    const product = await createProduct({ name: "Vanilla Cake", slug: "vanilla-cake" });
+
+    await createOrder({
+      orderNumber: "SV-NOCOST-001",
+      items: [
+        {
+          productId: product._id,
+          productName: "Vanilla Cake",
+          variantId: "default",
+          quantity: 2,
+          unitPrice: 500,
+          itemTotal: 1000,
+          totalPrice: 1000,
+          // No costSnapshot — simulates orders placed before cost tracking
+        },
+      ],
+      subtotal: 1000,
+      totalAmount: 1000,
+    });
+
+    const result = await getProductAnalytics(todayRange());
+
+    expect(result.products).toHaveLength(1);
+    const p0 = result.products[0]!;
+    expect(p0.productName).toBe("Vanilla Cake");
+    expect(p0.revenue).toBe(1000);
+    expect(p0.unitsSold).toBe(2);
+    // Cost data missing → null values
+    expect(p0.cogs).toBeNull();
+    expect(p0.grossProfit).toBeNull();
+    expect(p0.grossProfitMargin).toBeNull();
+    // Aggregates still computed from available data
+    expect(result.totalRevenue).toBe(1000);
+    expect(result.totalUnits).toBe(2);
+    expect(result.totalCogs).toBe(0);
+    expect(result.totalGrossProfit).toBe(0);
+    expect(result.productsWithoutCost).toBe(1);
+    expect(result.productsWithCost).toBe(0);
+  });
+
+  it("computes cogs/grossProfit when order items include costSnapshot", async () => {
+    const product = await createProduct({ name: "Chocolate Cake", slug: "chocolate-cake" });
+
+    await createOrder({
+      orderNumber: "SV-WITHCOST-001",
+      items: [
+        {
+          productId: product._id,
+          productName: "Chocolate Cake",
+          variantId: "default",
+          quantity: 3,
+          unitPrice: 400,
+          itemTotal: 1200,
+          totalPrice: 1200,
+          costSnapshot: 150, // cost per unit
+        },
+      ],
+      subtotal: 1200,
+      totalAmount: 1200,
+    });
+
+    const result = await getProductAnalytics(todayRange());
+
+    expect(result.products).toHaveLength(1);
+    const p1 = result.products[0]!;
+    expect(p1.cogs).toBe(450); // 150 * 3
+    expect(p1.grossProfit).toBe(750); // 1200 - 450
+    expect(p1.grossProfitMargin).toBeCloseTo(62.5); // (750/1200)*100
+    expect(result.totalCogs).toBe(450);
+    expect(result.totalGrossProfit).toBe(750);
+    expect(result.productsWithCost).toBe(1);
+    expect(result.productsWithoutCost).toBe(0);
+  });
+
+  it("handles mixed cost data — some products with cost, some without", async () => {
+    const withCost = await createProduct({ name: "With Cost", slug: "with-cost" });
+    const withoutCost = await createProduct({ name: "Without Cost", slug: "without-cost" });
+
+    await createOrder({
+      orderNumber: "SV-MIXED-001",
+      items: [
+        {
+          productId: withCost._id,
+          productName: "With Cost",
+          variantId: "default",
+          quantity: 1,
+          unitPrice: 300,
+          itemTotal: 300,
+          totalPrice: 300,
+          costSnapshot: 100,
+        },
+        {
+          productId: withoutCost._id,
+          productName: "Without Cost",
+          variantId: "default",
+          quantity: 1,
+          unitPrice: 200,
+          itemTotal: 200,
+          totalPrice: 200,
+          // No costSnapshot
+        },
+      ],
+      subtotal: 500,
+      totalAmount: 500,
+    });
+
+    const result = await getProductAnalytics(todayRange());
+
+    expect(result.products).toHaveLength(2);
+
+    const withCostProduct = result.products.find((p) => p.productName === "With Cost");
+    const withoutCostProduct = result.products.find(
+      (p) => p.productName === "Without Cost",
+    );
+
+    expect(withCostProduct!.cogs).toBe(100);
+    expect(withCostProduct!.grossProfit).toBe(200);
+    expect(withCostProduct!.grossProfitMargin).toBeCloseTo(66.67);
+
+    expect(withoutCostProduct!.cogs).toBeNull();
+    expect(withoutCostProduct!.grossProfit).toBeNull();
+    expect(withoutCostProduct!.grossProfitMargin).toBeNull();
+
+    expect(result.productsWithCost).toBe(1);
+    expect(result.productsWithoutCost).toBe(1);
+    expect(result.totalCogs).toBe(100);
+    expect(result.totalGrossProfit).toBe(200);
+  });
+
+  it("returns empty products and null margin when no orders exist", async () => {
+    const result = await getProductAnalytics(todayRange());
+
+    expect(result.products).toEqual([]);
+    expect(result.totalRevenue).toBe(0);
+    expect(result.totalUnits).toBe(0);
+    expect(result.totalCogs).toBe(0);
+    expect(result.totalGrossProfit).toBe(0);
+    expect(result.totalGrossProfitMargin).toBeNull();
+    expect(result.productsWithCost).toBe(0);
+    expect(result.productsWithoutCost).toBe(0);
   });
 });

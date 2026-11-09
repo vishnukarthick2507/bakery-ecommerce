@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
     <main className="mx-auto max-w-lg px-4 py-12 sm:px-6">
       <section className="rounded-[2rem] border border-border bg-card p-8 sm:p-10 shadow-sm">
         <p className="text-sm font-semibold text-primary tracking-wide uppercase">
-          S.V. Bakery
+          Bluebell Bakehouse
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-primary tracking-tight">
           Reset your password

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
 
 type ReportType = {
   id: string
@@ -20,28 +20,28 @@ export default function ReportsPage() {
       name: 'Sales Report',
       description: 'Daily sales breakdown with payment method analysis.',
       endpoint: '/api/admin/analytics/reports/sales',
-      fileName: 'S.V. Bakery Sales Report.pdf',
+      fileName: 'Bluebell Bakehouse Sales Report.pdf',
     },
     {
       id: 'products',
       name: 'Product Performance Report',
       description: 'Product-level sales, COGS, and profitability analysis.',
       endpoint: '/api/admin/analytics/reports/products',
-      fileName: 'S.V. Bakery Product Report.pdf',
+      fileName: 'Bluebell Bakehouse Product Report.pdf',
     },
     {
       id: 'customers',
       name: 'Customer Intelligence Report',
       description: 'Customer spending, order frequency, and retention analysis.',
       endpoint: '/api/admin/analytics/reports/customers',
-      fileName: 'S.V. Bakery Customer Report.pdf',
+      fileName: 'Bluebell Bakehouse Customer Report.pdf',
     },
     {
       id: 'financial',
       name: 'Financial Report',
       description: 'Revenue, costs, fees, taxes, and net contribution analysis.',
       endpoint: '/api/admin/analytics/reports/financial',
-      fileName: 'S.V. Bakery Financial Report.pdf',
+      fileName: 'Bluebell Bakehouse Financial Report.pdf',
     },
   ])
 
@@ -71,13 +71,13 @@ export default function ReportsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/20">
+    <AdminLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-medium text-primary">
-              S.V. Bakery Admin
+              Bluebell Bakehouse Admin
             </p>
             <Link
               href="/admin"
@@ -101,8 +101,6 @@ export default function ReportsPage() {
             </Link>
           </div>
         </div>
-
-        <AdminNav className="mt-6" />
 
         {/* Reports Grid */}
         <section className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -184,6 +182,6 @@ export default function ReportsPage() {
           </div>
         </section>
       </div>
-    </main>
+    </AdminLayout>
   )
 }

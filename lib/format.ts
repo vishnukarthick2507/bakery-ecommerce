@@ -4,8 +4,59 @@ const currency = new Intl.NumberFormat('en-IN', {
   maximumFractionDigits: 0,
 })
 
-export function formatPrice(value: number) {
+const number = new Intl.NumberFormat('en-IN', {
+  maximumFractionDigits: 0,
+})
+
+/**
+ * Safely format a currency value. Returns a fallback string (default '₹0')
+ * for null, undefined, NaN or non-numeric values instead of throwing.
+ * Genuine API errors are not swallowed here — callers still check
+ * response.ok before parsing. This only guards the formatting layer.
+ */
+export function formatPrice(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '₹0'
+  }
   return currency.format(value)
+}
+
+/**
+ * Safely format a plain number. Returns '0' for null, undefined, NaN
+ * or non-numeric values instead of throwing.
+ */
+export function formatNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '0'
+  }
+  return number.format(value)
+}
+
+/**
+ * Format a currency value with a custom fallback for missing data.
+ * Use this when '₹0' would be misleading (e.g. cost data not captured).
+ */
+export function formatPriceOr(
+  value: number | null | undefined,
+  fallback: string,
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+  return currency.format(value)
+}
+
+/**
+ * Format a number with a custom fallback for missing data.
+ */
+export function formatNumberOr(
+  value: number | null | undefined,
+  fallback: string,
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+  return number.format(value)
 }
 
 export function discountPercent(price: number, mrp: number) {

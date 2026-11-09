@@ -5,7 +5,7 @@ import { CustomCakeForm } from '@/components/custom-cake/custom-cake-form'
 export const metadata: Metadata = {
   title: 'Custom Cakes',
   description:
-    'Design a custom celebration cake with S.V. Bakery, Chromepet, Chennai.',
+    'Design a custom celebration cake with Bluebell Bakehouse, Chromepet, Chennai.',
 }
 
 export default function CustomCakePage() {

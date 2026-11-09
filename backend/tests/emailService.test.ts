@@ -39,7 +39,7 @@ describe("sendOtpEmail (Brevo HTTPS transactional API)", () => {
     setBrevoEnv({
       BREVO_API_KEY: "test-api-key",
       BREVO_FROM_EMAIL: "vishnukarthick2507@gmail.com",
-      BREVO_FROM_NAME: "S.V. Sweets & Bakers",
+      BREVO_FROM_NAME: "Bluebell Bakehouse",
     });
 
     const result = await sendOtpEmail(
@@ -61,13 +61,13 @@ describe("sendOtpEmail (Brevo HTTPS transactional API)", () => {
     const body = JSON.parse(init.body as string);
     expect(body.sender).toEqual({
       email: "vishnukarthick2507@gmail.com",
-      name: "S.V. Sweets & Bakers",
+      name: "Bluebell Bakehouse",
     });
     expect(body.to).toEqual([{ email: "customer@example.com" }]);
     expect(body.subject).toContain("123456");
     expect(body.htmlContent).toContain("123456");
     expect(body.htmlContent).toContain("10 minutes");
-    expect(body.htmlContent).toContain("S.V. Sweets & Bakers");
+    expect(body.htmlContent).toContain("Bluebell Bakehouse");
   });
 
   it("uses the verified sender by default when BREVO_FROM_* are unset", async () => {
@@ -80,7 +80,7 @@ describe("sendOtpEmail (Brevo HTTPS transactional API)", () => {
     const [, init] = fetchMock.mock.calls[0]!;
     const body = JSON.parse(init.body as string);
     expect(body.sender.email).toBe("vishnukarthick2507@gmail.com");
-    expect(body.sender.name).toBe("S.V. Sweets & Bakers");
+    expect(body.sender.name).toBe("Bluebell Bakehouse");
   });
 
   it("returns false when Brevo API is not configured and does not call fetch", async () => {

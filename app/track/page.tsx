@@ -388,7 +388,7 @@ function TrackPageContent() {
                 Order Confirmed
               </h1>
               <p className="mt-3 text-muted-foreground">
-                Your S.V. Bakery order has been placed successfully.
+                Your Bluebell Bakehouse order has been placed successfully.
               </p>
             </>
           ) : (
@@ -397,7 +397,7 @@ function TrackPageContent() {
                 Track Your Order
               </h1>
               <p className="mt-3 text-muted-foreground">
-                Check the latest status of your S.V. Bakery order.
+                Check the latest status of your Bluebell Bakehouse order.
               </p>
             </>
           )}
@@ -701,7 +701,7 @@ function TrackPageContent() {
                             <div>
                               <p className="font-medium text-foreground">Pickup Location</p>
                               <p className="text-sm text-muted-foreground">
-                                S.V. Sweets &amp; Bakers
+                                Bluebell Bakehouse
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 X42V+XP4, Radha Nagar, Lakshmi Nagar,

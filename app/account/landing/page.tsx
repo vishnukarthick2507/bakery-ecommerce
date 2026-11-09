@@ -70,7 +70,7 @@ export default function AccountLandingPage() {
             <UserPlusIcon className="mb-4 size-6 text-caramel" aria-hidden="true" />
             <h2 className="text-lg font-semibold text-primary">Create account</h2>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed text-center">
-              New to S.V. Sweets & Bakers? Register with your email and phone
+              New to Bluebell Bakehouse? Register with your email and phone
               to place your first order.
             </p>
           </Link>

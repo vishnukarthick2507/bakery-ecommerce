@@ -58,7 +58,7 @@ export default function AdminLoginPage() {
           <h1 className="text-3xl font-bold text-primary tracking-tight">
             Admin Login
           </h1>
-          <p className="mt-2 text-muted-foreground">S.V. Bakery Admin</p>
+          <p className="mt-2 text-muted-foreground">Bluebell Bakehouse Admin</p>
         </div>
 
         <div className="rounded-[2rem] border border-border bg-card p-8 shadow-sm">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
 
 type Settings = {
   _id: string
@@ -138,24 +138,24 @@ function AdminSettingsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-cream/30 px-4 py-8">
-        <div className="mx-auto max-w-2xl">
+      <AdminLayout>
+        <div className="mx-auto max-w-2xl py-8">
           <div className="rounded-[2rem] border border-border bg-card p-10 text-center shadow-sm">
             <p className="text-muted-foreground">Loading settings…</p>
           </div>
         </div>
-      </main>
+      </AdminLayout>
     )
   }
 
   return (
-    <main className="min-h-screen bg-cream/30">
+    <AdminLayout>
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center mb-8">
           <div>
             <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
-              S.V. Bakery Admin
+              Bluebell Bakehouse Admin
             </p>
             <Link
               href="/admin"
@@ -180,8 +180,6 @@ function AdminSettingsPage() {
             </Link>
           </div>
         </div>
-
-        <AdminNav className="mt-8" />
 
         {error && (
           <div className="mt-6 rounded-[2rem] border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
@@ -414,7 +412,7 @@ function AdminSettingsPage() {
           </form>
         )}
       </div>
-    </main>
+    </AdminLayout>
   )
 }
 

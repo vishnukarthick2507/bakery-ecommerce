@@ -18,7 +18,7 @@ export function isImmediatelyOrderable(product: Product) {
 }
 
 export function whatsappProductMessage(product: Product, variantLabel?: string) {
-  return `Hi S.V. Bakery! I'd like to order "${product.name}"${
+  return `Hi Bluebell Bakehouse! I'd like to order "${product.name}"${
     variantLabel ? ` (${variantLabel})` : ''
   }. Is it possible to get it for a later date?`
 }
@@ -32,8 +32,8 @@ export function ProductCard({ product, priority }: { product: Product; priority?
   return (
     <Card
       className={cn(
-        'group/card relative h-full overflow-hidden border border-border bg-card shadow-sm transition-shadow duration-200 hover:shadow-md',
-        product.availability === 'SOLD_OUT' && 'border-border/50',
+        'group/card relative h-full overflow-hidden border border-gold-border bg-card shadow-sm transition-shadow duration-300 hover:shadow-lg',
+        product.availability === 'SOLD_OUT' && 'border-gold-border/30',
       )}
     >
       <div className="relative aspect-[4/5] overflow-hidden bg-muted">
@@ -44,8 +44,8 @@ export function ProductCard({ product, priority }: { product: Product; priority?
           priority={priority}
           sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
           className={cn(
-            'object-cover object-center transition-transform duration-300 group-hover/card:scale-105',
-            product.availability === 'SOLD_OUT' && 'opacity-60 grayscale-[40%]',
+            'object-cover object-center transition-transform duration-500 group-hover/card:scale-105',
+            product.availability === 'SOLD_OUT' && 'opacity-50 grayscale-[30%]',
           )}
           onError={(e) => {
             ;(e.target as HTMLImageElement).src = '/placeholder.svg'
@@ -56,21 +56,21 @@ export function ProductCard({ product, priority }: { product: Product; priority?
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2.5 p-3 sm:p-4">
+      <div className="flex flex-1 flex-col gap-2.5 p-4 sm:p-5">
         {product.reviewCount > 0 && (
-          <Rating value={product.rating} count={product.reviewCount} className="text-xs sm:text-xs" />
+          <Rating value={product.rating} count={product.reviewCount} className="text-xs sm:text-sm" />
         )}
         <h3 className="font-sans text-sm leading-snug font-semibold sm:text-base line-clamp-2">
           <Link href={href} className="outline-none after:absolute after:inset-0 focus-visible:underline text-foreground hover:text-primary transition-colors">
             {product.name}
           </Link>
         </h3>
-        <p className="text-xs text-muted-foreground leading-none">{variant.label}</p>
-        <div className="mt-auto pt-2">
+        <p className="text-xs text-muted-foreground leading-none uppercase tracking-wider">{variant.label}</p>
+        <div className="mt-auto pt-3">
           <Price price={variant.price} mrp={variant.mrp} size="lg" />
         </div>
 
-        <div className="relative z-10 flex flex-col gap-2 pt-2">
+        <div className="relative z-10 flex flex-col gap-2 pt-3">
           {orderable ? (
             <Button
               size="lg"
@@ -90,7 +90,7 @@ export function ProductCard({ product, priority }: { product: Product; priority?
             <>
               <Link
                 href={href}
-                className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'w-full')}
+                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'w-full border-gold-border text-secondary-text hover:bg-gold-border hover:text-primary')}
               >
                 <CalendarPlusIcon data-icon="inline-start" />
                 Order for later
@@ -99,7 +99,7 @@ export function ProductCard({ product, priority }: { product: Product; priority?
                 href={whatsappLink(whatsappProductMessage(product, variant.label))}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'w-full')}
+                className={cn(buttonVariants({ variant: 'ghost', size: 'lg' }), 'w-full text-secondary-text hover:text-primary')}
               >
                 <MessageCircleIcon data-icon="inline-start" />
                 Ask on WhatsApp

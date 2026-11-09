@@ -3,8 +3,16 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
 import { cn } from '@/lib/utils'
+import {
+  formatPrice,
+  formatNumber,
+} from '@/lib/format'
+import {
+  BarChart,
+  ChartContainer,
+} from '@/components/admin/charts'
 
 type InventorySummary = {
   productId: string
@@ -20,9 +28,9 @@ type InventorySummary = {
 
 type InventoryAnalytics = {
   products: InventorySummary[]
-  lowStockCount: number
-  totalStockValue: number
-  totalProducts: number
+  lowStockCount: number | null
+  totalStockValue: number | null
+  totalProducts: number | null
 }
 
 type DateRangeOption = {
@@ -56,14 +64,6 @@ function StatCard({
       {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
     </div>
   )
-}
-
-function formatCurrency(value: number): string {
-  return `₹${value.toLocaleString('en-IN')}`
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-IN')
 }
 
 export default function InventoryAnalyticsPage() {
@@ -149,7 +149,7 @@ export default function InventoryAnalyticsPage() {
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-medium text-primary">
-              S.V. Bakery Admin
+              Bluebell Bakehouse Admin
             </p>
             <Link
               href="/admin"
@@ -173,8 +173,6 @@ export default function InventoryAnalyticsPage() {
             </Link>
           </div>
         </div>
-
-        <AdminNav className="mt-6" />
 
         {/* Date Range Filters */}
         <section className="mt-6 rounded-xl border border-border bg-white p-6 shadow-sm">
@@ -227,20 +225,57 @@ export default function InventoryAnalyticsPage() {
         <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Total Products"
-            value={totalProducts.toLocaleString('en-IN')}
+            value={formatNumber(totalProducts)}
           />
           <StatCard
             label="Total Stock Value"
-            value={`₹${totalStockValue.toLocaleString('en-IN')}`}
+            value={formatPrice(totalStockValue)}
           />
           <StatCard
             label="Low Stock Items"
-            value={lowStockCount.toLocaleString('en-IN')}
+            value={formatNumber(lowStockCount)}
           />
           <StatCard
             label="Total Products Listed"
-            value={totalProducts.toLocaleString('en-IN')}
+            value={formatNumber(totalProducts)}
           />
+        </section>
+
+        {/* Inventory Distribution Charts */}
+        <section className="mt-8 grid gap-6 lg:grid-cols-2">
+          <ChartContainer
+            title="Stock Status Distribution"
+            subtitle="Products by low stock status"
+          >
+            <BarChart
+              data={[
+                { label: 'Adequately Stocked', value: products.filter((p) => !p.isLowStock).length },
+                { label: 'Low Stock', value: products.filter((p) => p.isLowStock).length },
+              ]}
+              color="#17243A"
+              showLabels
+            />
+          </ChartContainer>
+
+          <ChartContainer
+            title="Top Products by Units Sold"
+            subtitle="Best-selling products by sales volume"
+          >
+            {products.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No inventory data available.</p>
+              </div>
+            ) : (
+              <BarChart
+                data={products
+                  .sort((a, b) => b.unitsSold - a.unitsSold)
+                  .slice(0, 8)
+                  .map((p) => ({ label: p.productName, value: p.unitsSold }))}
+                color="#C6A46A"
+                showLabels
+              />
+            )}
+          </ChartContainer>
         </section>
 
         {/* Low Stock Alert */}
@@ -250,7 +285,7 @@ export default function InventoryAnalyticsPage() {
               Low Stock Items
             </h2>
             <p className="text-sm text-muted-foreground">
-              {lowStockCount} items need restocking
+              {formatNumber(lowStockCount)} items need restocking
             </p>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-3 xl:grid-cols-4">
@@ -276,14 +311,14 @@ export default function InventoryAnalyticsPage() {
                   </span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Stock: {p.stock}
+                  Stock: {formatNumber(p.stock)}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Reorder Level:
-                  {p.reorderLevel !== null ? p.reorderLevel : 'Not set'}
+                  {p.reorderLevel !== null ? formatNumber(p.reorderLevel) : 'Not set'}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Units Sold: {p.unitsSold}
+                  Units Sold: {formatNumber(p.unitsSold)}
                 </p>
               </div>
             ))}
@@ -338,14 +373,14 @@ export default function InventoryAnalyticsPage() {
                     <td className="py-3 text-sm font-medium">{p.productName}</td>
                     <td className="py-3 text-sm">{p.category}</td>
                     <td className="py-3 text-sm text-right font-medium">
-                      {formatCurrency(p.price)}
+                      {formatPrice(p.price)}
                     </td>
                     <td className="py-3 text-sm text-right font-medium">
-                      {p.stock}
+                      {formatNumber(p.stock)}
                     </td>
-                    <td className="py-3 text-sm text-right">{p.unitsSold}</td>
+                    <td className="py-3 text-sm text-right">{formatNumber(p.unitsSold)}</td>
                     <td className="py-3 text-sm text-right">
-                      {p.reorderLevel !== null ? p.reorderLevel : 'Not set'}
+                      {p.reorderLevel !== null ? formatNumber(p.reorderLevel) : 'Not set'}
                     </td>
                     <td className="py-3 text-sm text-right">
                       <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${

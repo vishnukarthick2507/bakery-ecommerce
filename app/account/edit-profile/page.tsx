@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { UserIcon } from 'lucide-react'
 import type { CustomerProfile } from '@/lib/customer-auth'
 
 export default function EditProfilePage() {
@@ -42,9 +43,12 @@ export default function EditProfilePage() {
   }, [router])
 
   if (loading) return (
-    <main className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
-      <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
-        <p className="text-muted-foreground">Loading profile…</p>
+    <main className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-champagne-gold/15 text-champagne-gold">
+          <UserIcon className="size-5" aria-hidden="true" />
+        </div>
+        <p className="mt-4 text-sm text-muted-foreground">Loading your profile…</p>
       </div>
     </main>
   )

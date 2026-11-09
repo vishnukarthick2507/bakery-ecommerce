@@ -7,43 +7,37 @@
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-playfair), ui-serif, Georgia, serif;
-  --color-caramel: var(--caramel);
-  --color-caramel-foreground: var(--caramel-foreground);
-  --color-cream: var(--cream);
-  --color-burgundy: var(--burgundy);
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
-  --color-background: var(--background);
+
+  /* Brand colour system — Midnight Navy + Warm Ivory + Champagne Gold */
+  --color-primary: var(--midnight-navy);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--deep-navy);
+  --color-secondary-foreground: #ffffff;
+  --color-background: var(--warm-ivory);
+  --color-foreground: var(--main-text);
+  --color-card: #ffffff;
+  --color-card-foreground: var(--main-text);
+  --color-popover: #ffffff;
+  --color-popover-foreground: var(--main-text);
+  --color-muted: #f1e9d6;
+  --color-muted-foreground: var(--secondary-text);
+  --color-accent: var(--champagne-gold);
+  --color-accent-foreground: #17243A;
+  --color-destructive: var(--error);
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--borders);
+  --color-input: #e8e2d8;
+  --color-ring: var(--champagne-gold);
+  --color-success: var(--sage-green);
+  --color-success-foreground: #ffffff;
+
+  /* Chart colours — restrained, on-brand */
+  --color-chart-1: #17243A;
+  --color-chart-2: #C6A46A;
+  --color-chart-3: #536B60;
+  --color-chart-4: #B28C52;
+  --color-chart-5: #E8E2D8;
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -53,46 +47,70 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Design tokens */
 :root {
   color-scheme: light;
-  --background: #ffffff;
-  --foreground: #16324F;
-  --card: #ffffff;
-  --card-foreground: #16324F;
-  --popover: #ffffff;
-  --popover-foreground: #16324F;
-  --primary: #0B2744;
-  --primary-foreground: #ffffff;
-  --secondary: #EAF3FA;
-  --secondary-foreground: #16324F;
-  --muted: #F5F9FC;
-  --muted-foreground: #526779;
-  --accent: #2D6FA3;
-  --accent-foreground: #ffffff;
-  --destructive: #a91f31;
-  --border: #D9E6F2;
-  --input: #C6D9E8;
-  --ring: #2D6FA3;
-  --caramel: #2D6FA3;
-  --caramel-foreground: #ffffff;
-  --cream: #F8FBFE;
-  --burgundy: #0B2744;
-  --success: #1c7a4a;
+
+  /* Core palette */
+  --midnight-navy: #17243A;
+  --deep-navy: #101A2B;
+  --warm-ivory: #F7F3EB;
+  --champagne-gold: #C6A46A;
+  --muted-gold: #B28C52;
+  --sage-green: #536B60;
+  --error: #B94B4B;
+
+  /* Semantic */
+  --main-text: #202938;
+  --secondary-text: #747B86;
+  --borders: #E8E2D8;
+
+  /* Legacy colour aliases (kept for existing components during transition) */
+  --caramel: var(--champagne-gold);
+  --caramel-foreground: #17243A;
+  --cream: var(--warm-ivory);
+  --burgundy: var(--midnight-navy);
+  --success: var(--sage-green);
   --success-foreground: #ffffff;
-  --chart-1: #0B2744;
-  --chart-2: #5B8FB9;
-  --chart-3: #0B2744;
-  --chart-4: #8BB6D1;
-  --chart-5: #E3EFF7;
-  --radius: 0.75rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #16324F;
-  --sidebar-primary: #0B2744;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #EAF3FA;
-  --sidebar-accent-foreground: #16324F;
-  --sidebar-border: #D9E6F2;
-  --sidebar-ring: #2D6FA3;
+
+  /* Derived shorthand */
+  --background: var(--warm-ivory);
+  --foreground: var(--main-text);
+  --card: #ffffff;
+  --card-foreground: var(--main-text);
+  --popover: #ffffff;
+  --popover-foreground: var(--main-text);
+  --primary: var(--midnight-navy);
+  --primary-foreground: #ffffff;
+  --secondary: var(--deep-navy);
+  --secondary-foreground: #ffffff;
+  --muted: #f1e9d6;
+  --muted-foreground: var(--secondary-text);
+  --accent: var(--champagne-gold);
+  --accent-foreground: #17243A;
+  --destructive: var(--error);
+  --destructive-foreground: #ffffff;
+  --border: var(--borders);
+  --input: #e8e2d8;
+  --ring: var(--champagne-gold);
+  --success: var(--sage-green);
+  --success-foreground: #ffffff;
+  --chart-1: #17243A;
+  --chart-2: #C6A46A;
+  --chart-3: #536B60;
+  --chart-4: #B28C52;
+  --chart-5: #E8E2D8;
+  --radius: 0.5rem;
+
+  /* Sidebar (admin) */
+  --sidebar: #17243A;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #C6A46A;
+  --sidebar-primary-foreground: #17243A;
+  --sidebar-accent: rgba(198, 164, 106, 0.12);
+  --sidebar-accent-foreground: #C6A46A;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #C6A46A;
 }
 
 @layer base {
@@ -100,198 +118,13 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background font-sans text-foreground;
+    @apply bg-background font-sans text-foreground antialiased;
   }
-  h1, h2, h3, h4 {
-    @apply font-heading text-balance;
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading text-balance text-foreground;
   }
-}
-
-/* THE CAKE POINT opening intro */
-.opening-intro {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: grid;
-  place-items: center;
-  background: #0B2744;
-  animation: opening-intro-exit 700ms ease 1900ms forwards;
-}
-
-.opening-intro__card {
-  position: relative;
-  width: min(100vw, 560px);
-  height: min(100vh, 760px);
-  overflow: hidden;
-  background: #0B2744;
-  animation: opening-intro-card 2600ms cubic-bezier(.22, 1, .36, 1) forwards;
-}
-
-.opening-intro__image {
-  object-fit: cover;
-  transform: scale(1.08);
-  animation: opening-intro-image 2600ms ease-out forwards;
-}
-
-.opening-intro__overlay {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(
-      to bottom,
-      rgba(11, 39, 68, 0.18),
-      rgba(11, 39, 68, 0.38) 45%,
-      rgba(11, 39, 68, 0.92)
-    );
-}
-
-.opening-intro__content {
-  position: absolute;
-  inset: auto 24px 72px;
-  z-index: 2;
-  text-align: center;
-  color: white;
-  animation: opening-intro-content 1100ms ease-out 350ms both;
-}
-
-.opening-intro__eyebrow {
-  margin-bottom: 10px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  opacity: 0.85;
-}
-
-.opening-intro__content h1 {
-  margin: 0;
-  font-size: clamp(2rem, 9vw, 4rem);
-  line-height: 0.95;
-  letter-spacing: 0.04em;
-  font-weight: 800;
-}
-
-.opening-intro__content p:last-child {
-  margin-top: 14px;
-  font-size: 0.95rem;
-  letter-spacing: 0.08em;
-  opacity: 0.9;
-}
-
-.opening-intro__steam {
-  position: absolute;
-  z-index: 2;
-  bottom: 42%;
-  width: 18px;
-  height: 90px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  filter: blur(8px);
-  opacity: 0;
-  animation: opening-intro-steam 1800ms ease-out infinite;
-}
-
-.opening-intro__steam--one {
-  left: 35%;
-  animation-delay: 500ms;
-}
-
-.opening-intro__steam--two {
-  left: 50%;
-  animation-delay: 900ms;
-}
-
-.opening-intro__steam--three {
-  left: 63%;
-  animation-delay: 700ms;
-}
-
-@keyframes opening-intro-image {
-  from {
-    transform: scale(1.08);
-  }
-  to {
-    transform: scale(1);
-  }
-}
-
-@keyframes opening-intro-card {
-  0%,
-  72% {
-    border-radius: 0;
-  }
-
-  100% {
-    border-radius: 24px;
-  }
-}
-
-@keyframes opening-intro-content {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes opening-intro-steam {
-  0% {
-    opacity: 0;
-    transform: translateY(20px) scaleX(0.8);
-  }
-
-  35% {
-    opacity: 0.55;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translateY(-70px) scaleX(1.4);
-  }
-}
-
-@keyframes opening-intro-exit {
-  from {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  to {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-  }
-}
-
-@media (min-width: 768px) {
-  .opening-intro__card {
-    width: 100vw;
-    height: 100vh;
-    max-width: none;
-    border-radius: 0;
-  }
-
-  .opening-intro__content {
-    inset: auto 40px 90px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .opening-intro,
-  .opening-intro__card,
-  .opening-intro__image,
-  .opening-intro__content,
-  .opening-intro__steam {
-    animation: none;
-  }
-
-  .opening-intro {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
+  a {
+    color: inherit;
+    text-decoration: none;
   }
 }

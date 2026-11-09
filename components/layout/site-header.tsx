@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 export function Logo({ className }: { className?: string }) {
   return (
     <Link href="/" className={cn('flex items-center gap-2', className)}>
-      <span className="flex size-10 items-center justify-center rounded-2xl bg-caramel text-caramel-foreground shadow-sm">
+      <span className="flex size-10 items-center justify-center rounded-2xl bg-champagne-gold text-midnight-navy shadow-sm">
         <CakeSliceIcon className="size-5" aria-hidden="true" />
       </span>
       <span className="font-heading text-lg leading-none font-bold text-primary sm:text-xl tracking-tight">
@@ -31,7 +31,7 @@ export function SiteHeader() {
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <header className="sticky top-0 z-40 border-b border-gold-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
         <Button
           variant="ghost"
@@ -52,9 +52,9 @@ export function SiteHeader() {
                   href={link.href}
                   aria-current={isActive(link.href) ? 'page' : undefined}
                   className={cn(
-                    'rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-cream hover:text-primary hover:border-caramel/20 border-transparent',
+                    'rounded-xl px-4 py-2 text-sm font-medium text-secondary-text transition-all hover:bg-gold-border hover:text-primary hover:border-champagne-gold/30 border-transparent',
                     isActive(link.href)
-                      && 'bg-cream text-primary border-caramel/50 font-semibold',
+                      && 'bg-gold-border text-primary border-champagne-gold/50 font-semibold',
                   )}
                 >
                   {link.label}
@@ -83,7 +83,7 @@ export function SiteHeader() {
             <ShoppingBagIcon data-icon="inline-start" />
             Cart
             {hydrated && count > 0 && (
-              <span className="ml-1.5 flex min-w-5 items-center justify-center rounded-full bg-caramel px-1.5 text-xs font-semibold text-caramel-foreground shadow-sm">
+              <span className="ml-1.5 flex min-w-5 items-center justify-center rounded-full bg-champagne-gold px-1.5 text-xs font-semibold text-midnight-navy shadow-sm">
                 {count}
               </span>
             )}
@@ -98,7 +98,7 @@ export function SiteHeader() {
       </div>
 
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="left" className="w-80 border-l border-border">
+        <SheetContent side="left" className="w-80 border-l border-gold-border">
           <SheetHeader className="pb-4">
             <SheetTitle className="sr-only">Menu</SheetTitle>
             <Logo />
@@ -109,7 +109,7 @@ export function SiteHeader() {
                 <Link
                   href="/account/landing"
                   onClick={() => setMenuOpen(false)}
-                  className="block rounded-xl px-4 py-3 text-base font-medium text-primary transition-colors hover:bg-cream hover:text-primary"
+                  className="block rounded-xl px-4 py-3 text-base font-medium text-primary transition-colors hover:bg-gold-border hover:text-primary"
                 >
                   My account
                 </Link>
@@ -122,9 +122,9 @@ export function SiteHeader() {
                     aria-current={isActive(link.href) ? 'page' : undefined}
                     className={cn(
                       'block rounded-xl px-4 py-3 text-base font-medium transition-all border-transparent',
-                      'text-muted-foreground hover:text-primary hover:bg-cream hover:border-caramel/20',
+                      'text-secondary-text hover:text-primary hover:bg-gold-border hover:border-champagne-gold/30',
                       isActive(link.href)
-                        && 'bg-cream text-primary border-caramel/50 font-semibold',
+                        && 'bg-gold-border text-primary border-champagne-gold/50 font-semibold',
                     )}
                   >
                     {link.label}

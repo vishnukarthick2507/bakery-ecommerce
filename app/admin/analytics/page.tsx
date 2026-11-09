@@ -3,7 +3,13 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
+import {
+  formatPrice,
+  formatNumber,
+  formatPriceOr,
+  formatNumberOr,
+} from '@/lib/format'
 
 type OrderStatus =
   | 'PLACED'
@@ -20,14 +26,15 @@ type FulfillmentType = 'DELIVERY' | 'PICKUP'
 type CakeStatus = 'PENDING' | 'CONTACTED' | 'CLOSED'
 
 type KPI = {
-  grossSales: number
-  collectedRevenue: number
-  pendingCod: number
-  totalOrders: number
-  averageOrderValue: number
-  totalCustomers: number
-  totalProductsSold: number
-  cancelledOrders: number
+  // Aggregate totals can be null when the backend returns incomplete data.
+  grossSales: number | null
+  collectedRevenue: number | null
+  pendingCod: number | null
+  totalOrders: number | null
+  averageOrderValue: number | null
+  totalCustomers: number | null
+  totalProductsSold: number | null
+  cancelledOrders: number | null
 }
 
 type ChartSeries = {
@@ -57,7 +64,7 @@ type AnalyticsData = {
   kpis: KPI
   charts: ChartSeries
   lowStock: LowStock[]
-  totalCustomCakes: number
+  totalCustomCakes: number | null
 }
 
 type DateRangeOption = {
@@ -79,14 +86,6 @@ const statusLabel = (status: OrderStatus) =>
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
-
-function formatCurrency(value: number): string {
-  return `₹${value.toLocaleString('en-IN')}`
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-IN')
-}
 
 function StatCard({
   label,
@@ -185,7 +184,7 @@ export default function AnalyticsPage() {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'S.V. Bakery Analytics.xlsx'
+      a.download = 'Bluebell Bakehouse Analytics.xlsx'
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -199,20 +198,20 @@ export default function AnalyticsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-muted/20">
-        <div className="mx-auto max-w-7xl px-4 py-12">
+      <AdminLayout>
+        <div className="mx-auto max-w-7xl py-12">
           <div className="rounded-xl border border-border p-10 text-center">
             <p className="text-muted-foreground">Loading analytics…</p>
           </div>
         </div>
-      </main>
+      </AdminLayout>
     )
   }
 
   if (!data) {
     return (
-      <main className="min-h-screen bg-muted/20">
-        <div className="mx-auto max-w-7xl px-4 py-12">
+      <AdminLayout>
+        <div className="mx-auto max-w-7xl py-12">
           <div className="rounded-xl border border-border p-10 text-center">
             {error ? (
               <>
@@ -229,20 +228,20 @@ export default function AnalyticsPage() {
             )}
           </div>
         </div>
-      </main>
+      </AdminLayout>
     )
   }
 
   const { kpis, charts, lowStock, totalCustomCakes } = data
 
   return (
-    <main className="min-h-screen bg-muted/20">
+    <AdminLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-medium text-primary">
-              S.V. Bakery Admin
+              Bluebell Bakehouse Admin
             </p>
             <Link
               href="/admin"
@@ -273,8 +272,6 @@ export default function AnalyticsPage() {
             </Link>
           </div>
         </div>
-
-        <AdminNav className="mt-6" />
 
         {/* Date Range Filters */}
         <section className="mt-6 rounded-xl border border-border bg-white p-6 shadow-sm">
@@ -326,17 +323,17 @@ export default function AnalyticsPage() {
         <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Gross Sales"
-            value={formatCurrency(kpis.grossSales)}
-            subtitle={`${formatCurrency(kpis.collectedRevenue)} collected`}
+            value={formatPrice(kpis.grossSales)}
+            subtitle={`${formatPrice(kpis.collectedRevenue)} collected`}
           />
           <StatCard
             label="Collected Revenue"
-            value={formatCurrency(kpis.collectedRevenue)}
-            subtitle={`${formatCurrency(kpis.pendingCod)} pending COD`}
+            value={formatPrice(kpis.collectedRevenue)}
+            subtitle={`${formatPrice(kpis.pendingCod)} pending COD`}
           />
           <StatCard
             label="Pending COD"
-            value={formatCurrency(kpis.pendingCod)}
+            value={formatPrice(kpis.pendingCod)}
             subtitle="Awaiting collection"
           />
           <StatCard
@@ -345,7 +342,7 @@ export default function AnalyticsPage() {
           />
           <StatCard
             label="Average Order Value"
-            value={formatCurrency(Math.round(kpis.averageOrderValue))}
+            value={formatPrice(kpis.averageOrderValue)}
           />
           <StatCard
             label="Total Customers"
@@ -460,7 +457,7 @@ export default function AnalyticsPage() {
                     </p>
                   </div>
                   <p className="font-semibold text-primary">
-                    {formatCurrency(p.revenue)}
+                    {formatPrice(p.revenue)}
                   </p>
                 </div>
               ))}
@@ -527,14 +524,14 @@ export default function AnalyticsPage() {
                   </div>
                   <div className="text-right">
                     <p className="font-medium text-primary">
-                      {formatCurrency(p.amount)} total sales
+                      {formatPrice(p.amount)} total sales
                     </p>
                     <p className="text-sm font-medium text-primary">
-                      {formatCurrency(p.collected)} collected
+                      {formatPrice(p.collected)} collected
                     </p>
                     {isCod && p.pendingCod > 0 && (
                       <p className="text-xs text-destructive font-medium">
-                        {formatCurrency(p.pendingCod)} pending collection
+                        {formatPrice(p.pendingCod)} pending collection
                       </p>
                     )}
                     {!isCod && p.collected === 0 && p.amount === 0 && (
@@ -584,7 +581,7 @@ export default function AnalyticsPage() {
                       {formatNumber(c.orderCount)}
                     </td>
                     <td className="py-3 text-sm text-right font-medium">
-                      {formatCurrency(c.totalSpent)}
+                      {formatPrice(c.totalSpent)}
                     </td>
                     <td className="py-3 text-sm text-right text-muted-foreground">
                       {c.lastOrder
@@ -646,6 +643,6 @@ export default function AnalyticsPage() {
           </div>
         </section>
       </div>
-    </main>
+    </AdminLayout>
   )
 }

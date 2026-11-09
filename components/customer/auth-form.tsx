@@ -602,7 +602,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   }
 
   // ---- Presentational helpers ----
-  const brandName = 'S.V. Sweets & Bakers'
+  const brandName = 'Bluebell Bakehouse'
 
   const inputClass = (field: keyof typeof fieldErrors) =>
     cn(
@@ -1425,7 +1425,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         </button>
 
         <p className="mt-10 text-sm text-muted-foreground text-center">
-          {isRegister ? 'Already have an account?' : 'New to S.V. Sweets & Bakers?'}{' '}
+          {isRegister ? 'Already have an account?' : 'New to Bluebell Bakehouse?'}{' '}
           {isRegister ? (
             <Link
               className="font-medium text-caramel underline-offset-4 hover:underline"

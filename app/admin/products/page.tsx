@@ -11,7 +11,7 @@ import {
 } from '@/lib/upload'
 
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
 
 type Availability =
   | 'AVAILABLE'
@@ -706,14 +706,14 @@ function AdminProductsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-cream/30">
+    <AdminLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
         {/* Header */}
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
             <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
-              S.V. Bakery Admin
+              Bluebell Bakehouse Admin
             </p>
 
             <Link
@@ -759,8 +759,6 @@ function AdminProductsPage() {
             </Link>
           </div>
         </div>
-
-        <AdminNav className="mt-8" />
 
         {/* Error */}
         {error && (
@@ -1485,7 +1483,7 @@ function AdminProductsPage() {
           </div>
         </div>
       )}
-    </main>
+  </AdminLayout>
   )
 }
 

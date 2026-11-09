@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
 
 type OrderStatus =
   | 'PLACED'
@@ -299,13 +299,13 @@ function AdminOrdersPage() {
   }
 
   return (
-    <main className="min-h-screen bg-cream/30">
+    <AdminLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
             <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
-              S.V. Bakery Admin
+              Bluebell Bakehouse Admin
             </p>
 
             <Link
@@ -341,8 +341,6 @@ function AdminOrdersPage() {
             </Link>
           </div>
         </div>
-
-        <AdminNav className="mt-8" />
 
         <div className="mt-10 grid gap-5 sm:grid-cols-3">
           <label className="grid gap-2 text-sm font-semibold text-foreground">
@@ -874,7 +872,7 @@ function AdminOrdersPage() {
                           {order.phone && (
                             <a
                               href={`https://wa.me/${order.phone}?text=${encodeURIComponent(
-                                `S.V. Bakery - Order ${order.orderNumber}: ${order.proposedSlot?.note || 'A new time has been suggested for your order.'} Please check your order page for details.`,
+                                `Bluebell Bakehouse - Order ${order.orderNumber}: ${order.proposedSlot?.note || 'A new time has been suggested for your order.'} Please check your order page for details.`,
                               )}`}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -922,7 +920,7 @@ function AdminOrdersPage() {
           </div>
         )}
       </div>
-    </main>
+    </AdminLayout>
   )
 }
 

@@ -3,7 +3,11 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
+import {
+  formatPrice,
+  formatNumber,
+} from '@/lib/format'
 
 type OrderStatus =
   | 'PLACED'
@@ -38,18 +42,7 @@ const statusLabel = (status: OrderStatus) =>
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[2rem] border border-border bg-card p-6 shadow-sm">
-      <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
-        {label}
-      </p>
-      <p className="mt-2.5 text-3xl font-bold text-primary">{value}</p>
-    </div>
-  )
-}
-
-function AdminPage() {
+function AdminDashboardContent() {
   const [orders, setOrders] = useState<Order[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [customersCount, setCustomersCount] = useState<number>(0)
@@ -209,13 +202,13 @@ function AdminPage() {
   ).length
 
   return (
-    <main className="min-h-screen bg-cream/30">
+    <AdminLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
-            <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
-              S.V. Bakery Admin
+            <p className="text-xs font-semibold text-champagne-gold uppercase tracking-wider">
+              Bluebell Bakehouse Admin
             </p>
 
             <h1 className="mt-1.5 text-3xl font-bold text-primary tracking-tight">
@@ -228,39 +221,57 @@ function AdminPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleLogout}
-              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
-            >
-              Logout
-            </button>
             <Link
               href="/"
-              className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-caramel hover:bg-cream/50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-gold-border bg-white px-5 py-2.5 text-sm font-semibold text-primary hover:bg-gold-border/50 transition-colors"
             >
               View Store
             </Link>
           </div>
         </div>
 
-        <AdminNav className="mt-8" />
-
         {/* Stats */}
         <section className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total Orders" value={loading || error ? '—' : totalOrders.toLocaleString('en-IN')} />
-          <StatCard label="Today's Orders" value={loading || error ? '—' : todaysOrders.length.toLocaleString('en-IN')} />
-          <StatCard label="Total Customers" value={customersLoading || error ? '—' : customersCount.toLocaleString('en-IN')} />
-          <StatCard label="Total Products" value={productsLoading || productsError ? '—' : products.length.toLocaleString('en-IN')} />
-          <StatCard label="Pending Orders" value={loading || error ? '—' : pendingOrders.toLocaleString('en-IN')} />
-          <StatCard label="Preparing" value={loading || error ? '—' : preparingOrders.toLocaleString('en-IN')} />
-          <StatCard label="Ready" value={loading || error ? '—' : readyOrders.toLocaleString('en-IN')} />
-          <StatCard label="Delivered" value={loading || error ? '—' : deliveredOrders.toLocaleString('en-IN')} />
-          <StatCard label="Cancelled" value={loading || error ? '—' : cancelledOrders.toLocaleString('en-IN')} />
-          <StatCard label="Paid Revenue" value={loading || error ? '—' : `₹${totalRevenue.toLocaleString('en-IN')}`} />
-          <StatCard label="Today's Paid Revenue" value={loading || error ? '—' : `₹${todaysRevenue.toLocaleString('en-IN')}`} />
-          <StatCard label="Pending Payments" value={loading || error ? '—' : pendingPayments.toLocaleString('en-IN')} />
-          <StatCard label="Average Order Value" value={loading || error ? '—' : `₹${Math.round(averageOrderValue).toLocaleString('en-IN')}`} />
-          <StatCard label="Out of Stock" value={productsLoading || productsError ? '—' : outOfStockProducts.toLocaleString('en-IN')} />
+          {[
+            { label: 'Total Orders', value: formatNumber(totalOrders) },
+            { label: "Today's Orders", value: formatNumber(todaysOrders.length) },
+            { label: 'Total Customers', value: formatNumber(customersCount) },
+            { label: 'Total Products', value: formatNumber(products.length) },
+            { label: 'Pending Orders', value: formatNumber(pendingOrders) },
+            { label: 'Preparing', value: formatNumber(preparingOrders) },
+            { label: 'Ready', value: formatNumber(readyOrders) },
+            { label: 'Delivered', value: formatNumber(deliveredOrders) },
+            { label: 'Cancelled', value: formatNumber(cancelledOrders) },
+            {
+              label: 'Paid Revenue',
+              value: loading || error ? '—' : formatPrice(totalRevenue),
+            },
+            {
+              label: "Today's Paid Revenue",
+              value: loading || error ? '—' : formatPrice(todaysRevenue),
+            },
+            { label: 'Pending Payments', value: formatNumber(pendingPayments) },
+            {
+              label: 'Average Order Value',
+              value:
+                loading || error
+                  ? '—'
+                  : formatPrice(Math.round(averageOrderValue)),
+            },
+            { label: 'Out of Stock', value: formatNumber(outOfStockProducts) },
+          ].map((stat, idx) => (
+            <div
+              key={idx}
+              className="rounded-xl border border-gold-border bg-white p-6 shadow-sm"
+            >
+              <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                {stat.label}
+              </p>
+              <p className="mt-2.5 text-3xl font-bold text-primary">
+                {stat.value}
+              </p>
+            </div>
+          ))}
         </section>
 
         {productsError && (
@@ -270,8 +281,8 @@ function AdminPage() {
         )}
 
         {/* Recent Orders */}
-        <section className="mt-10 rounded-[2rem] border border-border bg-card shadow-sm">
-          <div className="flex items-center justify-between border-b border-border px-8 py-6">
+        <section className="mt-10 rounded-xl border border-gold-border bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gold-border px-6 py-5">
             <div>
               <h2 className="text-xl font-semibold text-primary">Recent Orders</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -280,14 +291,14 @@ function AdminPage() {
             </div>
             <Link
               href="/admin/orders"
-              className="text-sm font-semibold text-caramel hover:underline"
+              className="text-sm font-semibold text-primary hover:underline"
             >
               View All
             </Link>
           </div>
 
           {error && (
-            <div className="p-8 text-sm text-destructive">{error}</div>
+            <div className="p-6 text-sm text-destructive">{error}</div>
           )}
 
           {!loading && !error && orders.length === 0 && (
@@ -297,22 +308,26 @@ function AdminPage() {
           )}
 
           {!loading && !error && orders.length > 0 && (
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-gold-border">
               {orders.slice(0, 5).map((order) => (
                 <div
                   key={order._id}
-                  className="flex flex-col gap-5 p-8 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <p className="font-semibold text-primary">{order.orderNumber}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{order.customerName}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleString('en-IN')}
+                      {new Date(order.createdAt).toLocaleDateString('en-IN')}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-primary">₹{order.totalAmount.toLocaleString('en-IN')}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{statusLabel(order.orderStatus)}</p>
+                    <p className="font-semibold text-primary">
+                      {formatPrice(order.totalAmount)}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {statusLabel(order.orderStatus)}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -321,7 +336,7 @@ function AdminPage() {
         </section>
 
         {/* Delivery summary */}
-        <section className="mt-10 rounded-[2rem] border border-border bg-card p-8 shadow-sm">
+        <section className="mt-10 rounded-xl border border-gold-border bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-primary">Order Summary</h2>
           <div className="mt-6 grid gap-5 sm:grid-cols-3">
             <div>
@@ -356,8 +371,8 @@ function AdminPage() {
           </div>
         </section>
       </div>
-    </main>
+    </AdminLayout>
   )
 }
 
-export default withAdminAuth(AdminPage)
+export default withAdminAuth(AdminDashboardContent)

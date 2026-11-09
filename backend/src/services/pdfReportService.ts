@@ -305,7 +305,7 @@ export function buildSalesReport(data: {
 }): ReportData {
   return {
     title: data.title || "Sales Report",
-    subtitle: data.subtitle || "S.V. Bakery - Sales Analytics",
+    subtitle: data.subtitle || "Bluebell Bakehouse - Sales Analytics",
     periodLabel: data.periodLabel,
     generatedAt: data.generatedAt,
     kpis: data.kpis,
@@ -372,7 +372,7 @@ export function buildProductReport(data: {
 }): ReportData {
   return {
     title: data.title || "Product Performance Report",
-    subtitle: data.subtitle || "S.V. Bakery - Product Analytics",
+    subtitle: data.subtitle || "Bluebell Bakehouse - Product Analytics",
     periodLabel: data.periodLabel,
     generatedAt: data.generatedAt,
     kpis: data.kpis,
@@ -428,7 +428,7 @@ export function buildCustomerReport(data: {
 }): ReportData {
   return {
     title: data.title || "Customer Intelligence Report",
-    subtitle: data.subtitle || "S.V. Bakery - Customer Analytics",
+    subtitle: data.subtitle || "Bluebell Bakehouse - Customer Analytics",
     periodLabel: data.periodLabel,
     generatedAt: data.generatedAt,
     kpis: data.kpis,
@@ -473,7 +473,7 @@ export function buildFinancialReport(data: {
 }): ReportData {
   return {
     title: data.title || "Financial Report",
-    subtitle: data.subtitle || "S.V. Bakery - Financial Analytics",
+    subtitle: data.subtitle || "Bluebell Bakehouse - Financial Analytics",
     periodLabel: data.periodLabel,
     generatedAt: data.generatedAt,
     kpis: data.kpis,

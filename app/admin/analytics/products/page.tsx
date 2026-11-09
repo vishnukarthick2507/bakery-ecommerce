@@ -3,7 +3,19 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
+import { cn } from '@/lib/utils'
+import {
+  formatPrice,
+  formatNumber,
+  formatPriceOr,
+  formatNumberOr,
+} from '@/lib/format'
+import {
+  BarChart,
+  DonutChart,
+  ChartContainer,
+} from '@/components/admin/charts'
 
 type ProductAnalytics = {
   products: Array<{
@@ -15,10 +27,11 @@ type ProductAnalytics = {
     grossProfit: number | null
     grossProfitMargin: number | null
   }>
-  totalRevenue: number
-  totalUnits: number
-  totalCogs: number
-  totalGrossProfit: number
+  // Aggregate totals can be null when the backend returns incomplete data.
+  totalRevenue: number | null
+  totalUnits: number | null
+  totalCogs: number | null
+  totalGrossProfit: number | null
   totalGrossProfitMargin: number | null
   productsWithCost: number
   productsWithoutCost: number
@@ -55,14 +68,6 @@ function StatCard({
       {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
     </div>
   )
-}
-
-function formatCurrency(value: number): string {
-  return `₹${value.toLocaleString('en-IN')}`
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-IN')
 }
 
 export default function ProductAnalyticsPage() {
@@ -139,7 +144,16 @@ export default function ProductAnalyticsPage() {
     )
   }
 
-  const { products, totalRevenue, totalUnits, totalCogs, totalGrossProfit, totalGrossProfitMargin, productsWithCost, productsWithoutCost } = data
+  const {
+    products,
+    totalRevenue,
+    totalUnits,
+    totalCogs,
+    totalGrossProfit,
+    totalGrossProfitMargin,
+    productsWithCost,
+    productsWithoutCost,
+  } = data
 
   return (
     <main className="min-h-screen bg-muted/20">
@@ -148,7 +162,7 @@ export default function ProductAnalyticsPage() {
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-medium text-primary">
-              S.V. Bakery Admin
+              Bluebell Bakehouse Admin
             </p>
             <Link
               href="/admin"
@@ -173,7 +187,6 @@ export default function ProductAnalyticsPage() {
           </div>
         </div>
 
-        <AdminNav className="mt-6" />
 
         {/* Date Range Filters */}
         <section className="mt-6 rounded-xl border border-border bg-white p-6 shadow-sm">
@@ -226,32 +239,75 @@ export default function ProductAnalyticsPage() {
         <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Total Revenue"
-            value={`₹${data.totalRevenue.toLocaleString('en-IN')}`}
+            value={formatPrice(totalRevenue)}
+            subtitle={`${formatPrice(totalGrossProfit)} gross profit`}
           />
           <StatCard
             label="Total Units Sold"
-            value={data.totalUnits.toLocaleString('en-IN')}
+            value={formatNumber(totalUnits)}
           />
           <StatCard
             label="Gross Profit"
-            value={`₹${data.totalGrossProfit.toLocaleString('en-IN')}`}
+            value={formatPrice(totalGrossProfit)}
           />
           <StatCard
             label="Gross Profit Margin"
-            value={`${data.totalGrossProfitMargin?.toFixed(1) ?? 0}%`}
+            value={`${totalGrossProfitMargin?.toFixed(1) ?? 0}%`}
           />
           <StatCard
             label="Products Sold"
-            value={data.totalUnits.toLocaleString('en-IN')}
+            value={formatNumber(totalUnits)}
           />
           <StatCard
             label="Products with Cost Data"
-            value={data.productsWithCost.toString()}
+            value={productsWithCost.toString()}
           />
           <StatCard
             label="Products Without Cost Data"
-            value={data.productsWithoutCost.toString()}
+            value={productsWithoutCost.toString()}
           />
+        </section>
+
+        {/* Product Performance Charts */}
+        <section className="mt-8 grid gap-6 lg:grid-cols-2">
+          <ChartContainer
+            title="Top Products by Revenue"
+            subtitle="Product revenue ranking based on order data"
+          >
+            {products.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No product data available.</p>
+              </div>
+            ) : (
+              <BarChart
+                data={products
+                  .slice(0, 8)
+                  .map((p) => ({ label: p.productName, value: p.revenue }))}
+                color="#17243A"
+                showLabels
+              />
+            )}
+          </ChartContainer>
+
+          <ChartContainer
+            title="Cost Data Coverage"
+            subtitle="Products with and without cost snapshots"
+          >
+            <DonutChart
+              data={[
+                {
+                  label: 'With Cost Data',
+                  value: productsWithCost,
+                  color: '#536B60',
+                },
+                {
+                  label: 'Without Cost Data',
+                  value: productsWithoutCost,
+                  color: '#C6A46A',
+                },
+              ]}
+            />
+          </ChartContainer>
         </section>
 
         {/* Product Performance Table */}
@@ -296,15 +352,15 @@ export default function ProductAnalyticsPage() {
                   <tr key={p.productName} className="hover:bg-muted/30">
                     <td className="py-3 text-sm font-medium">{p.productName}</td>
                     <td className="py-3 text-sm">{p.category}</td>
-                    <td className="py-3 text-sm text-right">{p.unitsSold}</td>
+                    <td className="py-3 text-sm text-right">{formatNumber(p.unitsSold)}</td>
                     <td className="py-3 text-sm text-right font-medium">
-                      {formatCurrency(p.revenue)}
+                      {formatPrice(p.revenue)}
                     </td>
                     <td className="py-3 text-sm text-right">
-                      {p.cogs !== null ? formatCurrency(p.cogs) : 'N/A'}
+                      {formatPriceOr(p.cogs, 'N/A')}
                     </td>
                     <td className="py-3 text-sm text-right">
-                      {p.grossProfit !== null ? formatCurrency(p.grossProfit) : 'N/A'}
+                      {formatPriceOr(p.grossProfit, 'N/A')}
                     </td>
                     <td className="py-3 text-sm text-right">
                       {p.grossProfitMargin !== null ? `${p.grossProfitMargin.toFixed(1)}%` : 'N/A'}
@@ -330,19 +386,19 @@ export default function ProductAnalyticsPage() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Revenue</span>
-                <span className="font-medium">{formatCurrency(totalRevenue)}</span>
+                <span className="font-medium">{formatPrice(totalRevenue)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Units Sold</span>
-                <span className="font-medium">{totalUnits}</span>
+                <span className="font-medium">{formatNumber(totalUnits)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total COGS</span>
-                <span className="font-medium">{formatCurrency(totalCogs)}</span>
+                <span className="font-medium">{formatPrice(totalCogs)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Gross Profit</span>
-                <span className="font-medium">{formatCurrency(totalGrossProfit)}</span>
+                <span className="font-medium">{formatPrice(totalGrossProfit)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Gross Profit Margin</span>
@@ -362,8 +418,4 @@ export default function ProductAnalyticsPage() {
       </div>
     </main>
   )
-}
-
-function cn(...classes: string[]): string {
-  return classes.filter(Boolean).join(' ')
 }

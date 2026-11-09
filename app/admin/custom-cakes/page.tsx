@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
 
 type CustomCakeRequest = {
   _id: string
@@ -154,13 +154,13 @@ function AdminCustomCakesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-cream/30">
+    <AdminLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
             <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
-              S.V. Bakery Admin
+              Bluebell Bakehouse Admin
             </p>
 
             <Link
@@ -206,8 +206,6 @@ function AdminCustomCakesPage() {
             </Link>
           </div>
         </div>
-
-        <AdminNav className="mt-8" />
 
         {error && (
           <div className="mt-6 rounded-[2rem] border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive shadow-sm">
@@ -459,7 +457,7 @@ function AdminCustomCakesPage() {
           </div>
         </div>
       )}
-    </main>
+    </AdminLayout>
   )
 }
 

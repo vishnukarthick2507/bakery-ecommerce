@@ -5,7 +5,7 @@ const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 // Brevo requires a verified sender address. The account's verified sender is
 // used by default; BREVO_FROM_EMAIL / BREVO_FROM_NAME may override it.
 const DEFAULT_SENDER_EMAIL = "vishnukarthick2507@gmail.com";
-const DEFAULT_SENDER_NAME = "S.V. Sweets & Bakers";
+const DEFAULT_SENDER_NAME = "Bluebell Bakehouse";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -65,16 +65,16 @@ function otpPurposeLabel(
   purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET",
 ): string {
   if (purpose === "LOGIN") {
-    return "sign in to your S.V. Sweets & Bakers account";
+    return "sign in to your Bluebell Bakehouse account";
   }
   if (purpose === "REGISTER") {
-    return "create your S.V. Sweets & Bakers account";
+    return "create your Bluebell Bakehouse account";
   }
   if (purpose === "GUEST_CHECKOUT") {
     return "confirm your guest checkout";
   }
   if (purpose === "PASSWORD_RESET") {
-    return "reset your S.V. Sweets & Bakers account password";
+    return "reset your Bluebell Bakehouse account password";
   }
   return "complete your request";
 }
@@ -98,7 +98,7 @@ function buildOtpHtml(
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px;">
             <tr>
               <td align="center" style="padding: 28px 24px; background-color: #7B4B1E; border-radius: 8px 8px 0 0;">
-                <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: bold; letter-spacing: 0.5px;">S.V. Sweets &amp; Bakers</h1>
+                <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: bold; letter-spacing: 0.5px;">Bluebell Bakehouse</h1>
                 <p style="color: #f3e5d8; margin: 6px 0 0; font-size: 14px;">Freshly Baked. Made With Love.</p>
               </td>
             </tr>
@@ -117,7 +117,7 @@ function buildOtpHtml(
                 </p>
                 <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
                 <p style="color: #9ca3af; font-size: 12px; margin: 0; line-height: 1.5;">
-                  S.V. Sweets &amp; Bakers<br>
+                  Bluebell Bakehouse<br>
                   Freshly Baked. Made With Love.<br>
                   This is an automated transactional email. Please do not reply to this message.
                 </p>
@@ -163,7 +163,7 @@ export async function sendOtpEmail(
 
   const { apiKey, from, fromName } = getBrevoConfig();
 
-  const subject = `Your S.V. Sweets & Bakers OTP Code: ${otp}`;
+  const subject = `Your Bluebell Bakehouse OTP Code: ${otp}`;
   const htmlContent = buildOtpHtml(otp, purpose);
 
   const controller = new AbortController();

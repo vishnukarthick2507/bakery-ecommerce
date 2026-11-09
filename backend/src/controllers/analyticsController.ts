@@ -925,8 +925,8 @@ export async function exportAnalytics(
 
     const workbook = new ExcelJS.Workbook();
 
-    workbook.creator = "S.V. Bakery";
-    workbook.lastModifiedBy = "S.V. Bakery Admin";
+    workbook.creator = "Bluebell Bakehouse";
+    workbook.lastModifiedBy = "Bluebell Bakehouse Admin";
     workbook.created = new Date();
     workbook.modified = new Date();
 
@@ -988,7 +988,7 @@ export async function exportAnalytics(
 
     const a1 = dashboardSheet.getCell("A1");
     a1.font = titleFont;
-    a1.value = "S.V. Bakery";
+    a1.value = "Bluebell Bakehouse";
     dashboardSheet.mergeCells("A1:B1");
 
     const a2 = dashboardSheet.getCell("A2");
@@ -1554,7 +1554,7 @@ export async function exportAnalytics(
     );
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="S.V. Bakery Analytics.xlsx"',
+      'attachment; filename="Bluebell Bakehouse Analytics.xlsx"',
     );
 
     await workbook.xlsx.write(res);
@@ -1612,7 +1612,7 @@ export async function getSalesReportPdf(
 
     const report = buildSalesReport({
       title: "Sales Report",
-      subtitle: "S.V. Bakery - Sales Analytics",
+      subtitle: "Bluebell Bakehouse - Sales Analytics",
       periodLabel: range,
       generatedAt: new Date(),
       kpis: [
@@ -1638,7 +1638,7 @@ export async function getSalesReportPdf(
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="S.V. Bakery Sales Report.pdf"',
+      'attachment; filename="Bluebell Bakehouse Sales Report.pdf"',
     );
     res.send(pdfBuffer);
   } catch (error) {
@@ -1677,7 +1677,7 @@ export async function getProductReportPdf(
 
     const report = buildProductReport({
       title: "Product Performance Report",
-      subtitle: "S.V. Bakery - Product Analytics",
+      subtitle: "Bluebell Bakehouse - Product Analytics",
       periodLabel: range,
       generatedAt: new Date(),
       kpis: [
@@ -1703,7 +1703,7 @@ export async function getProductReportPdf(
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="S.V. Bakery Product Report.pdf"',
+      'attachment; filename="Bluebell Bakehouse Product Report.pdf"',
     );
     res.send(pdfBuffer);
   } catch (error) {
@@ -1742,7 +1742,7 @@ export async function getCustomerReportPdf(
 
     const report = buildCustomerReport({
       title: "Customer Intelligence Report",
-      subtitle: "S.V. Bakery - Customer Analytics",
+      subtitle: "Bluebell Bakehouse - Customer Analytics",
       periodLabel: range,
       generatedAt: new Date(),
       kpis: [
@@ -1770,7 +1770,7 @@ export async function getCustomerReportPdf(
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="S.V. Bakery Customer Report.pdf"',
+      'attachment; filename="Bluebell Bakehouse Customer Report.pdf"',
     );
     res.send(pdfBuffer);
   } catch (error) {
@@ -1821,7 +1821,7 @@ export async function getFinancialReportPdf(
 
     const report = buildFinancialReport({
       title: "Financial Report",
-      subtitle: "S.V. Bakery - Financial Analytics",
+      subtitle: "Bluebell Bakehouse - Financial Analytics",
       periodLabel: range,
       generatedAt: new Date(),
       kpis: [
@@ -1843,7 +1843,7 @@ export async function getFinancialReportPdf(
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="S.V. Bakery Financial Report.pdf"',
+      'attachment; filename="Bluebell Bakehouse Financial Report.pdf"',
     );
     res.send(pdfBuffer);
   } catch (error) {

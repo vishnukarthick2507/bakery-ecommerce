@@ -21,7 +21,7 @@ export function OpeningIntro() {
   return (
     <div
       className="opening-intro"
-      aria-label="S.V. Bakery"
+      aria-label="Bluebell Bakehouse"
     >
       <div className="opening-intro__card">
         <Image

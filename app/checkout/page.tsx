@@ -291,7 +291,7 @@ export default function CheckoutPage() {
       key: data.keyId,
       amount: data.amount,
       currency: data.currency,
-      name: 'S.V. Bakery',
+      name: 'Bluebell Bakehouse',
       description: `Order ${data.orderNumber}`,
       order_id: data.razorpayOrderId,
 
@@ -868,7 +868,7 @@ export default function CheckoutPage() {
                   >
                     <div className="font-semibold text-foreground">Pickup</div>
                     <div className="mt-1 text-sm text-muted-foreground">
-                      Pick up from S.V. Bakery
+                      Pick up from Bluebell Bakehouse
                     </div>
                     {!settings?.onlineOrdersEnabled && (
                       <div className="mt-1 text-xs text-destructive">

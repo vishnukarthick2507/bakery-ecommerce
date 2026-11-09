@@ -3,8 +3,17 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
-import AdminNav from '@/components/admin/admin-nav'
+import AdminLayout from '@/components/admin/admin-layout'
 import { cn } from '@/lib/utils'
+import {
+  formatPrice,
+  formatNumber,
+} from '@/lib/format'
+import {
+  BarChart,
+  DonutChart,
+  ChartContainer,
+} from '@/components/admin/charts'
 
 type CustomerMetric = {
   name: string
@@ -19,14 +28,14 @@ type CustomerMetric = {
 }
 
 type CustomerAnalytics = {
-  totalCustomers: number
-  paidCustomers: number
-  repeatCustomers: number
-  guestCustomers: number
-  registeredCustomers: number
-  totalCustomerSpent: number
-  customerLTV: number
-  avgOrderCount: number
+  totalCustomers: number | null
+  paidCustomers: number | null
+  repeatCustomers: number | null
+  guestCustomers: number | null
+  registeredCustomers: number | null
+  totalCustomerSpent: number | null
+  customerLTV: number | null
+  avgOrderCount: number | null
   customers: CustomerMetric[]
 }
 
@@ -61,14 +70,6 @@ function StatCard({
       {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
     </div>
   )
-}
-
-function formatCurrency(value: number): string {
-  return `₹${value.toLocaleString('en-IN')}`
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-IN')
 }
 
 export default function CustomerAnalyticsPage() {
@@ -111,20 +112,20 @@ export default function CustomerAnalyticsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-muted/20">
-        <div className="mx-auto max-w-7xl px-4 py-12">
+      <AdminLayout>
+        <div className="mx-auto max-w-7xl py-12">
           <div className="rounded-xl border border-border p-10 text-center">
             <p className="text-muted-foreground">Loading customer analytics…</p>
           </div>
         </div>
-      </main>
+      </AdminLayout>
     )
   }
 
   if (!data) {
     return (
-      <main className="min-h-screen bg-muted/20">
-        <div className="mx-auto max-w-7xl px-4 py-12">
+      <AdminLayout>
+        <div className="mx-auto max-w-7xl py-12">
           <div className="rounded-xl border border-border p-10 text-center">
             {error ? (
               <>
@@ -141,7 +142,7 @@ export default function CustomerAnalyticsPage() {
             )}
           </div>
         </div>
-      </main>
+      </AdminLayout>
     )
   }
 
@@ -164,13 +165,13 @@ export default function CustomerAnalyticsPage() {
       : 0
 
   return (
-    <main className="min-h-screen bg-muted/20">
+    <AdminLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-medium text-primary">
-              S.V. Bakery Admin
+              Bluebell Bakehouse Admin
             </p>
             <Link
               href="/admin"
@@ -195,7 +196,6 @@ export default function CustomerAnalyticsPage() {
           </div>
         </div>
 
-        <AdminNav className="mt-6" />
 
         {/* Date Range Filters */}
         <section className="mt-6 rounded-xl border border-border bg-white p-6 shadow-sm">
@@ -248,40 +248,70 @@ export default function CustomerAnalyticsPage() {
         <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Total Customers"
-            value={totalCustomers.toLocaleString('en-IN')}
+            value={formatNumber(totalCustomers)}
           />
           <StatCard
             label="Paid Customers"
-            value={paidCustomers.toLocaleString('en-IN')}
+            value={formatNumber(paidCustomers)}
           />
           <StatCard
             label="Repeat Customers"
-            value={repeatCustomers.toLocaleString('en-IN')}
+            value={formatNumber(repeatCustomers)}
           />
           <StatCard
             label="Guest Customers"
-            value={guestCustomers.toLocaleString('en-IN')}
+            value={formatNumber(guestCustomers)}
           />
           <StatCard
             label="Registered Customers"
-            value={registeredCustomers.toLocaleString('en-IN')}
+            value={formatNumber(registeredCustomers)}
           />
           <StatCard
             label="Customer LTV"
-            value={`₹${customerLTV.toLocaleString('en-IN')}`}
+            value={formatPrice(customerLTV)}
           />
           <StatCard
             label="Avg Order Value"
-            value={formatCurrency(avgOrderValue)}
+            value={formatPrice(avgOrderValue)}
           />
           <StatCard
             label="Avg Orders per Customer"
-            value={avgOrderCount.toFixed(1)}
+            value={avgOrderCount?.toFixed(1) ?? '0'}
           />
-          <StatCard
-            label="Avg Order Value"
-            value={formatCurrency(avgOrderValue)}
-          />
+        </section>
+
+        {/* Customer Analytics Charts */}
+        <section className="mt-8 grid gap-6 lg:grid-cols-2">
+          <ChartContainer
+            title="Customer Type Distribution"
+            subtitle="Guest vs registered customers"
+          >
+            <DonutChart
+              data={[
+                { label: 'Registered', value: registeredCustomers ?? 0, color: '#17243A' },
+                { label: 'Guest', value: guestCustomers ?? 0, color: '#C6A46A' },
+              ]}
+            />
+          </ChartContainer>
+
+          <ChartContainer
+            title="Top Customers by Spending"
+            subtitle="Customer lifetime value ranking"
+          >
+            {customers.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No customer data available.</p>
+              </div>
+            ) : (
+              <BarChart
+                data={customers
+                  .slice(0, 8)
+                  .map((c) => ({ label: c.name, value: c.totalSpent }))}
+                color="#17243A"
+                showLabels
+              />
+            )}
+          </ChartContainer>
         </section>
 
         {/* Customer Table */}
@@ -322,17 +352,17 @@ export default function CustomerAnalyticsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {data.customers.map((c) => (
+                {customers.map((c) => (
                   <tr key={c.phone} className="hover:bg-muted/30">
                     <td className="py-3 text-sm font-medium">{c.name}</td>
                     <td className="py-3 text-sm">{c.phone}</td>
                     <td className="py-3 text-sm">{c.email ?? 'N/A'}</td>
-                    <td className="py-3 text-sm text-right">{c.orderCount}</td>
+                    <td className="py-3 text-sm text-right">{formatNumber(c.orderCount)}</td>
                     <td className="py-3 text-sm text-right font-medium">
-                      {formatCurrency(c.totalSpent)}
+                      {formatPrice(c.totalSpent)}
                     </td>
                     <td className="py-3 text-sm text-right font-medium">
-                      {formatCurrency(c.averageOrderValue)}
+                      {formatPrice(c.averageOrderValue)}
                     </td>
                     <td className="py-3 text-sm">
                       <span
@@ -347,7 +377,7 @@ export default function CustomerAnalyticsPage() {
                     </td>
                   </tr>
                 ))}
-                {data.customers.length === 0 && (
+                {customers.length === 0 && (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-muted-foreground">
                       No customer data available.
@@ -359,6 +389,6 @@ export default function CustomerAnalyticsPage() {
           </div>
         </section>
       </div>
-    </main>
+    </AdminLayout>
   )
 }

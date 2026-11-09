@@ -53,7 +53,7 @@ export function CustomCakeSection() {
               Start your design
             </Link>
             <a
-              href={whatsappLink('Hi S.V. Bakery! I would like to discuss a custom cake.')}
+              href={whatsappLink('Hi Bluebell Bakehouse! I would like to discuss a custom cake.')}
               target="_blank"
               rel="noopener noreferrer"
               className={cn(buttonVariants({ variant: 'whatsapp', size: 'xl' }), 'w-full sm:w-auto')}

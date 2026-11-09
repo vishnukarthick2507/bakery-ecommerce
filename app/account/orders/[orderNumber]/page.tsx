@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { ArrowLeftIcon, ClockIcon } from 'lucide-react'
 import { CustomerOrder, formatOrderStatus } from '@/lib/customer-auth'
 
 type RazorpayHandlerResponse = {
@@ -75,6 +76,26 @@ function loadRazorpayScript(): Promise<void> {
   return razorpayScriptPromise
 }
 
+const statusVariant = (status: string) => {
+  const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border'
+  switch (status) {
+    case 'DELIVERED':
+      return `${base} bg-green-50 text-green-700 border-green-100`
+    case 'CANCELLED':
+      return `${base} bg-red-50 text-red-700 border-red-100`
+    case 'PREPARING':
+    case 'READY':
+    case 'READY_FOR_PICKUP':
+    case 'OUT_FOR_DELIVERY':
+      return `${base} bg-amber-50 text-amber-700 border-amber-100`
+    case 'CONFIRMED':
+    case 'PAYMENT_CONFIRMED':
+      return `${base} bg-blue-50 text-blue-700 border-blue-100`
+    default:
+      return `${base} bg-muted text-muted-foreground border-border`
+  }
+}
+
 export default function CustomerOrderDetailPage() {
   const params = useParams<{ orderNumber: string }>()
   const router = useRouter()
@@ -141,7 +162,7 @@ export default function CustomerOrderDetailPage() {
         key: data.keyId,
         amount: data.amount,
         currency: data.currency,
-        name: 'S.V. Bakery',
+        name: 'Bluebell Bakehouse',
         description: `Order ${data.orderNumber}`,
         order_id: data.razorpayOrderId,
 
@@ -303,17 +324,24 @@ export default function CustomerOrderDetailPage() {
   }
 
   if (loading) return (
-    <main className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
-      <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
-        <p className="text-muted-foreground">Loading order…</p>
+    <main className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-champagne-gold/15 text-champagne-gold">
+          <ClockIcon className="size-5" aria-hidden="true" />
+        </div>
+        <p className="mt-4 text-sm text-muted-foreground">Loading your order…</p>
       </div>
     </main>
   )
   if (error) return (
-    <main className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
-      <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
-        <p className="text-destructive">{error}</p>
-        <Link href="/account/orders" className="mt-4 inline-flex underline text-sm text-caramel">
+    <main className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <p className="text-sm text-destructive">{error}</p>
+        <Link
+          href="/account/orders"
+          className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl border border-gold-border bg-champagne-gold px-6 py-3 font-semibold text-midnight-navy shadow-sm hover:bg-champagne-gold/90 transition-colors"
+        >
+          <ArrowLeftIcon className="size-4" aria-hidden="true" />
           Back to my orders
         </Link>
       </div>
@@ -322,22 +350,32 @@ export default function CustomerOrderDetailPage() {
   if (!order) return null
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6">
+    <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <Link href="/account/orders" className="text-sm text-muted-foreground hover:underline">
-            ← My orders
+          <Link
+            href="/account/orders"
+            className="inline-flex items-center gap-2 text-sm font-medium text-secondary-text hover:text-primary transition-colors"
+          >
+            <ArrowLeftIcon className="size-4" aria-hidden="true" />
+            My orders
           </Link>
-          <h1 className="mt-3 text-3xl font-semibold text-primary tracking-tight">
+          <h1 className="mt-1 font-heading text-3xl font-bold text-primary tracking-tight">
             {order.orderNumber}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-secondary-text">
             {new Date(order.createdAt).toLocaleString('en-IN')}
           </p>
         </div>
         <div className="text-right text-sm">
-          <p className="font-semibold text-primary">{formatOrderStatus(order.orderStatus)}</p>
-          <p className="mt-1 text-muted-foreground">Payment: {order.paymentStatus}</p>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${statusVariant(order.orderStatus)}`}
+          >
+            {formatOrderStatus(order.orderStatus)}
+          </span>
+          <p className="mt-1 text-sm text-secondary-text">
+            Payment: {order.paymentMethod}
+          </p>
         </div>
       </div>
 
@@ -494,7 +532,7 @@ export default function CustomerOrderDetailPage() {
           <p className="mt-2 text-sm">
             {order.address
               ? `${order.address.addressLine}, ${order.address.city}, ${order.address.pincode}`
-              : 'Pick up from S.V. Bakery'}
+              : 'Pick up from Bluebell Bakehouse'}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             {order.scheduledDate} · {order.scheduledTime}
