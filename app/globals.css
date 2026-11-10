@@ -11,9 +11,17 @@
   /* Brand colour system — Midnight Navy + Warm Ivory + Champagne Gold */
   --color-primary: var(--midnight-navy);
   --color-primary-foreground: #ffffff;
+  --color-midnight-navy: var(--midnight-navy);
+  --color-midnight-navy-foreground: #ffffff;
+  --color-deep-navy: var(--deep-navy);
+  --color-deep-navy-foreground: #ffffff;
   --color-secondary: var(--deep-navy);
   --color-secondary-foreground: #ffffff;
   --color-background: var(--warm-ivory);
+  --color-warm-ivory: var(--warm-ivory);
+  --color-warm-ivory-foreground: var(--main-text);
+  --color-champagne-gold: var(--champagne-gold);
+  --color-champagne-gold-foreground: #17243A;
   --color-foreground: var(--main-text);
   --color-card: #ffffff;
   --color-card-foreground: var(--main-text);

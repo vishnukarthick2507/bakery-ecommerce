@@ -2,9 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Inter, Playfair_Display } from 'next/font/google'
 import { Providers } from '@/components/providers'
-import { SiteHeader } from '@/components/layout/site-header'
-import { SiteFooter } from '@/components/layout/site-footer'
-import { MobileBottomBar } from '@/components/layout/mobile-bottom-bar'
+import { LayoutWrapper } from '@/components/layout/layout-wrapper'
 import { siteConfig } from '@/lib/site-config'
 import './globals.css'
 
@@ -65,14 +63,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           >
             Skip to content
           </a>
-          <SiteHeader />
-          <main id="main" className="flex-1 pb-24 md:pb-0">
-            {children}
-          </main>
-          <div className="pb-20 md:pb-0 bg-primary">
-            <SiteFooter />
-          </div>
-          <MobileBottomBar />
+          <LayoutWrapper>
+            <main id="main" className="flex-1 pb-24 md:pb-0">
+              {children}
+            </main>
+          </LayoutWrapper>
         </Providers>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

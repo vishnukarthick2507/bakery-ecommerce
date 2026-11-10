@@ -24,9 +24,11 @@ export function CinematicIntro({ onComplete }: { onComplete: () => void }) {
 
     const timers: NodeJS.Timeout[] = []
 
-    // Scene timing: 1s per scene, total ~5s
+    // Original motion: navy bg (0-1s) -> bakery scene reveals (1-2.5s)
+    // -> brand name overlaid (2.5-3.5s) -> tagline (3.5-4.3s)
+    // brand stays visible near lower centre through the handoff
     timers.push(setTimeout(() => setScene(2), 1000))
-    timers.push(setTimeout(() => setScene(3), 2000))
+    timers.push(setTimeout(() => setScene(3), 2500))
     timers.push(setTimeout(() => setScene(4), 3500))
 
     // Begin fade-out at 4.3s, complete transition at ~5s
@@ -58,7 +60,8 @@ export function CinematicIntro({ onComplete }: { onComplete: () => void }) {
   return (
     <div
       className={cn(
-        'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-midnight-navy',
+        'fixed inset-0 z-[9999] flex flex-col items-center justify-center',
+        'bg-gradient-to-b from-midnight-navy via-deep-navy to-midnight-navy',
         'transition-opacity duration-700',
         fadingOut ? 'opacity-0' : 'opacity-100',
       )}
@@ -69,17 +72,22 @@ export function CinematicIntro({ onComplete }: { onComplete: () => void }) {
       {scene === 1 && !fadingOut && (
         <button
           onClick={skipIntro}
-          className="absolute top-6 right-6 z-[9999] rounded-lg px-3 py-2 bg-white/10 backdrop-blur-sm text-white/70 hover:text-white hover:bg-white/20 transition-colors border border-white/20"
+          className="absolute top-6 right-6 z-[9999] rounded-lg px-3 py-2 bg-champagne-gold/10 backdrop-blur-sm text-champagne-gold hover:text-white hover:bg-champagne-gold/20 transition-colors border border-champagne-gold/30"
           aria-label="Skip intro"
         >
           Skip intro
         </button>
       )}
 
-      {/* Scene 1 — Bakery Atmosphere (0-1s) */}
+      {/* Scene 1 — Dark navy atmospheric background (0-1s) */}
       {scene === 1 && !fadingOut && (
+        <div className="absolute inset-0" />
+      )}
+
+      {/* Scene 2 — Bakery scene reveals itself (1-2.5s) */}
+      {scene === 2 && !fadingOut && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative aspect-square w-3/4 max-w-[800px] overflow-hidden rounded-2xl shadow-2xl border border-white/20 animate-scale-up">
+          <div className="relative aspect-square w-3/4 max-w-[860px] overflow-hidden rounded-3xl shadow-[0_20px_50px_rgba(16,26,43,0.5)] border border-champagne-gold/20 animate-scale-up">
             <Image
               src="/images/about-bakers.png"
               alt="Artisan bakery interior"
@@ -88,49 +96,70 @@ export function CinematicIntro({ onComplete }: { onComplete: () => void }) {
               className="object-cover object-center animate-fade-in-up"
               style={{ animationDelay: '200ms' }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-midnight-navy/60 via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-midnight-navy/70 via-midnight-navy/20 to-transparent" />
           </div>
         </div>
       )}
 
-      {/* Scene 2 — Artisan Craftsmanship (1-2s) */}
-      {scene === 2 && !fadingOut && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative aspect-square w-1/2 max-w-[600px] overflow-hidden rounded-2xl shadow-2xl border border-white/20 animate-scale-up">
-            <Image
-              src="/images/butter-croissant.jpg"
-              alt="Fresh croissants"
-              fill
-              priority
-              className="object-cover object-center animate-fade-in-up"
-              style={{ animationDelay: '400ms' }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-midnight-navy/40 via-transparent to-transparent" />
-          </div>
-        </div>
-      )}
-
-      {/* Scene 3 — Brand Reveal (2-3.5s) */}
+      {/* Scene 3 — Brand reveal overlaid on the bakery scene (2.5-3.5s) */}
       {scene === 3 && !fadingOut && (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-champagne-gold/10 text-champagne-gold border border-champagne-gold/30 mb-6 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-            <span className="text-xs font-semibold tracking-widest uppercase">Established 2024</span>
+          {/* Bakery scene remains visible behind the brand */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="relative aspect-square w-3/4 max-w-[860px] overflow-hidden rounded-3xl shadow-[0_20px_50px_rgba(16,26,43,0.5)] border border-champagne-gold/20 animate-scale-up">
+              <Image
+                src="/images/about-bakers.png"
+                alt="Artisan bakery interior"
+                fill
+                priority
+                className="object-cover object-center animate-fade-in-up"
+                style={{ animationDelay: '200ms' }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-midnight-navy/70 via-midnight-navy/20 to-transparent" />
+            </div>
           </div>
-          <h1 className="font-heading text-5xl font-bold text-white tracking-tight leading-tight animate-fade-in-up" style={{ animationDelay: '400ms' }}>
-            BLUEBELL<span className="text-champagne-gold"> BAKEHOUSE</span>
-          </h1>
+          <div className="relative z-10 flex flex-col items-center justify-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-champagne-gold/20 text-champagne-gold border border-champagne-gold/40 mb-6 animate-fade-in-up shadow-[0_10px_30px_rgba(198,164,106,0.2)]" style={{ animationDelay: '200ms' }}>
+              <span className="text-xs font-semibold tracking-widest uppercase">Established 2024</span>
+            </div>
+            <h1 className="font-heading text-6xl font-bold tracking-tight leading-tight animate-fade-in-up bg-[linear-gradient(to_right,_#C6A46A,_#B28C52)] bg-clip-text text-transparent" style={{ animationDelay: '400ms' }}>
+              BLUEBELL BAKEHOUSE
+            </h1>
+          </div>
         </div>
       )}
 
-      {/* Scene 4 — Tagline Reveal (3.5-4.3s) */}
+      {/* Scene 4 — Tagline reveal, brand stays visible near lower centre (3.5-4.3s) */}
       {scene === 4 && !fadingOut && (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-champagne-gold text-midnight-navy animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-            <span className="text-xs font-semibold tracking-widest uppercase">Freshly Baked</span>
+          {/* Bakery scene remains visible behind */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="relative aspect-square w-3/4 max-w-[860px] overflow-hidden rounded-3xl shadow-[0_20px_50px_rgba(16,26,43,0.5)] border border-champagne-gold/20 animate-scale-up">
+              <Image
+                src="/images/about-bakers.png"
+                alt="Artisan bakery interior"
+                fill
+                priority
+                className="object-cover object-center animate-fade-in-up"
+                style={{ animationDelay: '200ms' }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-midnight-navy/70 via-midnight-navy/20 to-transparent" />
+            </div>
           </div>
-          <h2 className="mt-2 text-4xl font-bold text-white tracking-tight animate-fade-in-up" style={{ animationDelay: '400ms' }}>
-            Freshly Baked Happiness.
-          </h2>
+          <div className="relative z-10 flex flex-col items-center justify-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-champagne-gold/20 text-champagne-gold border border-champagne-gold/40 mb-6 animate-fade-in-up shadow-[0_10px_30px_rgba(198,164,106,0.2)]" style={{ animationDelay: '200ms' }}>
+              <span className="text-xs font-semibold tracking-widest uppercase">Established 2024</span>
+            </div>
+            <h1 className="font-heading text-6xl font-bold tracking-tight leading-tight animate-fade-in-up bg-[linear-gradient(to_right,_#C6A46A,_#B28C52)] bg-clip-text text-transparent" style={{ animationDelay: '400ms' }}>
+              BLUEBELL BAKEHOUSE
+            </h1>
+            <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-champagne-gold text-midnight-navy mt-6 animate-fade-in-up shadow-[0_10px_30px_rgba(198,164,106,0.3)]" style={{ animationDelay: '600ms' }}>
+              <span className="text-xs font-semibold tracking-widest uppercase">Freshly Baked</span>
+            </div>
+            <h2 className="mt-2 text-5xl font-bold text-white tracking-tight animate-fade-in-up" style={{ animationDelay: '800ms' }}>
+              Freshly Baked Happiness.
+            </h2>
+          </div>
         </div>
       )}
     </div>

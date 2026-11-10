@@ -58,11 +58,17 @@ const navLinkBase =
 const navLinkActive =
   'bg-champagne-gold/10 border border-champagne-gold/30 bg-champagne-gold/5 text-champagne-gold shadow-sm'
 
-const navLinkInactive =
-  'border-transparent text-white hover:bg-midnight-navy/80 hover:text-champagne-gold hover:border-champagne-gold/40'
-
 const navLinkIconActive = 'size-5 shrink-0 text-champagne-gold'
-const navLinkIconInactive = 'size-5 shrink-0 text-white'
+
+// Desktop sidebar (dark): inactive links are warm-ivory so they stay readable on midnight navy.
+// Mobile drawer (light): inactive links use the default foreground colour.
+const sidebarInactiveLink =
+  'border-transparent text-warm-ivory/90 hover:bg-white/10 hover:text-champagne-gold hover:border-champagne-gold/40'
+const sidebarInactiveIcon = 'size-5 shrink-0 text-warm-ivory/90'
+
+const drawerInactiveLink =
+  'border-transparent text-foreground hover:bg-gold-border/50 hover:text-primary hover:border-gold-border/40'
+const drawerInactiveIcon = 'size-5 shrink-0 text-foreground'
 
 export default function AdminLayout({
   children,
@@ -94,12 +100,11 @@ export default function AdminLayout({
   }, [pathname])
 
   const isActive = (href: string) => pathname === href
+  const viewStoreActive = pathname === viewStoreItem.href
 
-  const renderNavLinks = (mobile = false) => {
-    const inactiveColor = mobile ? 'text-foreground' : 'text-white'
-    const inactiveHoverBg = mobile ? 'hover:bg-gold-border/50' : 'hover:bg-midnight-navy/80'
-    const inactiveHoverBorder = mobile ? 'hover:border-gold-border/40' : 'hover:border-champagne-gold/40'
-    const inactiveHoverText = mobile ? 'hover:text-primary' : 'hover:text-champagne-gold'
+  const renderNavLinks = (mobile = false, dark = false) => {
+    const inactiveLink = dark ? sidebarInactiveLink : drawerInactiveLink
+    const inactiveIcon = dark ? sidebarInactiveIcon : drawerInactiveIcon
     return (
       <>
         {adminNavItems.map((item) => {
@@ -114,15 +119,12 @@ export default function AdminLayout({
                 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
                 active
                   ? 'bg-champagne-gold/10 border border-champagne-gold/30 bg-champagne-gold/5 text-champagne-gold shadow-sm'
-                  : `border-transparent ${inactiveColor} ${inactiveHoverBg} ${inactiveHoverText} ${inactiveHoverBorder}`,
+                  : inactiveLink,
               )}
               aria-current={active ? 'page' : undefined}
             >
               <Icon
-                className={cn(
-                  'size-5 shrink-0',
-                  active ? 'text-champagne-gold' : inactiveColor,
-                )}
+                className={cn(inactiveIcon, active ? 'text-champagne-gold' : '')}
                 aria-hidden="true"
               />
               {!isCollapsed || !mobile ? <span>{item.label}</span> : null}
@@ -134,10 +136,15 @@ export default function AdminLayout({
           onClick={mobile ? () => setMobileMenuOpen(false) : undefined}
           className={cn(
             'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
-            `border-transparent ${inactiveColor} hover:bg-gold-border/50 hover:text-primary`,
+            dark
+              ? `${sidebarInactiveLink} hover:text-champagne-gold`
+              : `${drawerInactiveLink} hover:text-primary`,
           )}
         >
-          <LayoutDashboard className={`size-5 shrink-0 ${inactiveColor}`} aria-hidden="true" />
+          <LayoutDashboard
+            className={cn(inactiveIcon, viewStoreActive ? 'text-champagne-gold' : '')}
+            aria-hidden="true"
+          />
           {viewStoreItem.label}
         </Link>
         <button
@@ -148,7 +155,9 @@ export default function AdminLayout({
           }}
           className={cn(
             'flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
-            `border-transparent ${inactiveColor} hover:bg-destructive/10 hover:text-destructive`,
+            dark
+              ? `${sidebarInactiveLink} hover:bg-destructive/10 hover:text-destructive`
+              : `${drawerInactiveLink} hover:bg-destructive/10 hover:text-destructive`,
           )}
         >
           <LogOutIcon className="size-5 shrink-0" aria-hidden="true" />
@@ -163,7 +172,7 @@ export default function AdminLayout({
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'hidden lg:flex flex-col transition-all duration-300 border-r border-gold-border',
+          'hidden lg:flex flex-col transition-all duration-300 border-r border-midnight-navy/20',
           isCollapsed ? sidebarCollapsed : sidebarExpanded,
           'bg-midnight-navy text-white shadow-xl',
         )}
@@ -197,10 +206,10 @@ export default function AdminLayout({
         </div>
 
         <nav className="flex-1 px-2 py-3 space-y-0.5" aria-label="Main navigation">
-          {renderNavLinks()}
+          {renderNavLinks(false, true)}
         </nav>
 
-        <div className="mt-auto px-4 py-5 border-t border-gold-border/40">
+        <div className="mt-auto px-4 py-5 border-t border-white/10">
           <button
             type="button"
             onClick={handleLogout}
@@ -220,7 +229,7 @@ export default function AdminLayout({
         {/* Desktop header */}
         <header
           className={cn(
-            'lg:block sticky top-0 z-30 flex items-center justify-between border-b border-gold-border bg-white/95 backdrop-blur px-6 py-4 shadow-sm',
+            'lg:block sticky top-0 z-30 flex items-center justify-between border-b border-midnight-navy/20 bg-white/95 backdrop-blur px-6 py-4 shadow-sm',
           )}
         >
           <div className="flex items-center gap-4">
@@ -257,82 +266,7 @@ export default function AdminLayout({
 
         {/* Mobile header */}
         <header
-          className="lg:hidden flex items-center justify-between border-b border-gold-border bg-white px-4 py-3"
-        >
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            className="rounded-lg p-2 text-primary hover:bg-gold-border"
-            aria-label="Open menu"
-          >
-            <Menu className="size-6" />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-champagne-gold text-midnight-navy">
-              <Cake className="size-4" aria-hidden="true" />
-            </div>
-            <span className="font-heading font-bold text-midnight-navy">
-              Bluebell Bakehouse
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="rounded-lg p-2 text-primary hover:bg-gold-border"
-            aria-label="Logout"
-          >
-            <LogOutIcon className="size-5 text-primary" />
-          </button>
-        </header>
-
-        <main className="flex-1 overflow-x-auto overflow-y-hidden bg-warm-ivory p-6 lg:p-8">
-          {children}
-        </main>
-        </div>
-
-        {/* Desktop + Mobile content area */}
-      <div className="flex-1 min-w-0 flex-col relative">
-        {/* Desktop header */}
-        <header
-          className={cn(
-            'lg:block sticky top-0 z-30 flex items-center justify-between border-b border-gold-border bg-white/95 backdrop-blur px-6 py-4 shadow-sm',
-          )}
-        >
-          <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="lg:hidden rounded-lg p-2 text-primary hover:bg-gold-border hover:text-primary"
-            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-          >
-            {sidebarOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
-            <div className="hidden lg:flex items-center gap-2">
-              <div className="flex size-8 items-center justify-center rounded-lg bg-champagne-gold text-midnight-navy">
-                <Cake className="size-4" aria-hidden="true" />
-              </div>
-              <span className="font-heading font-bold text-midnight-navy">
-                Bluebell Bakehouse
-              </span>
-              <span className="text-xs text-midnight-navy">Admin</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="hidden lg:flex items-center gap-2 rounded-lg px-3 py-2 text-primary border border-gold-border hover:bg-gold-border/50 hover:text-primary transition-colors"
-            >
-              <LogOutIcon className="size-4 text-primary" aria-hidden="true" />
-              Logout
-            </button>
-          </div>
-        </header>
-
-        {/* Mobile header */}
-        <header
-          className="lg:hidden flex items-center justify-between border-b border-gold-border bg-white px-4 py-3"
+          className="lg:hidden flex items-center justify-between border-b border-midnight-navy/20 bg-white px-4 py-3"
         >
           <button
             type="button"
@@ -373,8 +307,8 @@ export default function AdminLayout({
             onClick={() => setMobileMenuOpen(false)}
             aria-hidden="true"
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-gold-border shadow-2xl transform transition-transform duration-300 lg:hidden">
-            <div className="px-4 py-4 border-b border-gold-border">
+          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-midnight-navy/20 shadow-2xl transform transition-transform duration-300 lg:hidden">
+            <div className="px-4 py-4 border-b border-midnight-navy/20">
               <div className="flex items-center gap-2">
                 <div className="flex size-8 items-center justify-center rounded-lg bg-champagne-gold text-midnight-navy">
                   <Cake className="size-4" aria-hidden="true" />
@@ -393,7 +327,7 @@ export default function AdminLayout({
               </button>
             </div>
             <nav className="px-4 py-4 space-y-1" aria-label="Admin navigation">
-              {renderNavLinks(true)}
+              {renderNavLinks(true, false)}
             </nav>
           </div>
         </>
