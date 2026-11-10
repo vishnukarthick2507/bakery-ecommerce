@@ -30,20 +30,20 @@ export function CustomCakeSection() {
           <p className="w-fit rounded-full bg-primary px-3 py-1 text-xs font-semibold tracking-widest text-primary-foreground uppercase">
             Custom cakes
           </p>
-          <h2 id="custom-cake-title" className="text-3xl font-bold sm:text-4xl">
+          <h2 id="custom-cake-title" className="text-3xl font-bold text-white sm:text-4xl">
             A cake designed around your celebration
           </h2>
-          <p className="leading-relaxed text-white/80">
+          <p className="leading-relaxed text-white">
             Birthdays, weddings, baby showers and office milestones. Eggless options available on
             every design. Please order at least 48 hours in advance.
           </p>
           <ol className="flex flex-col gap-4">
             {steps.map((step, i) => (
               <li key={step} className="flex items-start gap-3">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-foreground/10 text-sm font-semibold border border-primary-foreground/20">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-champagne-gold/20 text-sm font-semibold border border-champagne-gold/30">
                   {i + 1}
                 </span>
-                <span className="text-sm leading-6 text-white/90">{step}</span>
+                <span className="text-sm leading-6 text-white">{step}</span>
               </li>
             ))}
           </ol>

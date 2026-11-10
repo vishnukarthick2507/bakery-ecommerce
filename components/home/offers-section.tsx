@@ -48,7 +48,7 @@ export function OffersSection() {
                   </CardHeader>
                   <CardContent className="flex-1" />
                   <CardFooter className="justify-between gap-2 pt-4">
-                    <code className="rounded-md bg-secondary px-2.5 py-1 font-mono text-sm font-semibold text-primary">
+                    <code className="rounded-md bg-secondary px-2.5 py-1 font-mono text-sm font-semibold text-primary-foreground">
                       {offer.code}
                     </code>
                     <Button variant="outline" size="sm" onClick={() => copy(offer.code)}>

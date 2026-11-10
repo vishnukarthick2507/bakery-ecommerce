@@ -16,19 +16,40 @@ export function Hero() {
       <div className="absolute inset-0 bg-gradient-to-b from-primary/70 via-primary/40 to-primary/20" aria-hidden="true" />
       <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 md:grid-cols-2 md:py-24 lg:gap-16 lg:py-32">
         <div className="flex flex-col gap-6">
-          <p className="w-fit rounded-full bg-champagne-gold/20 px-3 py-1 text-sm font-semibold text-champagne-gold tracking-wide uppercase border border-champagne-gold/40">
+          <p
+            className={cn(
+              'w-fit rounded-full bg-champagne-gold/20 px-3 py-1 text-sm font-semibold text-champagne-gold tracking-wide uppercase border border-champagne-gold/40',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700',
+            )}
+          >
             Artisan bakery · Chromepet, Chennai
           </p>
-          <h1 id="hero-title" className="font-heading text-4xl leading-tight font-bold text-white sm:text-6xl lg:text-7xl tracking-tight">
+          <h1
+            id="hero-title"
+            className={cn(
+              'font-heading text-4xl leading-tight font-bold text-white sm:text-6xl lg:text-7xl tracking-tight',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-70',
+            )}
+          >
             Freshly Baked.<br />
             Made With Love.
           </h1>
-          <p className="max-w-lg text-lg leading-relaxed text-muted/80">
+          <p
+            className={cn(
+              'max-w-lg text-lg leading-relaxed text-white/85',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150',
+            )}
+          >
             Cakes, breads and pastries made from scratch in small batches. Order
             ahead for pickup or delivery, or design a cake that&apos;s entirely
             yours.
           </p>
-          <div className="flex flex-col gap-4 sm:flex-row">
+          <div
+            className={cn(
+              'flex flex-col gap-4 sm:flex-row',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300',
+            )}
+          >
             <Link
               href="/products"
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-champagne-gold px-8 py-4 font-semibold text-midnight-navy shadow-sm hover:bg-champagne-gold/90 transition-colors"
@@ -44,16 +65,26 @@ export function Hero() {
               Custom cake
             </Link>
           </div>
-          <ul className="flex flex-wrap gap-x-6 gap-y-3 pt-4">
+          <ul
+            className={cn(
+              'flex flex-wrap gap-x-6 gap-y-3 pt-4',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-450',
+            )}
+          >
             {highlights.map(({ icon: Icon, label }) => (
-              <li key={label} className="flex items-center gap-2.5 text-sm text-muted/90">
+              <li key={label} className="flex items-center gap-2.5 text-sm text-white/80">
                 <Icon className="size-4 text-champagne-gold" aria-hidden="true" />
                 {label}
               </li>
             ))}
           </ul>
         </div>
-        <div className="hidden lg:block relative aspect-[4/3] overflow-hidden rounded-3xl shadow-2xl border border-white/20">
+        <div
+          className={cn(
+            'hidden lg:block relative aspect-[4/3] overflow-hidden rounded-3xl shadow-2xl border border-white/20',
+            'animate-in fade-in zoom-in duration-700 delay-600',
+          )}
+        >
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
           <Image
             src="/images/hero.png"

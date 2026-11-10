@@ -40,6 +40,7 @@ type DateRangeOption = {
 
 const dateRangeOptions: DateRangeOption[] = [
   { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
   { value: '7d', label: 'Last 7 Days' },
   { value: '30d', label: 'Last 30 Days' },
   { value: 'thisMonth', label: 'This Month' },
@@ -272,6 +273,27 @@ export default function InventoryAnalyticsPage() {
                   .slice(0, 8)
                   .map((p) => ({ label: p.productName, value: p.unitsSold }))}
                 color="#C6A46A"
+                showLabels
+              />
+            )}
+          </ChartContainer>
+
+          <ChartContainer
+            title="Slowest-Moving Products"
+            subtitle="Products with lowest units sold"
+          >
+            {products.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No inventory data available.</p>
+              </div>
+            ) : (
+              <BarChart
+                data={products
+                  .slice()
+                  .sort((a, b) => a.unitsSold - b.unitsSold)
+                  .slice(0, 8)
+                  .map((p) => ({ label: p.productName, value: p.unitsSold }))}
+                color="#B28C52"
                 showLabels
               />
             )}

@@ -44,6 +44,7 @@ type DateRangeOption = {
 
 const dateRangeOptions: DateRangeOption[] = [
   { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
   { value: '7d', label: 'Last 7 Days' },
   { value: '30d', label: 'Last 30 Days' },
   { value: 'thisMonth', label: 'This Month' },
@@ -285,6 +286,56 @@ export default function ProductAnalyticsPage() {
                   .map((p) => ({ label: p.productName, value: p.revenue }))}
                 color="#17243A"
                 showLabels
+              />
+            )}
+          </ChartContainer>
+
+          <ChartContainer
+            title="Lowest-Selling Products"
+            subtitle="Products with lowest revenue based on order data"
+          >
+            {products.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No product data available.</p>
+              </div>
+            ) : (
+              <BarChart
+                data={products
+                  .slice()
+                  .sort((a, b) => a.revenue - b.revenue)
+                  .slice(0, 8)
+                  .map((p) => ({ label: p.productName, value: p.revenue }))}
+                color="#B28C52"
+                showLabels
+              />
+            )}
+          </ChartContainer>
+
+          <ChartContainer
+            title="Category Performance"
+            subtitle="Revenue distribution by product category"
+          >
+            {products.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No product data available.</p>
+              </div>
+            ) : (
+              <DonutChart
+                data={(() => {
+                  const categoryMap = new Map<string, { revenue: number; units: number }>()
+                  for (const p of products) {
+                    const existing = categoryMap.get(p.category) || { revenue: 0, units: 0 }
+                    categoryMap.set(p.category, {
+                      revenue: existing.revenue + p.revenue,
+                      units: existing.units + p.unitsSold,
+                    })
+                  }
+                  return Array.from(categoryMap.entries()).map(([category, data], i) => ({
+                    label: category,
+                    value: data.revenue,
+                    color: ['#17243A', '#C6A46A', '#536B60', '#B28C52', '#E8E2D8'][i % 5],
+                  }))
+                })()}
               />
             )}
           </ChartContainer>

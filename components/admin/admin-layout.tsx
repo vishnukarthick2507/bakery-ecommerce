@@ -59,10 +59,10 @@ const navLinkActive =
   'bg-champagne-gold/10 border border-champagne-gold/30 bg-champagne-gold/5 text-champagne-gold shadow-sm'
 
 const navLinkInactive =
-  'border-transparent text-secondary-text hover:bg-white hover:text-primary hover:border-gold-border/40'
+  'border-transparent text-white hover:bg-midnight-navy/80 hover:text-champagne-gold hover:border-champagne-gold/40'
 
 const navLinkIconActive = 'size-5 shrink-0 text-champagne-gold'
-const navLinkIconInactive = 'size-5 shrink-0 text-secondary-text'
+const navLinkIconInactive = 'size-5 shrink-0 text-white'
 
 export default function AdminLayout({
   children,
@@ -200,10 +200,10 @@ export default function AdminLayout({
             onClick={handleLogout}
             className={cn(
               'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
-              'border-transparent text-secondary-text hover:bg-white/10 hover:text-white',
+              'border-transparent text-white hover:bg-white/10 hover:text-white',
             )}
           >
-            <LogOutIcon className="size-5 shrink-0 text-secondary-text" aria-hidden="true" />
+            <LogOutIcon className="size-5 shrink-0 text-white" aria-hidden="true" />
             {!isCollapsed && <span>Logout</span>}
           </button>
         </div>
@@ -218,14 +218,14 @@ export default function AdminLayout({
           )}
         >
           <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden rounded-lg p-2 text-secondary-text hover:bg-gold-border hover:text-primary"
-              aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-              {sidebarOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-            </button>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="lg:hidden rounded-lg p-2 text-primary hover:bg-gold-border hover:text-primary"
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {sidebarOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
             <div className="hidden lg:flex items-center gap-2">
               <div className="flex size-8 items-center justify-center rounded-lg bg-champagne-gold text-midnight-navy">
                 <Cake className="size-4" aria-hidden="true" />
@@ -241,9 +241,9 @@ export default function AdminLayout({
             <button
               type="button"
               onClick={handleLogout}
-              className="hidden lg:flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-secondary-text border border-gold-border hover:bg-gold-border/50 hover:text-primary transition-colors"
+              className="hidden lg:flex items-center gap-2 rounded-lg px-3 py-2 text-primary border border-gold-border hover:bg-gold-border/50 hover:text-primary transition-colors"
             >
-              <LogOutIcon className="size-4" aria-hidden="true" />
+              <LogOutIcon className="size-4 text-primary" aria-hidden="true" />
               Logout
             </button>
           </div>
@@ -272,10 +272,10 @@ export default function AdminLayout({
           <button
             type="button"
             onClick={handleLogout}
-            className="rounded-lg p-2 text-secondary-text hover:bg-gold-border"
+            className="rounded-lg p-2 text-white hover:bg-gold-border"
             aria-label="Logout"
           >
-            <LogOutIcon className="size-5" />
+            <LogOutIcon className="size-5 text-white" />
           </button>
         </header>
 
@@ -305,7 +305,7 @@ export default function AdminLayout({
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="absolute right-3 top-3 rounded-lg p-1 text-secondary-text hover:bg-gold-border"
+                className="absolute right-3 top-3 rounded-lg p-1 text-white hover:bg-gold-border"
                 aria-label="Close menu"
               >
                 <X className="size-5" />

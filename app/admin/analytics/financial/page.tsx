@@ -41,6 +41,7 @@ type DateRangeOption = {
 
 const dateRangeOptions: DateRangeOption[] = [
   { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
   { value: '7d', label: 'Last 7 Days' },
   { value: '30d', label: 'Last 30 Days' },
   { value: 'thisMonth', label: 'This Month' },
@@ -350,6 +351,37 @@ export default function FinancialAnalyticsPage() {
                   { label: 'COGS', value: Math.max(data.totalCogs ?? 0, 0), color: '#C6A46A' },
                   { label: 'Net Contribution', value: Math.max(data.netContribution ?? 0, 0), color: '#B28C52' },
                 ]}
+              />
+            </ChartContainer>
+          </section>
+
+          {/* Revenue & Margin Trends */}
+          <section className="mt-8 grid gap-6 lg:grid-cols-2">
+            <ChartContainer
+              title="Revenue Trend"
+              subtitle="Gross revenue trend across the selected period"
+            >
+              <BarChart
+                data={[
+                  { label: 'Gross Revenue', value: data.grossRevenue ?? 0 },
+                  { label: 'Collected Revenue', value: data.collectedRevenue ?? 0 },
+                  { label: 'Net Contribution', value: Math.max(data.netContribution ?? 0, 0) },
+                ]}
+                color="#17243A"
+                showLabels
+              />
+            </ChartContainer>
+
+            <ChartContainer
+              title="Profit Margin"
+              subtitle="Gross profit margin percentage"
+            >
+              <DonutChart
+                data={[
+                  { label: 'Gross Margin', value: Math.round(data.grossProfitMargin ?? 0), color: '#536B60' },
+                  { label: 'Remaining', value: Math.max(100 - Math.round(data.grossProfitMargin ?? 0), 0), color: '#E8E2D8' },
+                ]}
+                showLegend
               />
             </ChartContainer>
           </section>

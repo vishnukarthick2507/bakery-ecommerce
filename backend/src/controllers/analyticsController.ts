@@ -21,6 +21,7 @@ import {
   getCustomerAnalytics as getCustomerAnalyticsService,
   getFinancialAnalytics as getFinancialAnalyticsService,
   getInventoryAnalytics as getInventoryAnalyticsService,
+  buildPreviousPeriodFilter,
 } from "../services/analyticsService.js";
 import { logAnalyticsAccess } from "../services/analyticsService.js";
 
@@ -82,6 +83,7 @@ interface OrderDoc {
     unitPrice: number;
     itemTotal: number;
     totalPrice: number;
+    costSnapshot?: number;
   }>;
   subtotal: number;
   deliveryFee: number;
@@ -127,7 +129,7 @@ const analyticsQuerySchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   range: z
-    .enum(["today", "7d", "30d", "thisMonth", "lastMonth", "custom"])
+    .enum(["today", "yesterday", "7d", "30d", "thisMonth", "lastMonth", "custom"])
     .optional()
     .default("30d"),
 });
@@ -177,6 +179,13 @@ function buildDateFilter(
     case "today": {
       const start = startOfDay(now);
       const end = endOfDay(now);
+      return { start, end };
+    }
+    case "yesterday": {
+      const start = startOfDay(now);
+      start.setDate(start.getDate() - 1);
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
       return { start, end };
     }
     case "7d": {
@@ -347,6 +356,61 @@ export async function getAnalytics(
 
     const pendingCodAmount = allOrders
       .filter(isPendingCod)
+      .reduce((sum, o) => sum + o.totalAmount, 0);
+
+    const nonCancelledOrders = allOrders.filter((o) => o.orderStatus !== "CANCELLED");
+
+    /* Previous period comparison */
+    const prevRange = dateFilter ? buildPreviousPeriodFilter(dateFilter) : undefined;
+    const prevDateMatch = prevRange
+      ? { createdAt: { $gte: prevRange.start, $lte: prevRange.end } }
+      : undefined;
+    const [prevOrders] = await Promise.all([
+      prevDateMatch ? Order.find({ ...prevDateMatch }).lean().exec() : [],
+    ]) as any[];
+    const prevNonCancelled = prevOrders.filter((o: OrderDoc) => o.orderStatus !== "CANCELLED");
+    const prevCollectedRevenue = prevNonCancelled.filter(isCollectedRevenue).reduce((sum: number, o: OrderDoc) => sum + o.totalAmount, 0);
+    const prevPendingCodAmount = prevOrders.filter(isPendingCod).reduce((sum: number, o: OrderDoc) => sum + o.totalAmount, 0);
+    const prevGrossSales = prevNonCancelled.filter(isCompletedSale).reduce((sum: number, o: OrderDoc) => sum + o.totalAmount, 0);
+    const prevTotalOrders = prevOrders.length;
+    const prevNonCancelledCount = prevNonCancelled.length;
+    const prevAverageOrderValue = prevNonCancelledCount > 0 ? prevGrossSales / prevNonCancelledCount : 0;
+    const prevTotalCustomers = new Set(prevOrders.map((o: OrderDoc) => o.phone)).size;
+    const prevTotalProductsSold = prevNonCancelled.reduce((sum: number, o: OrderDoc) => sum + o.items.reduce((itemSum: number, i: any) => itemSum + i.quantity, 0), 0);
+    const prevCanceledOrders = prevOrders.filter((o: OrderDoc) => o.orderStatus === "CANCELLED").length;
+
+    /* Previous COGS */
+    let prevTotalCogs = 0;
+    for (const o of prevNonCancelled) {
+      for (const item of o.items) {
+        if (item.costSnapshot !== undefined) {
+          prevTotalCogs += item.costSnapshot * item.quantity;
+        }
+      }
+    }
+    const prevGrossProfit = prevGrossSales - prevTotalCogs;
+    const prevGrossProfitMargin = prevGrossSales > 0 ? (prevGrossProfit / prevGrossSales) * 100 : null;
+    const prevOutstandingAmount = prevOrders
+      .filter((o: OrderDoc) => o.orderStatus !== "CANCELLED" && o.paymentStatus !== "PAID")
+      .filter((o: OrderDoc) => !isPendingCod(o))
+      .reduce((sum: number, o: OrderDoc) => sum + o.totalAmount, 0);
+
+    /* COGS from cost snapshots (non-cancelled orders only) */
+    let totalCogs = 0;
+    for (const o of nonCancelledOrders) {
+      for (const item of o.items) {
+        if (item.costSnapshot !== undefined) {
+          totalCogs += item.costSnapshot * item.quantity;
+        }
+      }
+    }
+
+    const grossProfit = grossSales - totalCogs;
+    const grossProfitMargin = grossSales > 0 ? (grossProfit / grossSales) * 100 : null;
+
+    const outstandingAmount = allOrders
+      .filter((o) => o.orderStatus !== "CANCELLED" && o.paymentStatus !== "PAID")
+      .filter((o) => !isPendingCod(o))
       .reduce((sum, o) => sum + o.totalAmount, 0);
 
     const averageOrderValue = grossSalesCount > 0
@@ -661,6 +725,55 @@ export async function getAnalytics(
         totalCustomers,
         totalProductsSold,
         cancelledOrders,
+        grossProfit,
+        grossProfitMargin,
+        outstandingAmount,
+        grossSalesComparison: {
+          current: grossSales,
+          previous: prevGrossSales,
+          absoluteChange: grossSales - prevGrossSales,
+          percentChange: prevGrossSales === 0 ? (grossSales > 0 ? 100 : 0) : Math.round(((grossSales - prevGrossSales) / prevGrossSales) * 100),
+          trend: grossSales > prevGrossSales ? "up" : grossSales < prevGrossSales ? "down" : "flat",
+        },
+        totalOrdersComparison: {
+          current: totalOrders,
+          previous: prevTotalOrders,
+          absoluteChange: totalOrders - prevTotalOrders,
+          percentChange: prevTotalOrders === 0 ? (totalOrders > 0 ? 100 : 0) : Math.round(((totalOrders - prevTotalOrders) / prevTotalOrders) * 100),
+          trend: totalOrders > prevTotalOrders ? "up" : totalOrders < prevTotalOrders ? "down" : "flat",
+        },
+        averageOrderValueComparison: {
+          current: Math.round(averageOrderValue * 100) / 100,
+          previous: Math.round(prevAverageOrderValue * 100) / 100,
+          absoluteChange: Math.round((averageOrderValue - prevAverageOrderValue) * 100) / 100,
+          percentChange: prevAverageOrderValue === 0 ? (averageOrderValue > 0 ? 100 : 0) : Math.round(((averageOrderValue - prevAverageOrderValue) / prevAverageOrderValue) * 100),
+          trend: averageOrderValue > prevAverageOrderValue ? "up" : averageOrderValue < prevAverageOrderValue ? "down" : "flat",
+        },
+        totalCustomersComparison: {
+          current: totalCustomers,
+          previous: prevTotalCustomers,
+          absoluteChange: totalCustomers - prevTotalCustomers,
+          percentChange: prevTotalCustomers === 0 ? (totalCustomers > 0 ? 100 : 0) : Math.round(((totalCustomers - prevTotalCustomers) / prevTotalCustomers) * 100),
+          trend: totalCustomers > prevTotalCustomers ? "up" : totalCustomers < prevTotalCustomers ? "down" : "flat",
+        },
+        grossProfitComparison: {
+          current: grossProfit,
+          previous: prevGrossProfit,
+          absoluteChange: grossProfit - prevGrossProfit,
+          percentChange: prevGrossProfit === 0 ? (grossProfit > 0 ? 100 : 0) : Math.round(((grossProfit - prevGrossProfit) / prevGrossProfit) * 100),
+          trend: grossProfit > prevGrossProfit ? "up" : grossProfit < prevGrossProfit ? "down" : "flat",
+        },
+        grossProfitMarginComparison: {
+          current: grossProfitMargin ? Math.round(grossProfitMargin * 10) / 10 : null,
+          previous: prevGrossProfitMargin ? Math.round(prevGrossProfitMargin * 10) / 10 : null,
+        },
+        outstandingAmountComparison: {
+          current: outstandingAmount,
+          previous: prevOutstandingAmount,
+          absoluteChange: outstandingAmount - prevOutstandingAmount,
+          percentChange: prevOutstandingAmount === 0 ? (outstandingAmount > 0 ? 100 : 0) : Math.round(((outstandingAmount - prevOutstandingAmount) / prevOutstandingAmount) * 100),
+          trend: outstandingAmount > prevOutstandingAmount ? "up" : outstandingAmount < prevOutstandingAmount ? "down" : "flat",
+        },
       },
       charts: {
         revenueOverTime,

@@ -46,6 +46,7 @@ type DateRangeOption = {
 
 const dateRangeOptions: DateRangeOption[] = [
   { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
   { value: '7d', label: 'Last 7 Days' },
   { value: '30d', label: 'Last 30 Days' },
   { value: 'thisMonth', label: 'This Month' },
@@ -292,6 +293,32 @@ export default function CustomerAnalyticsPage() {
                 { label: 'Guest', value: guestCustomers ?? 0, color: '#C6A46A' },
               ]}
             />
+          </ChartContainer>
+
+          <ChartContainer
+            title="New vs Returning Customers"
+            subtitle="First-time vs repeat customers based on order history"
+          >
+            {customers.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No customer data available.</p>
+              </div>
+            ) : (
+              <DonutChart
+                data={[
+                  {
+                    label: 'New Customers',
+                    value: customers.filter((c) => c.orderCount === 1).length,
+                    color: '#17243A',
+                  },
+                  {
+                    label: 'Returning Customers',
+                    value: customers.filter((c) => c.orderCount > 1).length,
+                    color: '#C6A46A',
+                  },
+                ]}
+              />
+            )}
           </ChartContainer>
 
           <ChartContainer

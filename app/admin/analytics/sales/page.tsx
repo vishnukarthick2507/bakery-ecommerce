@@ -42,6 +42,7 @@ type DateRangeOption = {
 
 const dateRangeOptions: DateRangeOption[] = [
   { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
   { value: '7d', label: 'Last 7 Days' },
   { value: '30d', label: 'Last 30 Days' },
   { value: 'thisMonth', label: 'This Month' },
@@ -270,7 +271,7 @@ export default function SalesAnalyticsPage() {
             />
           </section>
 
-          {/* Revenue Over Time */}
+          {/* Revenue & Orders Trends */}
           <section className="mt-8 grid gap-6 lg:grid-cols-2">
             <ChartContainer
               title="Revenue Over Time"
@@ -312,6 +313,50 @@ export default function SalesAnalyticsPage() {
                   color="#C6A46A"
                   showArea
                   showPoints
+                />
+              )}
+            </ChartContainer>
+          </section>
+
+          {/* Average Order Value Trend */}
+          <section className="mt-8 grid gap-6 lg:grid-cols-2">
+            <ChartContainer
+              title="Average Order Value"
+              subtitle="Average order value trend across the selected period"
+            >
+              {revenueOverTime.length === 0 || totalOrders === 0 ? (
+                <div className="h-64 flex flex-col items-center justify-center text-center">
+                  <p className="text-sm text-secondary-text">No AOV data yet.</p>
+                </div>
+              ) : (
+                <LineChart
+                  data={revenueOverTime.map((p) => ({
+                    date: p.date,
+                    value: p.orders > 0 ? p.revenue / p.orders : 0,
+                    label: p.date,
+                  }))}
+                  color="#536B60"
+                  showArea
+                  showPoints
+                />
+              )}
+            </ChartContainer>
+
+            <ChartContainer
+              title="Revenue by Payment Method"
+              subtitle="Revenue distribution across payment methods"
+            >
+              {paymentBreakdown.length === 0 ? (
+                <div className="h-64 flex flex-col items-center justify-center text-center">
+                  <p className="text-sm text-secondary-text">No payment data yet.</p>
+                </div>
+              ) : (
+                <DonutChart
+                  data={paymentBreakdown.map((pb, i) => ({
+                    label: pb.label,
+                    value: pb.amount,
+                    color: ['#17243A', '#C6A46A', '#536B60'][i % 3],
+                  }))}
                 />
               )}
             </ChartContainer>

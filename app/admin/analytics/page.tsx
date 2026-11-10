@@ -10,6 +10,12 @@ import {
   formatPriceOr,
   formatNumberOr,
 } from '@/lib/format'
+import {
+  LineChart,
+  BarChart,
+  DonutChart,
+  ChartContainer,
+} from '@/components/admin/charts'
 
 type OrderStatus =
   | 'PLACED'
@@ -26,7 +32,6 @@ type FulfillmentType = 'DELIVERY' | 'PICKUP'
 type CakeStatus = 'PENDING' | 'CONTACTED' | 'CLOSED'
 
 type KPI = {
-  // Aggregate totals can be null when the backend returns incomplete data.
   grossSales: number | null
   collectedRevenue: number | null
   pendingCod: number | null
@@ -35,6 +40,9 @@ type KPI = {
   totalCustomers: number | null
   totalProductsSold: number | null
   cancelledOrders: number | null
+  grossProfit: number | null
+  grossProfitMargin: number | null
+  outstandingAmount: number | null
 }
 
 type ChartSeries = {
@@ -74,6 +82,7 @@ type DateRangeOption = {
 
 const dateRangeOptions: DateRangeOption[] = [
   { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
   { value: '7d', label: 'Last 7 Days' },
   { value: '30d', label: 'Last 30 Days' },
   { value: 'thisMonth', label: 'This Month' },
@@ -357,6 +366,16 @@ export default function AnalyticsPage() {
             value={formatNumber(kpis.cancelledOrders)}
           />
           <StatCard
+            label="Gross Profit"
+            value={formatPrice(kpis.grossProfit)}
+            subtitle={`Margin: ${kpis.grossProfitMargin?.toFixed(1) ?? 0}%`}
+          />
+          <StatCard
+            label="Outstanding Payments"
+            value={formatPrice(kpis.outstandingAmount)}
+            subtitle="Awaiting collection"
+          />
+          <StatCard
             label="Custom Cake Requests"
             value={formatNumber(totalCustomCakes)}
           />
@@ -364,135 +383,91 @@ export default function AnalyticsPage() {
 
         {/* Revenue & Orders Charts */}
         <section className="mt-8 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-primary mb-4">
-              Collected Revenue Over Time
-            </h2>
-            <div className="h-64 flex items-end gap-2">
-              {charts.revenueOverTime.map((point) => (
-                <div
-                  key={point._id}
-                  className="flex flex-col items-center gap-1"
-                  style={{
-                    flex: 1,
-                    minHeight: '24px',
-                    height: `${Math.max(
-                      24,
-                      (point.revenue /
-                        Math.max(
-                          1,
-                          ...charts.revenueOverTime.map((p) => p.revenue),
-                        )) *
-                        300,
-                    )}px`,
-                  }}
-                >
-                  <div className="w-full bg-primary rounded-t" />
-                  <span className="text-xs text-muted-foreground">
-                    {point._id}
-                  </span>
-                </div>
-              ))}
-              {charts.revenueOverTime.length === 0 && (
-                <p className="text-center text-muted-foreground mt-8">
-                  No collected revenue yet.
-                </p>
-              )}
-            </div>
-          </div>
+          <ChartContainer
+            title="Collected Revenue Over Time"
+            subtitle="Collected revenue trend across the selected period"
+          >
+            {charts.revenueOverTime.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No collected revenue yet.</p>
+              </div>
+            ) : (
+              <LineChart
+                data={charts.revenueOverTime.map((p) => ({
+                  date: p._id,
+                  value: p.revenue,
+                  label: p._id,
+                }))}
+                color="#17243A"
+                showArea
+                showPoints
+              />
+            )}
+          </ChartContainer>
 
-          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-primary mb-4">
-              Orders Over Time
-            </h2>
-            <div className="h-64 flex items-end gap-2">
-              {charts.ordersOverTime.map((point) => (
-                <div
-                  key={point._id}
-                  className="flex flex-col items-center gap-1"
-                  style={{
-                    flex: 1,
-                    minHeight: '24px',
-                    height: `${Math.max(
-                      24,
-                      (point.count /
-                        Math.max(
-                          1,
-                          ...charts.ordersOverTime.map((p) => p.count),
-                        )) *
-                        300,
-                    )}px`,
-                  }}
-                >
-                  <div className="w-full bg-[#173F67] rounded-t" />
-                  <span className="text-xs text-muted-foreground">
-                    {point._id}
-                  </span>
-                </div>
-              ))}
-              {charts.ordersOverTime.length === 0 && (
-                <p className="text-center text-muted-foreground mt-8">
-                  No orders yet.
-                </p>
-              )}
-            </div>
-          </div>
+          <ChartContainer
+            title="Orders Over Time"
+            subtitle="Order volume trend across the selected period"
+          >
+            {charts.ordersOverTime.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No orders yet.</p>
+              </div>
+            ) : (
+              <LineChart
+                data={charts.ordersOverTime.map((p) => ({
+                  date: p._id,
+                  value: p.count,
+                  label: p._id,
+                }))}
+                color="#C6A46A"
+                showArea
+                showPoints
+              />
+            )}
+          </ChartContainer>
         </section>
 
         {/* Top Products & Status Breakdown */}
         <section className="mt-8 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-primary mb-4">
-              Top-Selling Products
-            </h2>
-            <div className="divide-y divide-border">
-              {charts.topProducts.map((p, i) => (
-                <div key={p._id} className="flex justify-between py-3">
-                  <div>
-                    <p className="font-medium text-primary">
-                      {p.productName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatNumber(p.unitsSold)} units sold
-                    </p>
-                  </div>
-                  <p className="font-semibold text-primary">
-                    {formatPrice(p.revenue)}
-                  </p>
-                </div>
-              ))}
-              {charts.topProducts.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">
-                  No products sold yet.
-                </p>
-              )}
-            </div>
-          </div>
+          <ChartContainer
+            title="Top-Selling Products"
+            subtitle="Product revenue ranking based on order data"
+          >
+            {charts.topProducts.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No products sold yet.</p>
+              </div>
+            ) : (
+              <BarChart
+                data={charts.topProducts.map((p) => ({
+                  label: p.productName,
+                  value: p.revenue,
+                }))}
+                color="#17243A"
+                showLabels
+              />
+            )}
+          </ChartContainer>
 
-          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-primary mb-4">
-              Order Status Breakdown
-            </h2>
-            <div className="space-y-3">
-              {charts.orderStatusBreakdown.map((s) => (
-                <div key={s._id} className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">
-                    {statusLabel(s._id as OrderStatus)}
-                  </span>
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${formatStatusBadge(s._id)}`}
-                  >
-                    {formatNumber(s.count)}
-                  </span>
-                </div>
-              ))}
-              {charts.orderStatusBreakdown.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">
-                  No orders yet.
-                </p>
-              )}
-            </div>
-          </div>
+          <ChartContainer
+            title="Order Status Breakdown"
+            subtitle="Order count by status"
+          >
+            {charts.orderStatusBreakdown.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <p className="text-sm text-secondary-text">No orders yet.</p>
+              </div>
+            ) : (
+              <DonutChart
+                data={charts.orderStatusBreakdown.map((s, i) => ({
+                  label: statusLabel(s._id as OrderStatus),
+                  value: s.count,
+                  color: ['#17243A', '#C6A46A', '#536B60', '#B28C52', '#E8E2D8'][i % 5],
+                }))}
+              />
+            )}
+          </ChartContainer>
         </section>
 
         {/* Payment Method Breakdown */}

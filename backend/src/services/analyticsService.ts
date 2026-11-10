@@ -135,6 +135,14 @@ export function buildDateFilter(
       const end = endOfDay(now);
       return { start, end };
     }
+    case "yesterday": {
+      const start = startOfDay(now);
+      start.setDate(start.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
     case "7d": {
       const start = startOfDay(now);
       start.setDate(start.getDate() - 6);
