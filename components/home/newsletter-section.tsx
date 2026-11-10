@@ -14,7 +14,7 @@ export function NewsletterSection() {
           <h2 className="font-heading text-2xl font-bold text-primary sm:text-3xl tracking-tight">
             Fresh from the oven, straight to your inbox
           </h2>
-          <p className="mt-4 text-secondary-text">
+          <p className="mt-4 text-foreground">
             Be the first to know about new bakes, seasonal treats and bakery
             events.
           </p>
@@ -22,7 +22,7 @@ export function NewsletterSection() {
             <input
               type="email"
               placeholder="you@example.com"
-              className="flex-1 rounded-lg border border-gold-border bg-white px-5 py-3 text-sm text-primary placeholder-secondary-text/50 focus:border-champagne-gold focus:ring-2 focus:ring-champagne-gold/30 outline-none"
+              className="flex-1 rounded-lg border border-gold-border bg-white px-5 py-3 text-sm text-primary placeholder-primary/60 focus:border-champagne-gold focus:ring-2 focus:ring-champagne-gold/30 outline-none"
             />
             <Link
               href="/contact"

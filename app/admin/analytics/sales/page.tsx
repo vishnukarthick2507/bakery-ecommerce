@@ -64,11 +64,11 @@ function StatCard({
 }) {
   return (
     <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="text-sm text-foreground">{label}</p>
       <p className="mt-2 text-3xl font-bold text-primary">{value}</p>
-      {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
+      {subtitle && <p className="mt-1 text-xs text-foreground">{subtitle}</p>}
       {trend && trend.percentChange !== null && (
-        <p className={`mt-1 text-xs font-medium ${trend.trend === 'up' ? 'text-green-600' : trend.trend === 'down' ? 'text-red-600' : 'text-muted-foreground'}`}>
+        <p className={`mt-1 text-xs font-medium ${trend.trend === 'up' ? 'text-green-600' : trend.trend === 'down' ? 'text-red-600' : 'text-foreground'}`}>
           {trend.trend === 'up' ? '▲' : trend.trend === 'down' ? '▼' : '▬'} {Math.abs(trend.percentChange)}% vs prior period
         </p>
       )}
@@ -119,7 +119,7 @@ export default function SalesAnalyticsPage() {
       <main className="min-h-screen bg-muted/20">
         <div className="mx-auto max-w-7xl px-4 py-12">
           <div className="rounded-xl border border-border p-10 text-center">
-            <p className="text-muted-foreground">Loading sales analytics…</p>
+            <p className="text-foreground">Loading sales analytics…</p>
           </div>
         </div>
       </main>
@@ -142,7 +142,7 @@ export default function SalesAnalyticsPage() {
                 </button>
               </>
             ) : (
-              <p className="text-muted-foreground">No data available</p>
+              <p className="text-foreground">No data available</p>
             )}
           </div>
         </div>
@@ -175,14 +175,14 @@ export default function SalesAnalyticsPage() {
               </p>
               <Link
                 href="/admin"
-                className="text-sm text-muted-foreground hover:underline"
+                className="text-sm text-foreground hover:underline"
               >
                 ← Back to Dashboard
               </Link>
               <h1 className="mt-3 text-3xl font-bold text-primary">
                 Sales Analytics
               </h1>
-              <p className="mt-2 text-muted-foreground">
+              <p className="mt-2 text-foreground">
                 Track sales performance, revenue trends, and payment methods.
               </p>
             </div>
@@ -200,7 +200,7 @@ export default function SalesAnalyticsPage() {
           <section className="mt-6 rounded-xl border border-border bg-white p-6 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-muted-foreground">
+                <span className="text-sm font-medium text-foreground">
                   Date range:
                 </span>
                 {dateRangeOptions.map((opt) => (
@@ -215,7 +215,7 @@ export default function SalesAnalyticsPage() {
                       'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                       range === opt.value
                         ? 'bg-primary text-primary-foreground border-primary'
-                        : 'border-border text-muted-foreground hover:bg-muted',
+                        : 'border-border text-foreground hover:bg-muted',
                     )}
                   >
                     {opt.label}
@@ -224,14 +224,14 @@ export default function SalesAnalyticsPage() {
               </div>
               {range === 'custom' && (
                 <div className="flex items-center gap-3">
-                  <label className="text-sm text-muted-foreground">From</label>
+                  <label className="text-sm text-foreground">From</label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     className="rounded-lg border border-border px-3 py-1.5 text-sm"
                   />
-                  <label className="text-sm text-muted-foreground">To</label>
+                  <label className="text-sm text-foreground">To</label>
                   <input
                     type="date"
                     value={endDate}
@@ -279,7 +279,7 @@ export default function SalesAnalyticsPage() {
             >
               {revenueOverTime.length === 0 ? (
                 <div className="h-64 flex flex-col items-center justify-center text-center">
-                  <p className="text-sm text-secondary-text">No revenue data yet.</p>
+                  <p className="text-sm text-foreground">No revenue data yet.</p>
                 </div>
               ) : (
                 <LineChart
@@ -301,7 +301,7 @@ export default function SalesAnalyticsPage() {
             >
               {revenueOverTime.length === 0 ? (
                 <div className="h-64 flex flex-col items-center justify-center text-center">
-                  <p className="text-sm text-secondary-text">No order data yet.</p>
+                  <p className="text-sm text-foreground">No order data yet.</p>
                 </div>
               ) : (
                 <LineChart
@@ -326,7 +326,7 @@ export default function SalesAnalyticsPage() {
             >
               {revenueOverTime.length === 0 || totalOrders === 0 ? (
                 <div className="h-64 flex flex-col items-center justify-center text-center">
-                  <p className="text-sm text-secondary-text">No AOV data yet.</p>
+                  <p className="text-sm text-foreground">No AOV data yet.</p>
                 </div>
               ) : (
                 <LineChart
@@ -348,7 +348,7 @@ export default function SalesAnalyticsPage() {
             >
               {paymentBreakdown.length === 0 ? (
                 <div className="h-64 flex flex-col items-center justify-center text-center">
-                  <p className="text-sm text-secondary-text">No payment data yet.</p>
+                  <p className="text-sm text-foreground">No payment data yet.</p>
                 </div>
               ) : (
                 <DonutChart
@@ -375,7 +375,7 @@ export default function SalesAnalyticsPage() {
                 >
                   <div>
                     <p className="font-medium text-primary">{pb.label}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-foreground">
                       {pb.count} order{pb.count !== 1 ? 's' : ''}
                     </p>
                   </div>
@@ -392,7 +392,7 @@ export default function SalesAnalyticsPage() {
                       </p>
                     )}
                     {pb.collected === 0 && pb.amount === 0 && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-foreground">
                         No orders
                       </p>
                     )}

@@ -607,7 +607,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
   const inputClass = (field: keyof typeof fieldErrors) =>
     cn(
       'mt-2 block w-full rounded-xl border px-4 py-3.5 text-base outline-none transition-all',
-      'placeholder:text-muted-foreground',
+      'placeholder:text-foreground',
       fieldErrors[field]
         ? 'border-destructive focus:ring-destructive focus:border-destructive'
         : 'border-border focus:ring-caramel/20 focus:border-caramel',
@@ -672,13 +672,13 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       <section className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
         {/* Brand header */}
         <div className="mb-8 text-center sm:text-left">
-          <p className="text-xs font-semibold text-caramel tracking-widest uppercase">
+          <p className="text-xs font-semibold text-primary tracking-widest uppercase">
             {brandName}
           </p>
           <h1 className="mt-1 font-heading text-3xl sm:text-4xl font-semibold text-primary tracking-tight">
             {isRegister ? 'Create your account' : 'Welcome back'}
           </h1>
-          <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+          <p className="mt-3 text-sm text-foreground leading-relaxed">
             {isRegister
               ? 'Join us and save your favourite cakes for faster checkout.'
               : 'Sign in to view your orders and account details.'}
@@ -1037,7 +1037,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={handleForgotPassword}
-                  className="font-medium text-caramel underline-offset-4 hover:underline"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
                   disabled={submitting}
                 >
                   Reset password
@@ -1357,7 +1357,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t border-border"></span>
           </div>
-          <span className="relative flex justify-center text-xs uppercase tracking-widest text-muted-foreground bg-card px-4">
+          <span className="relative flex justify-center text-xs uppercase tracking-widest text-foreground bg-card px-4">
             Or continue with
           </span>
         </div>
@@ -1424,18 +1424,18 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           )}
         </button>
 
-        <p className="mt-10 text-sm text-muted-foreground text-center">
+        <p className="mt-10 text-sm text-foreground text-center">
           {isRegister ? 'Already have an account?' : 'New to Bluebell Bakehouse?'}{' '}
           {isRegister ? (
             <Link
-              className="font-medium text-caramel underline-offset-4 hover:underline"
+              className="font-medium text-primary underline-offset-4 hover:underline"
               href="/account/login"
             >
               Sign in
             </Link>
           ) : (
             <Link
-              className="font-medium text-caramel underline-offset-4 hover:underline"
+              className="font-medium text-primary underline-offset-4 hover:underline"
               href="/account/register"
             >
               Create an account

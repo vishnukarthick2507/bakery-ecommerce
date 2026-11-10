@@ -58,7 +58,7 @@ export default function AdminLoginPage() {
           <h1 className="text-3xl font-bold text-primary tracking-tight">
             Admin Login
           </h1>
-          <p className="mt-2 text-muted-foreground">Bluebell Bakehouse Admin</p>
+          <p className="mt-2 text-foreground">Bluebell Bakehouse Admin</p>
         </div>
 
         <div className="rounded-[2rem] border border-border bg-card p-8 shadow-sm">
@@ -109,7 +109,7 @@ export default function AdminLoginPage() {
           <div className="mt-8 text-center">
             <Link
               href="/"
-              className="text-sm text-caramel hover:underline font-medium"
+              className="text-sm text-primary hover:underline font-medium"
             >
               ← Back to store
             </Link>

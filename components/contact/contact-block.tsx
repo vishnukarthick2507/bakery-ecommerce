@@ -50,7 +50,7 @@ export function ContactBlock() {
             <dl className="flex flex-col gap-3 text-sm">
               {siteConfig.openingHours.map((row) => (
                 <div key={row.days} className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">{row.days}</dt>
+                  <dt className="text-foreground">{row.days}</dt>
                   <dd className="font-medium">{row.hours}</dd>
                 </div>
               ))}

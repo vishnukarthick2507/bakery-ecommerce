@@ -25,14 +25,14 @@ export default function AboutPage() {
               Our Story
             </h2>
 
-            <p className="mt-4 leading-7 text-muted-foreground">
+            <p className="mt-4 leading-7 text-foreground">
               Bluebell Bakehouse is a neighbourhood bakery in
               Chromepet, Chennai, creating fresh cakes, breads,
               pastries, brownies and celebration cakes with carefully
               selected ingredients.
             </p>
 
-            <p className="mt-4 leading-7 text-muted-foreground">
+            <p className="mt-4 leading-7 text-foreground">
               From everyday treats to special occasions, our goal is
               to make every order fresh, delicious and memorable.
             </p>
@@ -46,21 +46,21 @@ export default function AboutPage() {
             <div className="mt-5 space-y-4">
               <div>
                 <h3 className="font-semibold">Fresh Every Day</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-sm text-foreground">
                   We focus on freshly prepared bakery products.
                 </p>
               </div>
 
               <div>
                 <h3 className="font-semibold">Quality Ingredients</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-sm text-foreground">
                   We aim to use quality ingredients in everything we bake.
                 </p>
               </div>
 
               <div>
                 <h3 className="font-semibold">Made for You</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-sm text-foreground">
                   From simple cakes to custom celebrations, every order
                   deserves care and attention.
                 </p>

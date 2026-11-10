@@ -40,11 +40,11 @@ export function OffersSection() {
                   className="h-full border border-border rounded-2xl bg-card shadow-sm transition-shadow duration-200 hover:shadow-md hover:border-caramel/50"
                 >
                   <CardHeader className="pb-4">
-                    <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-caramel/10 text-caramel">
+                    <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-caramel/10 text-primary">
                       <TicketPercentIcon className="size-5" aria-hidden="true" />
                     </div>
                     <CardTitle className="font-heading text-xl">{offer.title}</CardTitle>
-                    <CardDescription className="text-sm">{offer.description}</CardDescription>
+                    <CardDescription className="text-sm text-foreground">{offer.description}</CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1" />
                   <CardFooter className="justify-between gap-2 pt-4">

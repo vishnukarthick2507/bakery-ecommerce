@@ -20,12 +20,12 @@ export function BrandStorySection() {
             <h2 className="font-heading text-3xl font-bold text-primary sm:text-4xl tracking-tight">
               Crafted with care, baked daily
             </h2>
-            <p className="mt-6 text-lg text-secondary-text leading-relaxed">
+            <p className="mt-6 text-lg text-foreground leading-relaxed">
               At Bluebell Bakehouse, we believe every loaf and every cake tells a
               story. Our bakers arrive before dawn to mix, shape and bake by hand,
               using only the finest ingredients and time-honoured techniques.
             </p>
-            <p className="mt-4 text-lg text-secondary-text leading-relaxed">
+            <p className="mt-4 text-lg text-foreground leading-relaxed">
               From buttery croissants to celebration cakes, everything is made
               fresh in our Chromepet kitchen — never frozen, never rushed.
             </p>

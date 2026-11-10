@@ -47,12 +47,12 @@ export function CartSheet() {
               ))}
             </ul>
             <SheetFooter className="gap-3 border-t border-border px-5 py-5">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-foreground">
                 Delivery is currently free on all orders.
               </p>
               {pricing.savings > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">You save</span>
+                  <span className="text-foreground">You save</span>
                   <span className="font-medium text-primary">{formatPrice(pricing.savings)}</span>
                 </div>
               )}

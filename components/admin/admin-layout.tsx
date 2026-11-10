@@ -95,62 +95,68 @@ export default function AdminLayout({
 
   const isActive = (href: string) => pathname === href
 
-  const renderNavLinks = (mobile = false) => (
-    <>
-      {adminNavItems.map((item) => {
-        const active = isActive(item.href)
-        const Icon = item.icon
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={mobile ? () => setMobileMenuOpen(false) : undefined}
-            className={cn(
-              'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
-              active
-                ? 'bg-champagne-gold/10 border border-champagne-gold/30 bg-champagne-gold/5 text-champagne-gold shadow-sm'
-                : 'border-transparent text-secondary-text hover:bg-white hover:text-primary hover:border-gold-border/40',
-            )}
-            aria-current={active ? 'page' : undefined}
-          >
-            <Icon
+  const renderNavLinks = (mobile = false) => {
+    const inactiveColor = mobile ? 'text-foreground' : 'text-white'
+    const inactiveHoverBg = mobile ? 'hover:bg-gold-border/50' : 'hover:bg-midnight-navy/80'
+    const inactiveHoverBorder = mobile ? 'hover:border-gold-border/40' : 'hover:border-champagne-gold/40'
+    const inactiveHoverText = mobile ? 'hover:text-primary' : 'hover:text-champagne-gold'
+    return (
+      <>
+        {adminNavItems.map((item) => {
+          const active = isActive(item.href)
+          const Icon = item.icon
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={mobile ? () => setMobileMenuOpen(false) : undefined}
               className={cn(
-                'size-5 shrink-0',
-                active ? 'text-champagne-gold' : 'text-secondary-text',
+                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
+                active
+                  ? 'bg-champagne-gold/10 border border-champagne-gold/30 bg-champagne-gold/5 text-champagne-gold shadow-sm'
+                  : `border-transparent ${inactiveColor} ${inactiveHoverBg} ${inactiveHoverText} ${inactiveHoverBorder}`,
               )}
-              aria-hidden="true"
-            />
-            {!isCollapsed || !mobile ? <span>{item.label}</span> : null}
-          </Link>
-        )
-      })}
-      <Link
-        href={viewStoreItem.href}
-        onClick={mobile ? () => setMobileMenuOpen(false) : undefined}
-        className={cn(
-          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
-          'border-transparent text-secondary-text hover:bg-gold-border/50 hover:text-primary',
-        )}
-      >
-        <LayoutDashboard className="size-5 shrink-0 text-secondary-text" aria-hidden="true" />
-        {viewStoreItem.label}
-      </Link>
-      <button
-        type="button"
-        onClick={() => {
-          setMobileMenuOpen(false)
-          handleLogout()
-        }}
-        className={cn(
-          'flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
-          'border-transparent text-secondary-text hover:bg-destructive/10 hover:text-destructive',
-        )}
-      >
-        <LogOutIcon className="size-5 shrink-0" aria-hidden="true" />
-        Logout
-      </button>
-    </>
-  )
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon
+                className={cn(
+                  'size-5 shrink-0',
+                  active ? 'text-champagne-gold' : inactiveColor,
+                )}
+                aria-hidden="true"
+              />
+              {!isCollapsed || !mobile ? <span>{item.label}</span> : null}
+            </Link>
+          )
+        })}
+        <Link
+          href={viewStoreItem.href}
+          onClick={mobile ? () => setMobileMenuOpen(false) : undefined}
+          className={cn(
+            'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
+            `border-transparent ${inactiveColor} hover:bg-gold-border/50 hover:text-primary`,
+          )}
+        >
+          <LayoutDashboard className={`size-5 shrink-0 ${inactiveColor}`} aria-hidden="true" />
+          {viewStoreItem.label}
+        </Link>
+        <button
+          type="button"
+          onClick={() => {
+            setMobileMenuOpen(false)
+            handleLogout()
+          }}
+          className={cn(
+            'flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
+            `border-transparent ${inactiveColor} hover:bg-destructive/10 hover:text-destructive`,
+          )}
+        >
+          <LogOutIcon className="size-5 shrink-0" aria-hidden="true" />
+          Logout
+        </button>
+      </>
+    )
+  }
 
   return (
     <div className="flex min-h-screen bg-warm-ivory">
@@ -256,7 +262,7 @@ export default function AdminLayout({
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="rounded-lg p-2 text-secondary-text hover:bg-gold-border"
+            className="rounded-lg p-2 text-primary hover:bg-gold-border"
             aria-label="Open menu"
           >
             <Menu className="size-6" />
@@ -272,10 +278,10 @@ export default function AdminLayout({
           <button
             type="button"
             onClick={handleLogout}
-            className="rounded-lg p-2 text-white hover:bg-gold-border"
+            className="rounded-lg p-2 text-primary hover:bg-gold-border"
             aria-label="Logout"
           >
-            <LogOutIcon className="size-5 text-white" />
+            <LogOutIcon className="size-5 text-primary" />
           </button>
         </header>
 
@@ -305,7 +311,7 @@ export default function AdminLayout({
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="absolute right-3 top-3 rounded-lg p-1 text-white hover:bg-gold-border"
+                className="absolute right-3 top-3 rounded-lg p-1 text-primary hover:bg-gold-border"
                 aria-label="Close menu"
               >
                 <X className="size-5" />

@@ -18,7 +18,7 @@ export function Hero() {
         <div className="flex flex-col gap-6">
           <p
             className={cn(
-              'w-fit rounded-full bg-champagne-gold/20 px-3 py-1 text-sm font-semibold text-champagne-gold tracking-wide uppercase border border-champagne-gold/40',
+              'w-fit rounded-full bg-champagne-gold/20 px-3 py-1 text-sm font-semibold text-white tracking-wide uppercase border border-champagne-gold/40',
               'animate-in fade-in slide-in-from-bottom-4 duration-700',
             )}
           >
@@ -28,7 +28,7 @@ export function Hero() {
             id="hero-title"
             className={cn(
               'font-heading text-4xl leading-tight font-bold text-white sm:text-6xl lg:text-7xl tracking-tight',
-              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-70',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150',
             )}
           >
             Freshly Baked.<br />
@@ -37,7 +37,7 @@ export function Hero() {
           <p
             className={cn(
               'max-w-lg text-lg leading-relaxed text-white/85',
-              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300',
             )}
           >
             Cakes, breads and pastries made from scratch in small batches. Order
@@ -47,7 +47,7 @@ export function Hero() {
           <div
             className={cn(
               'flex flex-col gap-4 sm:flex-row',
-              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-[450ms]',
             )}
           >
             <Link
@@ -68,7 +68,7 @@ export function Hero() {
           <ul
             className={cn(
               'flex flex-wrap gap-x-6 gap-y-3 pt-4',
-              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-450',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-[600ms]',
             )}
           >
             {highlights.map(({ icon: Icon, label }) => (
@@ -82,7 +82,7 @@ export function Hero() {
         <div
           className={cn(
             'hidden lg:block relative aspect-[4/3] overflow-hidden rounded-3xl shadow-2xl border border-white/20',
-            'animate-in fade-in zoom-in duration-700 delay-600',
+            'animate-in fade-in zoom-in duration-700 delay-700',
           )}
         >
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />

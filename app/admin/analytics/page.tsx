@@ -107,9 +107,9 @@ function StatCard({
 }) {
   return (
     <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="text-sm text-foreground">{label}</p>
       <p className="mt-2 text-3xl font-bold text-primary">{value}</p>
-      {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
+      {subtitle && <p className="mt-1 text-xs text-foreground">{subtitle}</p>}
     </div>
   )
 }
@@ -210,7 +210,7 @@ export default function AnalyticsPage() {
       <AdminLayout>
         <div className="mx-auto max-w-7xl py-12">
           <div className="rounded-xl border border-border p-10 text-center">
-            <p className="text-muted-foreground">Loading analytics…</p>
+            <p className="text-foreground">Loading analytics…</p>
           </div>
         </div>
       </AdminLayout>
@@ -233,7 +233,7 @@ export default function AnalyticsPage() {
                 </button>
               </>
             ) : (
-              <p className="text-muted-foreground">No data available</p>
+              <p className="text-foreground">No data available</p>
             )}
           </div>
         </div>
@@ -254,14 +254,14 @@ export default function AnalyticsPage() {
             </p>
             <Link
               href="/admin"
-              className="text-sm text-muted-foreground hover:underline"
+              className="text-sm text-foreground hover:underline"
             >
               ← Back to Dashboard
             </Link>
             <h1 className="mt-3 text-3xl font-bold text-primary">
               Analytics & Reports
             </h1>
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-2 text-foreground">
               Track sales, orders, and business performance.
             </p>
           </div>
@@ -286,7 +286,7 @@ export default function AnalyticsPage() {
         <section className="mt-6 rounded-xl border border-border bg-white p-6 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-muted-foreground">
+              <span className="text-sm font-medium text-foreground">
                 Date range:
               </span>
               {dateRangeOptions.map((opt) => (
@@ -300,7 +300,7 @@ export default function AnalyticsPage() {
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                     range === opt.value
                       ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-border text-muted-foreground hover:bg-muted'
+                      : 'border-border text-foreground hover:bg-muted'
                   }`}
                 >
                   {opt.label}
@@ -309,14 +309,14 @@ export default function AnalyticsPage() {
             </div>
             {range === 'custom' && (
               <div className="flex items-center gap-3">
-                <label className="text-sm text-muted-foreground">From</label>
+                <label className="text-sm text-foreground">From</label>
                 <input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                   className="rounded-lg border border-border px-3 py-1.5 text-sm"
                 />
-                <label className="text-sm text-muted-foreground">To</label>
+                <label className="text-sm text-foreground">To</label>
                 <input
                   type="date"
                   value={endDate}
@@ -389,7 +389,7 @@ export default function AnalyticsPage() {
           >
             {charts.revenueOverTime.length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-center">
-                <p className="text-sm text-secondary-text">No collected revenue yet.</p>
+                <p className="text-sm text-foreground">No collected revenue yet.</p>
               </div>
             ) : (
               <LineChart
@@ -411,7 +411,7 @@ export default function AnalyticsPage() {
           >
             {charts.ordersOverTime.length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-center">
-                <p className="text-sm text-secondary-text">No orders yet.</p>
+                <p className="text-sm text-foreground">No orders yet.</p>
               </div>
             ) : (
               <LineChart
@@ -436,7 +436,7 @@ export default function AnalyticsPage() {
           >
             {charts.topProducts.length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-center">
-                <p className="text-sm text-secondary-text">No products sold yet.</p>
+                <p className="text-sm text-foreground">No products sold yet.</p>
               </div>
             ) : (
               <BarChart
@@ -456,7 +456,7 @@ export default function AnalyticsPage() {
           >
             {charts.orderStatusBreakdown.length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-center">
-                <p className="text-sm text-secondary-text">No orders yet.</p>
+                <p className="text-sm text-foreground">No orders yet.</p>
               </div>
             ) : (
               <DonutChart
@@ -491,7 +491,7 @@ export default function AnalyticsPage() {
                 >
                   <div>
                     <p className="font-medium text-primary">{method.label}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-foreground">
                       {formatNumber(p.count)} order{
                         p.count !== 1 ? 's' : ''
                       }
@@ -510,7 +510,7 @@ export default function AnalyticsPage() {
                       </p>
                     )}
                     {!isCod && p.collected === 0 && p.amount === 0 && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-foreground">
                         No orders
                       </p>
                     )}
@@ -530,19 +530,19 @@ export default function AnalyticsPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="py-3 text-sm font-medium text-muted-foreground">
+                  <th className="py-3 text-sm font-medium text-foreground">
                     Customer
                   </th>
-                  <th className="py-3 text-sm font-medium text-muted-foreground">
+                  <th className="py-3 text-sm font-medium text-foreground">
                     Phone
                   </th>
-                  <th className="py-3 text-sm font-medium text-muted-foreground text-right">
+                  <th className="py-3 text-sm font-medium text-foreground text-right">
                     Orders
                   </th>
-                  <th className="py-3 text-sm font-medium text-muted-foreground text-right">
+                  <th className="py-3 text-sm font-medium text-foreground text-right">
                     Total Spent
                   </th>
-                  <th className="py-3 text-sm font-medium text-muted-foreground text-right">
+                  <th className="py-3 text-sm font-medium text-foreground text-right">
                     Last Order
                   </th>
                 </tr>
@@ -558,7 +558,7 @@ export default function AnalyticsPage() {
                     <td className="py-3 text-sm text-right font-medium">
                       {formatPrice(c.totalSpent)}
                     </td>
-                    <td className="py-3 text-sm text-right text-muted-foreground">
+                    <td className="py-3 text-sm text-right text-foreground">
                       {c.lastOrder
                         ? new Date(c.lastOrder).toLocaleDateString('en-IN')
                         : '—'}
@@ -567,7 +567,7 @@ export default function AnalyticsPage() {
                 ))}
                 {charts.topCustomers.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={5} className="py-8 text-center text-foreground">
                       No customer data yet.
                     </td>
                   </tr>
@@ -583,7 +583,7 @@ export default function AnalyticsPage() {
             <h2 className="text-xl font-semibold text-primary mb-0">
               Low-Stock Products
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-foreground">
               {lowStock.length} items need attention
             </p>
           </div>
@@ -594,7 +594,7 @@ export default function AnalyticsPage() {
                 className="rounded-lg border border-border p-4 bg-white"
               >
                 <p className="font-medium text-primary">{p.name}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-sm text-foreground">
                   {p.category}
                 </p>
                 <p className="mt-2 text-sm">
@@ -605,13 +605,13 @@ export default function AnalyticsPage() {
                     {formatNumber(p.stock)}
                   </span>
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-foreground">
                   {p.availability}
                 </p>
               </div>
             ))}
             {lowStock.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">
+              <p className="text-center text-foreground py-8">
                 All products are in stock.
               </p>
             )}

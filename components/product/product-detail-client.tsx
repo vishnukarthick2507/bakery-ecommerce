@@ -60,7 +60,7 @@ export function ProductDetailClient({
     <div className="space-y-10">
       <Link
         href="/products"
-        className="inline-flex items-center gap-2 text-sm font-medium text-secondary-text hover:text-primary transition-colors"
+        className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary transition-colors"
       >
         <ArrowLeftIcon className="size-4" />
         Back to shop
@@ -103,7 +103,7 @@ export function ProductDetailClient({
                 {product.name}
               </h1>
 
-              <p className="mt-4 text-lg text-secondary-text leading-relaxed">
+              <p className="mt-4 text-lg text-foreground leading-relaxed">
                 {product.description}
               </p>
             </div>
@@ -115,39 +115,39 @@ export function ProductDetailClient({
                 size="lg"
               />
 
-              <span className="text-sm text-secondary-text uppercase tracking-wider">
+              <span className="text-sm text-foreground uppercase tracking-wider">
                 {variant.label}
               </span>
             </div>
 
             <div className="mt-10 grid gap-4 rounded-2xl border border-gold-border bg-white p-6 text-sm">
               <div className="flex justify-between gap-4">
-                <span className="text-secondary-text">Category</span>
+                <span className="text-foreground">Category</span>
                 <span className="font-medium text-capitalize">{product.category}</span>
               </div>
 
               <div className="flex justify-between gap-4">
-                <span className="text-secondary-text">Availability</span>
+                <span className="text-foreground">Availability</span>
                 <span className="font-medium">
                   {canOrder ? 'Available to order' : 'Currently unavailable'}
                 </span>
               </div>
 
               <div className="flex justify-between gap-4">
-                <span className="text-secondary-text">In stock</span>
+                <span className="text-foreground">In stock</span>
                 <span className="font-medium">{product.stock} available</span>
               </div>
 
               {product.readyInMinutes && (
                 <div className="flex justify-between gap-4">
-                  <span className="text-secondary-text">Ready in</span>
+                  <span className="text-foreground">Ready in</span>
                   <span className="font-medium">{product.readyInMinutes} minutes</span>
                 </div>
               )}
 
               {product.shelfLife && (
                 <div className="flex justify-between gap-4">
-                  <span className="text-secondary-text">Shelf life</span>
+                  <span className="text-foreground">Shelf life</span>
                   <span className="font-medium">{product.shelfLife}</span>
                 </div>
               )}
@@ -158,7 +158,7 @@ export function ProductDetailClient({
                 <h2 className="text-sm font-semibold text-primary tracking-tight uppercase">
                   Ingredients
                 </h2>
-                <p className="mt-2 text-sm text-secondary-text">
+                <p className="mt-2 text-sm text-foreground">
                   {product.ingredients.join(', ')}
                 </p>
               </div>
@@ -169,7 +169,7 @@ export function ProductDetailClient({
                 <h2 className="text-sm font-semibold text-primary tracking-tight uppercase">
                   Allergens
                 </h2>
-                <p className="mt-2 text-sm text-secondary-text">
+                <p className="mt-2 text-sm text-foreground">
                   {product.allergens.join(', ')}
                 </p>
               </div>
@@ -226,7 +226,7 @@ export function ProductDetailClient({
               <Button
                 type="button"
                 size="lg"
-                className="w-full border border-gold-border bg-white text-secondary-text font-semibold hover:bg-gold-border/50 transition-colors disabled:opacity-60"
+                className="w-full border border-gold-border bg-white text-primary font-semibold hover:bg-gold-border/50 transition-colors disabled:opacity-60"
                 disabled
               >
                 Currently unavailable

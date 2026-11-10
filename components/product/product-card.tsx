@@ -65,7 +65,7 @@ export function ProductCard({ product, priority }: { product: Product; priority?
             {product.name}
           </Link>
         </h3>
-        <p className="text-xs text-muted-foreground leading-none uppercase tracking-wider">{variant.label}</p>
+        <p className="text-xs text-foreground leading-none uppercase tracking-wider">{variant.label}</p>
         <div className="mt-auto pt-3">
           <Price price={variant.price} mrp={variant.mrp} size="lg" />
         </div>
@@ -90,7 +90,7 @@ export function ProductCard({ product, priority }: { product: Product; priority?
             <>
               <Link
                 href={href}
-                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'w-full border-gold-border text-secondary-text hover:bg-gold-border hover:text-primary')}
+                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'w-full border-gold-border text-primary hover:bg-gold-border hover:text-primary')}
               >
                 <CalendarPlusIcon data-icon="inline-start" />
                 Order for later
@@ -99,7 +99,7 @@ export function ProductCard({ product, priority }: { product: Product; priority?
                 href={whatsappLink(whatsappProductMessage(product, variant.label))}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={cn(buttonVariants({ variant: 'ghost', size: 'lg' }), 'w-full text-secondary-text hover:text-primary')}
+                className={cn(buttonVariants({ variant: 'ghost', size: 'lg' }), 'w-full text-primary hover:text-primary')}
               >
                 <MessageCircleIcon data-icon="inline-start" />
                 Ask on WhatsApp

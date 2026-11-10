@@ -63,10 +63,10 @@ export default function CustomerOrdersPage() {
     return (
       <main className="mx-auto max-w-5xl px-4 py-20 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-champagne-gold/15 text-champagne-gold">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-champagne-gold/15 text-primary">
             <ClockIcon className="size-5" aria-hidden="true" />
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading your orders…</p>
+          <p className="mt-4 text-sm text-foreground">Loading your orders…</p>
         </div>
       </main>
     )
@@ -95,7 +95,7 @@ export default function CustomerOrdersPage() {
         <div>
           <Link
             href="/account"
-            className="inline-flex items-center gap-2 text-sm font-medium text-secondary-text hover:text-primary transition-colors"
+            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary transition-colors"
           >
             <ArrowLeftIcon className="size-4" aria-hidden="true" />
             My account
@@ -108,11 +108,11 @@ export default function CustomerOrdersPage() {
 
       {!loading && !error && orders.length === 0 && (
         <section className="mt-12 flex flex-col items-center justify-center min-h-[60vh] rounded-xl border border-dashed border-gold-border bg-white p-12 text-center shadow-sm">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-champagne-gold/15 text-champagne-gold mb-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-champagne-gold/15 text-primary mb-4">
             <ShoppingBagIcon className="size-6" aria-hidden="true" />
           </div>
           <h2 className="text-xl font-bold text-primary mb-2">No orders yet</h2>
-          <p className="text-sm text-muted-foreground mb-8">
+          <p className="text-sm text-foreground mb-8">
             Your order history will appear here once you place your first order.
           </p>
           <Link
@@ -136,7 +136,7 @@ export default function CustomerOrdersPage() {
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                   <div>
                     <p className="font-semibold text-primary">{order.orderNumber}</p>
-                    <p className="text-sm text-secondary-text">
+                    <p className="text-sm text-foreground">
                       {new Date(order.createdAt).toLocaleString('en-IN')}
                     </p>
                   </div>
@@ -156,7 +156,7 @@ export default function CustomerOrdersPage() {
                   </span>
                 </div>
               </div>
-              <p className="mt-4 text-sm text-secondary-text">
+              <p className="mt-4 text-sm text-foreground">
                 {order.items.map((item) => `${item.productName} × ${item.quantity}`).join(', ')}
               </p>
             </Link>

@@ -24,15 +24,15 @@ export function ReviewsSection() {
                 <Card className="h-full border border-border rounded-2xl bg-card shadow-sm transition-shadow duration-200 hover:shadow-md">
                   <CardContent className="flex flex-1 flex-col gap-4 p-6 sm:p-8">
                     <StarRow value={t.rating} />
-                    <blockquote className="leading-relaxed text-pretty text-muted-foreground">
+                    <blockquote className="leading-relaxed text-pretty text-foreground">
                       {`“${t.comment}”`}
                     </blockquote>
                   </CardContent>
                   <CardFooter className="flex-col items-start gap-2 p-6 sm:p-8 border-t border-border">
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-foreground">{t.name}</p>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <p className="text-sm text-muted-foreground">{t.location}</p>
+                      <span className="text-xs text-foreground">·</span>
+                      <p className="text-sm text-foreground">{t.location}</p>
                     </div>
                   </CardFooter>
                 </Card>

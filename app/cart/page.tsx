@@ -18,7 +18,7 @@ export default function CartPage() {
     return (
       <main className="mx-auto max-w-5xl px-4 py-20 sm:px-6">
         <div className="rounded-2xl border border-gold-border bg-card p-12 text-center shadow-sm">
-          <p className="text-secondary-text">Loading your cart…</p>
+          <p className="text-foreground">Loading your cart…</p>
         </div>
       </main>
     )
@@ -36,7 +36,7 @@ export default function CartPage() {
             Your cart is empty
           </h1>
 
-          <p className="mt-4 text-secondary-text leading-relaxed">
+          <p className="mt-4 text-foreground leading-relaxed">
             Add some delicious bakes from Bluebell Bakehouse before checking out.
           </p>
 
@@ -57,7 +57,7 @@ export default function CartPage() {
       <div className="mb-12">
         <Link
           href="/products"
-          className="inline-flex items-center gap-2 text-sm font-medium text-secondary-text hover:text-primary transition-colors"
+          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary transition-colors"
         >
           <span>←</span> Continue Shopping
         </Link>
@@ -66,7 +66,7 @@ export default function CartPage() {
           Your Cart
         </h1>
 
-        <p className="mt-3 text-secondary-text">
+        <p className="mt-3 text-foreground">
           {items.length}{' '}
           {items.length === 1 ? 'item' : 'items'} in your cart.
         </p>
@@ -116,11 +116,11 @@ export default function CartPage() {
                         {product.name}
                       </Link>
 
-                      <p className="mt-1.5 text-sm text-secondary-text">
+                      <p className="mt-1.5 text-sm text-foreground">
                         {product.category}
                       </p>
 
-                      <p className="mt-1 text-sm text-secondary-text uppercase tracking-wider">
+                      <p className="mt-1 text-sm text-foreground uppercase tracking-wider">
                         {variant.label}
                       </p>
                     </div>
@@ -198,7 +198,7 @@ export default function CartPage() {
 
           <div className="mt-10 space-y-6">
             <div className="flex justify-between gap-4 text-sm">
-              <span className="text-secondary-text">
+              <span className="text-foreground">
                 Subtotal
               </span>
 
@@ -209,7 +209,7 @@ export default function CartPage() {
 
             {pricing.savings > 0 && (
               <div className="flex justify-between gap-4 text-sm">
-                <span className="text-secondary-text">
+                <span className="text-foreground">
                   Savings
                 </span>
 
@@ -231,7 +231,7 @@ export default function CartPage() {
               </div>
             </div>
 
-            <p className="mt-4 text-xs text-secondary-text">
+            <p className="mt-4 text-xs text-foreground">
               Delivery is free on all orders.
             </p>
           </div>

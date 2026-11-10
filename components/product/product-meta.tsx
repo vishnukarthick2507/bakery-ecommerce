@@ -15,7 +15,7 @@ export function Rating({
     <div className={cn('flex items-center gap-1 text-sm', className)}>
       <StarIcon className="size-4 fill-primary text-primary" aria-hidden="true" />
       <span className="font-medium">{value.toFixed(1)}</span>
-      {count !== undefined && <span className="text-muted-foreground">({count})</span>}
+      {count !== undefined && <span className="text-foreground">({count})</span>}
       <span className="sr-only">
         Rated {value.toFixed(1)} out of 5{count !== undefined ? ` from ${count} reviews` : ''}
       </span>
@@ -54,7 +54,7 @@ export function Price({
       </span>
       {off > 0 && (
         <>
-          <span className="text-sm text-muted-foreground line-through">
+          <span className="text-sm text-foreground line-through">
             <span className="sr-only">Original price </span>
             {formatPrice(mrp)}
           </span>

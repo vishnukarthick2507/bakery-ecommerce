@@ -52,7 +52,7 @@ export function SiteHeader() {
                   href={link.href}
                   aria-current={isActive(link.href) ? 'page' : undefined}
                   className={cn(
-                    'rounded-xl px-4 py-2 text-sm font-medium text-secondary-text transition-all hover:bg-gold-border hover:text-primary hover:border-champagne-gold/30 border-transparent',
+                    'rounded-xl px-4 py-2 text-sm font-medium text-primary transition-all hover:bg-gold-border hover:text-primary hover:border-champagne-gold/30 border-transparent',
                     isActive(link.href)
                       && 'bg-gold-border text-primary border-champagne-gold/50 font-semibold',
                   )}
@@ -122,7 +122,7 @@ export function SiteHeader() {
                     aria-current={isActive(link.href) ? 'page' : undefined}
                     className={cn(
                       'block rounded-xl px-4 py-3 text-base font-medium transition-all border-transparent',
-                      'text-secondary-text hover:text-primary hover:bg-gold-border hover:border-champagne-gold/30',
+                      'text-primary hover:text-primary hover:bg-gold-border hover:border-champagne-gold/30',
                       isActive(link.href)
                         && 'bg-gold-border text-primary border-champagne-gold/50 font-semibold',
                     )}

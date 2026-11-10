@@ -206,7 +206,7 @@ export default function TrackPage() {
     <Suspense fallback={
       <div className="mx-auto max-w-5xl px-4 py-20 sm:px-6">
         <div className="rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
-          <p className="text-muted-foreground">Loading order…</p>
+          <p className="text-foreground">Loading order…</p>
         </div>
       </div>
     }>
@@ -376,7 +376,7 @@ function TrackPageContent() {
         <div className="mb-10">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary transition-colors"
           >
             <ArrowLeftIcon className="size-4 shrink-0" aria-hidden="true" />
             <span>Back to home</span>
@@ -387,7 +387,7 @@ function TrackPageContent() {
               <h1 className="mt-4 text-3xl font-semibold text-primary tracking-tight">
                 Order Confirmed
               </h1>
-              <p className="mt-3 text-muted-foreground">
+              <p className="mt-3 text-foreground">
                 Your Bluebell Bakehouse order has been placed successfully.
               </p>
             </>
@@ -396,7 +396,7 @@ function TrackPageContent() {
               <h1 className="mt-4 text-3xl font-semibold text-primary tracking-tight">
                 Track Your Order
               </h1>
-              <p className="mt-3 text-muted-foreground">
+              <p className="mt-3 text-foreground">
                 Check the latest status of your Bluebell Bakehouse order.
               </p>
             </>
@@ -409,7 +409,7 @@ function TrackPageContent() {
             <h2 className="text-xl font-semibold text-primary mb-1">
               Track Order
             </h2>
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-2 text-foreground">
               Enter your order number to check the latest status.
             </p>
 
@@ -468,7 +468,7 @@ function TrackPageContent() {
             <div className="rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                  <p className="text-sm text-foreground uppercase tracking-wider font-semibold">
                     Order Number
                   </p>
                   <h2 className="mt-1 text-2xl font-bold text-primary">
@@ -483,7 +483,7 @@ function TrackPageContent() {
 
               <div className="mt-8 grid gap-5 md:grid-cols-3">
                 <div className="rounded-xl border border-border p-4">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                  <p className="text-xs text-foreground uppercase tracking-wider font-semibold">
                     Payment
                   </p>
                   <p className="mt-1 font-medium text-foreground">
@@ -491,12 +491,12 @@ function TrackPageContent() {
                       ? 'Cash on Delivery'
                       : 'Online Payment'}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-xs text-foreground">
                     {formatPaymentStatus(order.paymentStatus)}
                   </p>
                 </div>
                 <div className="rounded-xl border border-border p-4">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                  <p className="text-xs text-foreground uppercase tracking-wider font-semibold">
                     Fulfilment
                   </p>
                   <p className="mt-1 font-medium text-foreground">
@@ -506,7 +506,7 @@ function TrackPageContent() {
                   </p>
                 </div>
                 <div className="rounded-xl border border-border p-4">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                  <p className="text-xs text-foreground uppercase tracking-wider font-semibold">
                     Total
                   </p>
                   <p className="mt-1 font-bold text-primary">
@@ -523,7 +523,7 @@ function TrackPageContent() {
                     <XIcon className="size-8 text-destructive" aria-hidden="true" />
                   </div>
                   <h2 className="text-xl font-bold text-primary">Order Cancelled</h2>
-                  <p className="text-muted-foreground text-center">
+                  <p className="text-foreground text-center">
                     This order has been cancelled. If you have any questions,
                     please contact us on WhatsApp.
                   </p>
@@ -535,7 +535,7 @@ function TrackPageContent() {
                   <h2 className="text-xl font-semibold text-primary mb-1">
                     Order Status
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground mb-8">
+                  <p className="mt-1 text-sm text-foreground mb-8">
                     Here&apos;s where your order stands.
                   </p>
 
@@ -609,7 +609,7 @@ function TrackPageContent() {
                                 'text-sm font-semibold',
                                 isCompleted || isCurrent
                                   ? 'text-primary'
-                                  : 'text-muted-foreground',
+                                  : 'text-foreground',
                               )}
                             >
                               {step.label}
@@ -619,7 +619,7 @@ function TrackPageContent() {
                                 'text-xs',
                                 isCompleted || isCurrent
                                   ? 'text-success'
-                                  : 'text-muted-foreground',
+                                  : 'text-foreground',
                               )}
                             >
                               {isCompleted ? step.completedLabel : step.label}
@@ -647,7 +647,7 @@ function TrackPageContent() {
                           <p className="font-medium text-foreground">
                             {item.productName}
                           </p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-foreground">
                             {item.quantity} × ₹
                             {item.unitPrice.toLocaleString('en-IN')}
                           </p>
@@ -672,12 +672,12 @@ function TrackPageContent() {
 
                     <div className="mt-6 space-y-4 text-sm">
                       <div className="flex items-start gap-3">
-                        <Mail className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <Mail className="size-4 mt-0.5 shrink-0 text-foreground" aria-hidden="true" />
                         <div>
                           <p className="font-medium text-foreground">
                             {order.customerName}
                           </p>
-                          <p className="text-muted-foreground">
+                          <p className="text-foreground">
                             {order.phone}
                           </p>
                         </div>
@@ -685,8 +685,8 @@ function TrackPageContent() {
 
                       {order.fulfillmentType === 'DELIVERY' && order.address && (
                         <div className="flex items-start gap-3 mt-4">
-                          <MapPin className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                          <p className="text-muted-foreground">
+                          <MapPin className="size-4 mt-0.5 shrink-0 text-foreground" aria-hidden="true" />
+                          <p className="text-foreground">
                             {order.address.addressLine},{' '}
                             {order.address.city},{' '}
                             {order.address.pincode}
@@ -697,23 +697,23 @@ function TrackPageContent() {
                       {order.fulfillmentType === 'PICKUP' && (
                         <>
                           <div className="flex items-start gap-3 mt-4">
-                            <MapPin className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <MapPin className="size-4 mt-0.5 shrink-0 text-foreground" aria-hidden="true" />
                             <div>
                               <p className="font-medium text-foreground">Pickup Location</p>
-                              <p className="text-sm text-muted-foreground">
+                              <p className="text-sm text-foreground">
                                 Bluebell Bakehouse
                               </p>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-xs text-foreground">
                                 X42V+XP4, Radha Nagar, Lakshmi Nagar,
                                 Chromepet, Tambaram, Chennai 600044
                               </p>
                             </div>
                           </div>
                           <div className="mt-4 rounded-xl border border-border bg-cream/30 p-4">
-                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                            <p className="text-xs font-medium text-foreground uppercase tracking-wider mb-1">
                               Pickup Instructions
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-foreground">
                               Please present your order number at the counter.
                               Pay at the store if you selected Pay at Store.
                             </p>
@@ -730,24 +730,24 @@ function TrackPageContent() {
 
                     <div className="mt-6 space-y-4 text-sm">
                       <div className="flex items-start gap-3">
-                        <Calendar className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <p className="text-muted-foreground">
+                        <Calendar className="size-4 mt-0.5 shrink-0 text-foreground" aria-hidden="true" />
+                        <p className="text-foreground">
                           <span className="font-medium">Date:</span>{' '}
                           {order.scheduledDate}
                         </p>
                       </div>
 
                       <div className="flex items-start gap-3">
-                        <Clock className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <p className="text-muted-foreground">
+                        <Clock className="size-4 mt-0.5 shrink-0 text-foreground" aria-hidden="true" />
+                        <p className="text-foreground">
                           <span className="font-medium">Time:</span>{' '}
                           {order.scheduledTime}
                         </p>
                       </div>
 
                       <div className="flex items-start gap-3">
-                        <CreditCard className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <p className="text-muted-foreground">
+                        <CreditCard className="size-4 mt-0.5 shrink-0 text-foreground" aria-hidden="true" />
+                        <p className="text-foreground">
                           <span className="font-medium">Payment:</span>{' '}
                           {order.paymentMethod === 'COD'
                             ? 'Cash on Delivery'
@@ -758,8 +758,8 @@ function TrackPageContent() {
                       </div>
 
                       <div className="flex items-start gap-3">
-                        <Mail className="size-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <p className="text-muted-foreground">
+                        <Mail className="size-4 mt-0.5 shrink-0 text-foreground" aria-hidden="true" />
+                        <p className="text-foreground">
                           <span className="font-medium">Payment Status:</span>{' '}
                           {formatPaymentStatus(order.paymentStatus)}
                         </p>
@@ -776,12 +776,12 @@ function TrackPageContent() {
 
                   <div className="mt-6 space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="text-foreground">Subtotal</span>
                       <span>₹{order.subtotal.toLocaleString('en-IN')}</span>
                     </div>
 
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Delivery Fee</span>
+                      <span className="text-foreground">Delivery Fee</span>
                       <span>₹{order.deliveryFee.toLocaleString('en-IN')}</span>
                     </div>
 
@@ -798,7 +798,7 @@ function TrackPageContent() {
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
                   <Link
                     href="/track"
-                    className="flex-1 flex items-center justify-center rounded-xl border border-border px-6 py-3.5 font-medium hover:bg-cream/50 text-caramel transition-colors"
+                    className="flex-1 flex items-center justify-center rounded-xl border border-border px-6 py-3.5 font-medium hover:bg-cream/50 text-primary transition-colors"
                   >
                     Track Another Order
                   </Link>

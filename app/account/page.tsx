@@ -49,10 +49,10 @@ export default function AccountPage() {
     return (
       <main className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-champagne-gold/15 text-champagne-gold">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-champagne-gold/15 text-primary">
             <ShoppingBagIcon className="size-5" aria-hidden="true" />
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading your account…</p>
+          <p className="mt-4 text-sm text-foreground">Loading your account…</p>
         </div>
       </main>
     )
@@ -74,7 +74,7 @@ export default function AccountPage() {
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">Redirecting to sign in…</p>
+              <p className="text-sm text-foreground">Redirecting to sign in…</p>
             </>
           )}
         </div>
@@ -86,7 +86,7 @@ export default function AccountPage() {
     <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold text-champagne-gold tracking-widest uppercase">
+          <p className="text-xs font-semibold text-primary tracking-widest uppercase">
             Bluebell Bakehouse
           </p>
           <h1 className="mt-1 font-heading text-3xl font-bold text-primary tracking-tight">
@@ -95,7 +95,7 @@ export default function AccountPage() {
         </div>
         <button
           onClick={logout}
-          className="inline-flex items-center gap-2 rounded-xl border border-gold-border bg-white px-5 py-2.5 text-sm font-semibold text-secondary-text shadow-sm hover:bg-gold-border/50 hover:text-primary transition-colors"
+          className="inline-flex items-center gap-2 rounded-xl border border-gold-border bg-white px-5 py-2.5 text-sm font-semibold text-primary shadow-sm hover:bg-gold-border/50 hover:text-primary transition-colors"
         >
           <LogOutIcon className="size-4" aria-hidden="true" />
           Sign out
@@ -109,35 +109,35 @@ export default function AccountPage() {
           </h2>
           <dl className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <div className="flex flex-col gap-1.5">
-              <dt className="text-sm font-semibold text-secondary-text uppercase tracking-wider">
+              <dt className="text-sm font-semibold text-foreground uppercase tracking-wider">
                 Full name
               </dt>
               <dd className="text-base font-medium text-primary">{profile.name}</dd>
             </div>
             <div className="flex flex-col gap-1.5">
-              <dt className="text-sm font-semibold text-secondary-text uppercase tracking-wider">
+              <dt className="text-sm font-semibold text-foreground uppercase tracking-wider">
                 Email
               </dt>
               <dd className="flex items-center gap-2 text-base font-medium text-primary">
-                <MailIcon className="size-4 text-secondary-text" aria-hidden="true" />
+                <MailIcon className="size-4 text-primary" aria-hidden="true" />
                 {profile.email}
               </dd>
             </div>
             <div className="flex flex-col gap-1.5">
-              <dt className="text-sm font-semibold text-secondary-text uppercase tracking-wider">
+              <dt className="text-sm font-semibold text-foreground uppercase tracking-wider">
                 Phone
               </dt>
               <dd className="flex items-center gap-2 text-base font-medium text-primary">
-                <PhoneIcon className="size-4 text-secondary-text" aria-hidden="true" />
+                <PhoneIcon className="size-4 text-primary" aria-hidden="true" />
                 {profile.phone}
               </dd>
             </div>
             <div className="flex flex-col gap-1.5">
-              <dt className="text-sm font-semibold text-secondary-text uppercase tracking-wider">
+              <dt className="text-sm font-semibold text-foreground uppercase tracking-wider">
                 Member since
               </dt>
               <dd className="text-base font-medium text-primary">
-                <CalendarIcon className="size-4 text-secondary-text mr-2" aria-hidden="true" />
+                <CalendarIcon className="size-4 text-primary mr-2" aria-hidden="true" />
                 {new Date(profile.createdAt).toLocaleDateString('en-IN')}
               </dd>
             </div>
@@ -150,18 +150,18 @@ export default function AccountPage() {
           href="/account/orders"
           className="flex flex-col items-center justify-center py-10 rounded-xl border border-gold-border bg-white shadow-sm hover:bg-gold-border/50 hover:text-primary transition-all"
         >
-          <ShoppingBagIcon className="mb-3 size-5 text-champagne-gold" aria-hidden="true" />
+          <ShoppingBagIcon className="mb-3 size-5 text-primary" aria-hidden="true" />
           <span className="font-semibold text-primary">My orders</span>
-          <span className="mt-1 text-xs text-secondary-text">View order history &amp; tracking</span>
+          <span className="mt-1 text-xs text-foreground">View order history &amp; tracking</span>
         </Link>
 
         <Link
           href="/account/edit-profile"
           className="flex flex-col items-center justify-center py-10 rounded-xl border border-gold-border bg-white shadow-sm hover:bg-gold-border/50 hover:text-primary transition-all"
         >
-          <UserIcon className="mb-3 size-5 text-champagne-gold" aria-hidden="true" />
+          <UserIcon className="mb-3 size-5 text-primary" aria-hidden="true" />
           <span className="font-semibold text-primary">Edit profile</span>
-          <span className="mt-1 text-xs text-secondary-text">Update your personal details</span>
+          <span className="mt-1 text-xs text-foreground">Update your personal details</span>
         </Link>
       </div>
     </main>

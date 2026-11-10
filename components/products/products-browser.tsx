@@ -83,7 +83,7 @@ export function ProductsBrowser({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
           <InputGroup className="h-11 flex-1 bg-card border border-border rounded-xl">
             <InputGroupAddon className="bg-transparent">
-              <SearchIcon className="size-4 text-muted-foreground" />
+              <SearchIcon className="size-4 text-foreground" />
             </InputGroupAddon>
             <InputGroupInput
               type="search"
@@ -132,7 +132,7 @@ export function ProductsBrowser({
           </div>
         </div>
 
-        <p className="text-sm text-muted-foreground" aria-live="polite">
+        <p className="text-sm text-foreground" aria-live="polite">
           {isLoading
             ? 'Loading products…'
             : error
@@ -146,7 +146,7 @@ export function ProductsBrowser({
           <Empty className="border border-dashed border-border bg-card rounded-2xl p-8 text-center">
             <EmptyHeader>
               <EmptyMedia variant="icon">
-                <TriangleAlertIcon className="text-muted-foreground" />
+                <TriangleAlertIcon className="text-foreground" />
               </EmptyMedia>
               <EmptyTitle>Couldn't load products</EmptyTitle>
               <EmptyDescription>
@@ -165,7 +165,7 @@ export function ProductsBrowser({
           <Empty className="border border-dashed border-border bg-card rounded-2xl p-8 text-center">
             <EmptyHeader>
               <EmptyMedia variant="icon">
-                <SearchXIcon className="text-muted-foreground" />
+                <SearchXIcon className="text-foreground" />
               </EmptyMedia>
               <EmptyTitle>No products match</EmptyTitle>
               <EmptyDescription>

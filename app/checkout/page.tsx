@@ -613,7 +613,7 @@ export default function CheckoutPage() {
       <div className="mb-10">
         <Link
           href="/products"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary transition-colors"
         >
           <span>←</span> Continue shopping
         </Link>
@@ -622,7 +622,7 @@ export default function CheckoutPage() {
           Checkout
         </h1>
 
-        <p className="mt-3 text-muted-foreground">
+        <p className="mt-3 text-foreground">
           Enter your details and choose how you would like to receive your
           order.
         </p>
@@ -643,7 +643,7 @@ export default function CheckoutPage() {
                       ? 'bg-caramel text-caramel-foreground border-caramel'
                       : isCurrent
                         ? 'border-primary text-primary'
-                        : 'border-border text-muted-foreground',
+                        : 'border-border text-foreground',
                   )}
                 >
                   {i + 1}
@@ -658,7 +658,7 @@ export default function CheckoutPage() {
                     'text-[0.7rem] font-medium uppercase tracking-wider',
                     isComplete || isCurrent
                       ? 'text-primary font-bold'
-                      : 'text-muted-foreground',
+                      : 'text-foreground',
                   )}
                 >
                   {step.label}
@@ -704,7 +704,7 @@ export default function CheckoutPage() {
                 <h2 className="text-xl font-semibold text-primary mb-1">
                   Customer details
                 </h2>
-                <p className="text-sm text-muted-foreground mb-6">
+                <p className="text-sm text-foreground mb-6">
                   We&apos;ll use this to confirm your order.
                 </p>
 
@@ -822,7 +822,7 @@ export default function CheckoutPage() {
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Delivery or pickup
               </h2>
-              <p className="text-sm text-muted-foreground mb-6">
+              <p className="text-sm text-foreground mb-6">
                 How would you like to receive your order?
               </p>
 
@@ -843,7 +843,7 @@ export default function CheckoutPage() {
                     <div className="font-semibold text-foreground">
                       Delivery
                     </div>
-                    <div className="mt-1 text-sm text-muted-foreground">
+                    <div className="mt-1 text-sm text-foreground">
                       Deliver to my address
                     </div>
                     {!settings?.onlineOrdersEnabled && (
@@ -867,7 +867,7 @@ export default function CheckoutPage() {
                     }`}
                   >
                     <div className="font-semibold text-foreground">Pickup</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
+                    <div className="mt-1 text-sm text-foreground">
                       Pick up from Bluebell Bakehouse
                     </div>
                     {!settings?.onlineOrdersEnabled && (
@@ -970,7 +970,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setActiveStep('details')}
-                  className="text-sm text-muted-foreground hover:text-foreground underline"
+                  className="text-sm text-foreground hover:text-foreground underline"
                 >
                   ← Back
                 </button>
@@ -992,7 +992,7 @@ export default function CheckoutPage() {
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Schedule your order
               </h2>
-              <p className="text-sm text-muted-foreground mb-6">
+              <p className="text-sm text-foreground mb-6">
                 Choose when you&apos;d like to pick up or receive your order.
               </p>
 
@@ -1055,7 +1055,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setActiveStep('fulfilment')}
-                  className="text-sm text-muted-foreground hover:text-foreground underline"
+                  className="text-sm text-foreground hover:text-foreground underline"
                 >
                   ← Back
                 </button>
@@ -1094,7 +1094,7 @@ export default function CheckoutPage() {
               <h2 className="text-xl font-semibold text-primary mb-1">
                 Payment method
               </h2>
-              <p className="text-sm text-muted-foreground mb-6">
+              <p className="text-sm text-foreground mb-6">
                 Choose how you&apos;d like to pay.
               </p>
 
@@ -1118,7 +1118,7 @@ export default function CheckoutPage() {
                       className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${payment === 'cod' ? 'border-caramel bg-caramel/5' : 'border-border hover:bg-cream/50'}`}
                     >
                       <div className="font-semibold text-foreground">Cash on Delivery</div>
-                      <div className="mt-1 text-sm text-muted-foreground">
+                      <div className="mt-1 text-sm text-foreground">
                         Pay when your order arrives
                       </div>
                     </button>
@@ -1132,7 +1132,7 @@ export default function CheckoutPage() {
                       className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${payment === 'online' ? 'border-caramel bg-caramel/5' : 'border-border hover:bg-cream/50'}`}
                     >
                       <div className="font-semibold text-foreground">Online Payment</div>
-                      <div className="mt-1 text-sm text-muted-foreground">
+                      <div className="mt-1 text-sm text-foreground">
                         Pay securely via Razorpay — UPI,
                         cards & netbanking
                       </div>
@@ -1150,7 +1150,7 @@ export default function CheckoutPage() {
                       className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${payment === 'online' ? 'border-caramel bg-caramel/5' : 'border-border hover:bg-cream/50'}`}
                     >
                       <div className="font-semibold text-foreground">Online Payment</div>
-                      <div className="mt-1 text-sm text-muted-foreground">
+                      <div className="mt-1 text-sm text-foreground">
                         Pay securely via Razorpay — UPI,
                         cards & netbanking
                       </div>
@@ -1165,7 +1165,7 @@ export default function CheckoutPage() {
                       className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${payment === 'pay_at_store' ? 'border-caramel bg-caramel/5' : 'border-border hover:bg-cream/50'}`}
                     >
                       <div className="font-semibold text-foreground">Pay at Store</div>
-                      <div className="mt-1 text-sm text-muted-foreground">
+                      <div className="mt-1 text-sm text-foreground">
                         Pay when you collect your order
                       </div>
                     </button>
@@ -1178,7 +1178,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setActiveStep('schedule')}
-                  className="text-sm text-muted-foreground hover:text-foreground underline"
+                  className="text-sm text-foreground hover:text-foreground underline"
                 >
                   ← Back
                 </button>
@@ -1210,7 +1210,7 @@ export default function CheckoutPage() {
                     <p className="font-medium text-foreground">
                       {fulfilment === 'delivery' ? 'Delivery' : 'Pickup'}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-foreground">
                       {scheduledDate} · {scheduledTime}
                     </p>
                   </div>
@@ -1233,7 +1233,7 @@ export default function CheckoutPage() {
                         <p className="font-medium text-foreground">
                           {line.product.name}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-foreground">
                           {line.variant.label} ×{' '}
                           {line.item.quantity}
                         </p>
@@ -1249,7 +1249,7 @@ export default function CheckoutPage() {
 
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">
+                    <span className="text-foreground">
                       Subtotal
                     </span>
                     <span>{formatPrice(pricing.subtotal)}</span>
@@ -1305,7 +1305,7 @@ export default function CheckoutPage() {
                 </button>
               </div>
 
-              <p className="mt-5 text-center text-xs text-muted-foreground">
+              <p className="mt-5 text-center text-xs text-foreground">
                 Your order will be securely saved to our system.
               </p>
             </div>
@@ -1328,7 +1328,7 @@ export default function CheckoutPage() {
                   <p className="font-medium text-foreground line-clamp-1">
                     {line.product.name}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-foreground">
                     {line.variant.label} ×{' '}
                     {line.item.quantity}
                   </p>
@@ -1344,7 +1344,7 @@ export default function CheckoutPage() {
 
           <div className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">
+              <span className="text-foreground">
                 Subtotal
               </span>
               <span>{formatPrice(pricing.subtotal)}</span>
@@ -1355,7 +1355,7 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <p className="mt-5 text-xs text-muted-foreground text-center">
+          <p className="mt-5 text-xs text-foreground text-center">
             Delivery is currently free on all orders.
           </p>
 

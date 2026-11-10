@@ -29,7 +29,7 @@ export function CartLine({ line, onNavigate }: { line: PricedLine; onNavigate?: 
           </Link>
           <span className="text-sm font-semibold text-primary">{formatPrice(lineTotal)}</span>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-foreground">
           {variant.label} · {formatPrice(variant.price)} each
         </p>
         {product.availability !== 'AVAILABLE_NOW' && (

@@ -109,7 +109,7 @@ export function ProductFiltersPanel({
           aria-label="Price range"
           className="mt-2"
         />
-        <p className="flex justify-between text-sm text-muted-foreground">
+        <p className="flex justify-between text-sm text-foreground">
           <span>{formatPrice(value.price[0])}</span>
           <span>
             {formatPrice(value.price[1])}
