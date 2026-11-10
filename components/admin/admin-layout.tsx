@@ -224,6 +224,81 @@ export default function AdminLayout({
           )}
         >
           <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="lg:hidden rounded-lg p-2 text-primary hover:bg-gold-border hover:text-primary"
+              aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              {sidebarOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+            </button>
+            <div className="hidden lg:flex items-center gap-2">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-champagne-gold text-midnight-navy">
+                <Cake className="size-4" aria-hidden="true" />
+              </div>
+              <span className="font-heading font-bold text-midnight-navy">
+                Bluebell Bakehouse
+              </span>
+              <span className="text-xs text-midnight-navy">Admin</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="hidden lg:flex items-center gap-2 rounded-lg px-3 py-2 text-primary border border-gold-border hover:bg-gold-border/50 hover:text-primary transition-colors"
+            >
+              <LogOutIcon className="size-4 text-primary" aria-hidden="true" />
+              Logout
+            </button>
+          </div>
+        </header>
+
+        {/* Mobile header */}
+        <header
+          className="lg:hidden flex items-center justify-between border-b border-gold-border bg-white px-4 py-3"
+        >
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="rounded-lg p-2 text-primary hover:bg-gold-border"
+            aria-label="Open menu"
+          >
+            <Menu className="size-6" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-champagne-gold text-midnight-navy">
+              <Cake className="size-4" aria-hidden="true" />
+            </div>
+            <span className="font-heading font-bold text-midnight-navy">
+              Bluebell Bakehouse
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-lg p-2 text-primary hover:bg-gold-border"
+            aria-label="Logout"
+          >
+            <LogOutIcon className="size-5 text-primary" />
+          </button>
+        </header>
+
+        <main className="flex-1 overflow-x-auto overflow-y-hidden bg-warm-ivory p-6 lg:p-8">
+          {children}
+        </main>
+        </div>
+
+        {/* Desktop + Mobile content area */}
+      <div className="flex-1 min-w-0 flex-col relative">
+        {/* Desktop header */}
+        <header
+          className={cn(
+            'lg:block sticky top-0 z-30 flex items-center justify-between border-b border-gold-border bg-white/95 backdrop-blur px-6 py-4 shadow-sm',
+          )}
+        >
+          <div className="flex items-center gap-4">
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -239,7 +314,7 @@ export default function AdminLayout({
               <span className="font-heading font-bold text-midnight-navy">
                 Bluebell Bakehouse
               </span>
-              <span className="text-xs text-secondary-text">Admin</span>
+              <span className="text-xs text-midnight-navy">Admin</span>
             </div>
           </div>
 

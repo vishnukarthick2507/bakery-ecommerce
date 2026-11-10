@@ -846,7 +846,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   {/* Password strength meter (register only) */}
                   <div className="mt-2">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground">
+                      <span className="text-xs font-medium text-foreground">
                         Password strength
                       </span>
                       <span
@@ -1032,7 +1032,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
             {primaryButton(isRegister ? 'Create account' : 'Sign in')}
 
             {isLogin && (
-              <p className="mt-1 text-sm text-center text-muted-foreground">
+              <p className="mt-1 text-sm text-center text-foreground">
                 Forgot your password?{' '}
                 <button
                   type="button"
@@ -1087,14 +1087,14 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   {submitting ? 'Sending…' : 'Send OTP'}
                 </button>
 
-                <p className="mt-3 text-sm text-muted-foreground">
+                <p className="mt-3 text-sm text-foreground">
                   A 6-digit code will be sent to your email address.
                 </p>
               </>
             ) : otpStep === 'verify' ? (
               <>
                 <div className="bg-cream rounded-xl p-5">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-foreground">
                     Enter the 6-digit code sent to{' '}
                     <span className="font-medium text-primary">
                       {email || ''}
@@ -1165,7 +1165,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
               // Registration step (new customer after OTP verification)
               <form onSubmit={handleCompleteRegistration} className="space-y-5">
                 <div className="bg-cream rounded-xl p-5">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-foreground">
                     Email verified: <span className="font-medium text-primary">{email}</span>. Enter your details to continue.
                   </p>
                 </div>
@@ -1333,7 +1333,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
                   )}
                 </div>
 
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="mt-2 text-xs text-foreground">
                   Your email address is verified and cannot be changed here. To
                   use a different email, restart OTP verification.
                 </p>

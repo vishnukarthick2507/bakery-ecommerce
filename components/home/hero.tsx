@@ -19,7 +19,7 @@ export function Hero() {
           <p
             className={cn(
               'w-fit rounded-full bg-champagne-gold/20 px-3 py-1 text-sm font-semibold text-white tracking-wide uppercase border border-champagne-gold/40',
-              'animate-in fade-in slide-in-from-bottom-4 duration-700',
+              'animate-in fade-in slide-in-from-bottom-4 duration-700 delay-0',
             )}
           >
             Artisan bakery · Chromepet, Chennai

@@ -9,7 +9,7 @@ const fetchMock = vi.fn();
 
 vi.stubGlobal("fetch", fetchMock);
 
-const brevoEnvVars = ["BREVO_API_KEY", "BREVO_FROM_EMAIL", "BREVO_FROM_NAME"];
+const brevoEnvVars = ["BREVO_API_KEY", "BREVO_SMTP_HOST", "BREVO_SMTP_USER", "BREVO_SMTP_KEY", "BREVO_FROM_EMAIL", "BREVO_FROM_NAME"];
 
 function setBrevoEnv(values: Record<string, string>) {
   for (const [key, value] of Object.entries(values)) {
