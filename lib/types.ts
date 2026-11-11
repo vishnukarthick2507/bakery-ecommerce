@@ -15,7 +15,7 @@ export interface Category {
 export interface ProductVariant {
   id: string
   label: string
-  grams: number
+  grams?: number
   price: number
   mrp: number
 }
@@ -32,7 +32,7 @@ export interface Product {
   variants: ProductVariant[]
   rating: number
   reviewCount: number
-  isVeg: boolean
+  isVeg?: boolean
   availability: AvailabilityStatus
   readyInMinutes?: number
   tags: Array<'bestseller' | 'special' | 'fresh'>

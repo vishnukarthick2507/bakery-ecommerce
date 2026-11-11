@@ -43,6 +43,7 @@ export async function recordInventoryMovement(params: {
     | "MANUAL_ADJUSTMENT"
     | "RESTOCK"
     | "EXPIRY_RELEASE";
+  adjustmentReason?: string;
   relatedOrderId?: mongoose.Types.ObjectId;
   relatedUserId?: mongoose.Types.ObjectId;
 }): Promise<void> {
@@ -93,6 +94,10 @@ export async function recordInventoryMovement(params: {
     newStock: params.newStock,
     reason: params.reason,
   };
+
+  if (params.adjustmentReason) {
+    movementData.adjustmentReason = params.adjustmentReason;
+  }
 
   if (params.relatedOrderId) {
     movementData.relatedOrderId = params.relatedOrderId;

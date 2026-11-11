@@ -15,6 +15,7 @@ import { Admin } from "../src/models/Admin.js";
 import { Product } from "../src/models/Product.js";
 import { InventoryMovement } from "../src/models/InventoryMovement.js";
 import productRoutes from "../src/routes/productRoutes.js";
+import adminInventoryRoutes from "../src/routes/adminInventoryRoutes.js";
 import {
   deleteAsset,
   extractPublicId,
@@ -59,6 +60,7 @@ function createTestApp() {
   const app = express();
   app.use(express.json());
   app.use("/api/products", productRoutes);
+  app.use("/api/admin/inventory", adminInventoryRoutes);
   return app;
 }
 
@@ -155,7 +157,7 @@ describe("Inventory ledger consistency — manual stock adjustment", () => {
       const res = await request(app)
         .patch(`/api/products/${productId}`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ stock: 25 });
+        .send({ stock: 25, stockAdjustmentReason: "Morning bake count correction" });
 
       expect(res.status).toBe(200);
 
@@ -169,7 +171,25 @@ describe("Inventory ledger consistency — manual stock adjustment", () => {
         reason: "MANUAL_ADJUSTMENT",
       });
       expect(movements).toHaveLength(1);
+      expect(movements[0]!.adjustmentReason).toBe("Morning bake count correction");
+      expect(movements[0]!.createdAt).toBeInstanceOf(Date);
       expect(movements[0]!.quantityChange).toBe(15);
+
+      const history = await request(app)
+        .get("/api/admin/inventory/movements?page=1&limit=1")
+        .set("Authorization", `Bearer ${token}`);
+      expect(history.status).toBe(200);
+      expect(history.body.pagination).toMatchObject({ page: 1, limit: 1, total: 1, totalPages: 1 });
+      expect(history.body.movements[0]).toMatchObject({
+        adjustmentReason: "Morning bake count correction",
+        reason: "MANUAL_ADJUSTMENT",
+      });
+      expect(history.body.movements[0].createdAt).toBeDefined();
+
+      const invalidPage = await request(app)
+        .get("/api/admin/inventory/movements?page=abc&limit=1")
+        .set("Authorization", `Bearer ${token}`);
+      expect(invalidPage.status).toBe(400);
       expect(movements[0]!.previousStock).toBe(10);
       expect(movements[0]!.newStock).toBe(25);
     });

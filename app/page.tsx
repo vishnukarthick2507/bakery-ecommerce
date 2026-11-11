@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CinematicIntro } from '@/components/home/cinematic-intro'
+import { BluebellCinematicIntro } from '@/components/home/cinematic-intro'
 import { Hero } from '@/components/home/hero'
 import { CategoriesSection } from '@/components/home/categories-section'
 import { AvailableNowRail } from '@/components/home/product-rail'
@@ -24,9 +24,7 @@ export default function HomePage() {
 
   return (
     <>
-      <CinematicIntro onComplete={() => setIntroComplete(true)} />
-      {introComplete && (
-        <>
+      <div className={`homepage-under-intro${introComplete ? ' homepage-under-intro--ready' : ''}`}>
           <Hero />
           <CategoriesSection categories={categories} />
           <AvailableNowRail
@@ -47,8 +45,8 @@ export default function HomePage() {
             <SectionHeading id="contact-title" eyebrow="Visit us" title="Find the bakery" />
             <ContactBlock />
           </Section>
-        </>
-      )}
+      </div>
+      {!introComplete && <BluebellCinematicIntro onComplete={() => setIntroComplete(true)} />}
     </>
   )
 }

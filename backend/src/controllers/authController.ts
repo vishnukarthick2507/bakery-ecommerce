@@ -6,7 +6,10 @@ import { z } from "zod";
 import { Admin } from "../models/Admin.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import { getJwtSecret } from "../config/jwt.js";
-import { getBrevoPresenceChecks } from "../services/emailService.js";
+import {
+  getBrevoPresenceChecks,
+  sendAdminLoginAlertOnce,
+} from "../services/emailService.js";
 
 const JWT_EXPIRES_IN = "7d";
 
@@ -111,6 +114,16 @@ export const adminLogin = async (
     );
 
     setAdminTokenCookie(res, token);
+
+    const requestId = (req as Request & { id?: string }).id;
+    if (requestId) {
+      void sendAdminLoginAlertOnce(requestId, {
+        username: admin.username,
+        occurredAt: new Date(),
+        ...(req.ip ? { ipAddress: req.ip } : {}),
+        ...(req.get("user-agent") ? { userAgent: req.get("user-agent")! } : {}),
+      }).catch(() => undefined);
+    }
 
     res.status(200).json({
       message: "Login successful",

@@ -45,9 +45,17 @@ export const getInventoryMovements = async (
     }
 
     const { page, limit, productId, reason } = parsed.data;
-    const pageNum = page !== undefined ? parseInt(page, 10) : undefined;
-    const limitNum = limit !== undefined ? parseInt(limit, 10) : undefined;
+    const pageNum = page !== undefined ? Number(page) : undefined;
+    const limitNum = limit !== undefined ? Number(limit) : undefined;
     const hasPagination = pageNum !== undefined && limitNum !== undefined;
+
+    if (
+      (pageNum !== undefined && (!Number.isInteger(pageNum) || pageNum < 1)) ||
+      (limitNum !== undefined && (!Number.isInteger(limitNum) || limitNum < 1))
+    ) {
+      res.status(400).json({ message: "Page and limit must be positive integers" });
+      return;
+    }
 
     const filter: Record<string, unknown> = {};
 
@@ -100,6 +108,7 @@ export const getInventoryMovements = async (
       previousStock: m.previousStock,
       newStock: m.newStock,
       reason: m.reason,
+      adjustmentReason: m.adjustmentReason ?? null,
       relatedOrderId: m.relatedOrderId?.toString() ?? null,
       relatedUserId: m.relatedUserId?.toString() ?? null,
       createdAt: m.createdAt,

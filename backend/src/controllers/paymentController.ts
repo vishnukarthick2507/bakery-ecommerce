@@ -13,6 +13,7 @@ import {
 } from "../services/inventory.js";
 import { ONLINE_RESERVATION_TTL_MS } from "../services/inventoryExpiry.js";
 import { recalculateCustomerMetrics } from "../services/customerMetrics.js";
+import { notifyCustomerOrder, orderEmailDetails } from "../services/customerOrderNotifications.js";
 import {
   getRazorpayClient,
   getRazorpayKeyId,
@@ -70,20 +71,25 @@ export async function markOrderPaid(
   razorpayPaymentId: string,
 ): Promise<void> {
   const session = await mongoose.startSession();
+  let notificationOrder: IOrder | undefined;
+  let notificationEventId: string | undefined;
   try {
-    await session.withTransaction(async () => {
+    const transactionResult = await session.withTransaction(async () => {
       const order = await Order.findOne({
+        paymentMethod: "ONLINE",
         $or: [{ razorpayOrderId }, { razorpayOrderIds: razorpayOrderId }],
       }).session(session);
-      if (!order) return;
+      if (!order) return null;
 
       const capturedPaymentIds = order.razorpayPaymentIds ?? [];
+      const wasPending = order.paymentStatus === "PENDING";
+      const previouslyFailed = order.paymentStatus === "FAILED";
       if (order.paymentStatus === "PAID") {
         if (
           order.razorpayPaymentId === razorpayPaymentId ||
           capturedPaymentIds.includes(razorpayPaymentId)
         ) {
-          return;
+          return null;
         }
 
         order.razorpayPaymentIds = [...capturedPaymentIds, razorpayPaymentId];
@@ -91,15 +97,15 @@ export async function markOrderPaid(
         order.reconciliationReason =
           "Multiple Razorpay payment IDs were captured for this order; verify the duplicate charge and arrange a refund manually.";
         await order.save({ session });
-        return;
+        return null;
       }
+
+      if (!wasPending && !previouslyFailed) return null;
 
       const supersededAttempt = Boolean(
         order.razorpayOrderId && order.razorpayOrderId !== razorpayOrderId,
       );
 
-      order.paymentStatus = "PAID";
-      order.razorpayPaymentId = razorpayPaymentId;
       order.razorpayPaymentIds = [...new Set([...capturedPaymentIds, razorpayPaymentId])];
 
       // Record server-side paid timestamp when first marked PAID.
@@ -107,12 +113,18 @@ export async function markOrderPaid(
         order.paidAt = new Date();
       }
 
+      order.paymentStatus = "PAID";
+      order.razorpayPaymentId = razorpayPaymentId;
+
       const inventoryUnavailable =
         order.inventoryStatus === "RELEASED" ||
         order.orderStatus === "CANCELLED" ||
         !order.inventoryStatus;
 
-      if (inventoryUnavailable) {
+      if (previouslyFailed) {
+        order.reconciliationStatus = "REVIEW_REQUIRED";
+        order.reconciliationReason = "Payment was captured after the attempt had already failed and inventory was released; verify the charge and arrange fulfillment or refund manually.";
+      } else if (inventoryUnavailable) {
         order.reconciliationStatus = "REVIEW_REQUIRED";
         order.reconciliationReason = supersededAttempt
           ? "A superseded Razorpay attempt was captured after inventory was released; review stock and arrange fulfillment or refund manually."
@@ -133,7 +145,6 @@ export async function markOrderPaid(
       }
       order.reservationExpiresAt = undefined;
       await order.save({ session });
-
       // Recalculate customer metrics after successful payment confirmation.
       // Best-effort: metrics failure must not invalidate a confirmed payment.
       if (order.userId) {
@@ -146,9 +157,24 @@ export async function markOrderPaid(
           );
         }
       }
+      return wasPending && !inventoryUnavailable && !supersededAttempt
+        ? { order, paymentId: razorpayPaymentId }
+        : null;
     });
+    if (transactionResult) {
+      notificationOrder = transactionResult.order;
+      notificationEventId = `paid:${transactionResult.paymentId}`;
+    }
   } finally {
     await session.endSession();
+  }
+  if (notificationOrder && notificationEventId) {
+    void notifyCustomerOrder(
+      notificationOrder,
+      "PAYMENT_CONFIRMED",
+      notificationEventId,
+      orderEmailDetails(notificationOrder),
+    );
   }
 }
 
@@ -159,11 +185,12 @@ export async function markOrderPaymentFailed(
   try {
     await session.withTransaction(async () => {
       const order = await Order.findOne({
+        paymentMethod: "ONLINE",
         $or: [{ razorpayOrderId }, { razorpayOrderIds: razorpayOrderId }],
         paymentStatus: "PENDING",
       }).session(session);
-      if (!order) return;
-      if (order.razorpayOrderId !== razorpayOrderId) return;
+      if (!order) return null;
+      if (order.razorpayOrderId !== razorpayOrderId) return null;
 
       if (order.inventoryStatus === "RESERVED") {
         await restoreInventory(session, order.items);
@@ -173,44 +200,6 @@ export async function markOrderPaymentFailed(
       order.paymentStatus = "FAILED";
       await order.save({ session });
 
-      // Recalculate customer metrics after payment failure.
-      // Best-effort: metrics failure must not block failure recording.
-      if (order.userId) {
-        try {
-          await recalculateCustomerMetrics(order.userId);
-        } catch (metricsError) {
-          console.error(
-            `Customer metrics recalculation failed for user ${order.userId}:`,
-            metricsError,
-          );
-        }
-      }
-    });
-  } finally {
-    await session.endSession();
-  }
-}
-
-async function markOrderPaymentFailedById(orderId: string): Promise<void> {
-  const session = await mongoose.startSession();
-  try {
-    await session.withTransaction(async () => {
-      const order = await Order.findOne({
-        _id: orderId,
-        paymentStatus: "PENDING",
-      }).session(session);
-      if (!order) return;
-
-      if (order.inventoryStatus === "RESERVED") {
-        await restoreInventory(session, order.items);
-        order.inventoryStatus = "RELEASED";
-      }
-      order.reservationExpiresAt = undefined;
-      order.paymentStatus = "FAILED";
-      await order.save({ session });
-
-      // Recalculate customer metrics after payment failure.
-      // Best-effort: metrics failure must not block failure recording.
       if (order.userId) {
         try {
           await recalculateCustomerMetrics(order.userId);
@@ -292,7 +281,10 @@ async function createRazorpayAttempt(
   }
 
   // Amount comes from MongoDB only — never from the browser.
-  const amount = toPaise(order.totalAmount);
+  if (order.paymentMethod !== "ONLINE") {
+    throw new Error("Only online orders can create a Razorpay payment");
+  }
+    const amount = toPaise(order.totalAmount);
 
   if (!Number.isSafeInteger(amount) || amount <= 0) {
     throw new Error("Order amount is invalid");
@@ -311,8 +303,6 @@ async function createRazorpayAttempt(
   } catch (razorpayError) {
     console.error("Razorpay order creation failed:", razorpayError);
 
-    await markOrderPaymentFailedById(order._id.toString());
-
     throw new Error(
       "Unable to start online payment right now. Please try again or choose Cash on Delivery.",
     );
@@ -322,6 +312,7 @@ async function createRazorpayAttempt(
     {
       _id: order._id,
       paymentStatus: "PENDING",
+      paymentMethod: "ONLINE",
       inventoryStatus: "RESERVED",
       orderStatus: { $ne: "CANCELLED" },
     },
@@ -680,6 +671,11 @@ export const verifyPayment = async (
         message:
           "Payment verification failed. If any money was deducted, it will be refunded automatically.",
       });
+      return;
+    }
+
+    if (order.paymentMethod !== "ONLINE") {
+      res.status(400).json({ message: "This order is not an online payment order" });
       return;
     }
 

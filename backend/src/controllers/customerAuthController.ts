@@ -430,10 +430,13 @@ export const googleAuth = async (
     setCustomerTokenCookie(res, token);
 
     // Validate redirectTo to prevent open redirects.
-    let safeRedirect = redirectTo;
-    if (!safeRedirect || !safeRedirect.startsWith("/")) {
-      safeRedirect = "/account";
-    }
+    const safeRedirect =
+      redirectTo.startsWith("/") &&
+      !redirectTo.startsWith("//") &&
+      !redirectTo.startsWith("/\\") &&
+      !redirectTo.includes("\\")
+        ? redirectTo
+        : "/account";
 
     res.status(200).json({
       message: "Google sign-in successful",

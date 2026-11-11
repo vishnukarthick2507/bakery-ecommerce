@@ -18,7 +18,22 @@ export type PaymentMethod = "COD" | "ONLINE" | "PAY_AT_STORE";
 export type FulfillmentType = "DELIVERY" | "PICKUP";
 export type InventoryStatus = "RESERVED" | "COMMITTED" | "RELEASED";
 
-export type ProposalStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED";
+export type ProposalStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "ALTERNATIVE_REQUESTED";
+
+export interface IRescheduleProposal {
+  proposalId: string;
+  previousConfirmedSlot?: Date;
+  proposedSlot: Date;
+  reason: string;
+  proposedBy: mongoose.Types.ObjectId;
+  proposedAt: Date;
+  status: ProposalStatus;
+  expiresAt: Date;
+  customerResponse?: "ACCEPTED" | "DECLINED" | "REQUESTED_ALTERNATIVE";
+  customerResponseAt?: Date;
+  customerAlternativeSlot?: Date;
+  customerAlternativeNote?: string;
+}
 
 export interface IProposedSlot {
   time: Date;
@@ -77,6 +92,7 @@ export interface IOrder extends Document {
   requestedSlot?: Date;
   confirmedSlot?: Date;
   proposedSlot?: IProposedSlot;
+  rescheduleProposals: IRescheduleProposal[];
   slotHistory?: ISlotHistoryEntry[];
   reschedulePreviousStatus?: OrderStatus | undefined;
   paymentMethod: PaymentMethod;
@@ -316,9 +332,35 @@ const orderSchema = new Schema<IOrder>(
       proposedAt: { type: Date },
       status: {
         type: String,
-        enum: ["PENDING", "ACCEPTED", "DECLINED", "EXPIRED"],
+            enum: ["PENDING", "ACCEPTED", "DECLINED", "EXPIRED", "ALTERNATIVE_REQUESTED"],
       },
       expiresAt: { type: Date },
+    },
+
+    rescheduleProposals: {
+      type: [
+        {
+          proposalId: { type: String },
+          previousConfirmedSlot: { type: Date },
+          proposedSlot: { type: Date },
+          reason: { type: String, trim: true },
+          proposedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+          proposedAt: { type: Date },
+          status: {
+            type: String,
+            enum: ["PENDING", "ACCEPTED", "DECLINED", "EXPIRED", "ALTERNATIVE_REQUESTED"],
+          },
+          expiresAt: { type: Date },
+          customerResponse: {
+            type: String,
+            enum: ["ACCEPTED", "DECLINED", "REQUESTED_ALTERNATIVE"],
+          },
+          customerResponseAt: { type: Date },
+          customerAlternativeSlot: { type: Date },
+          customerAlternativeNote: { type: String, trim: true, maxlength: 500 },
+        },
+      ],
+      default: [],
     },
 
     slotHistory: [

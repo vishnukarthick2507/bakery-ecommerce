@@ -45,6 +45,22 @@ type ProductForm = {
   images: string[]
 }
 
+const DEFAULT_CATEGORIES = [
+  'Breads',
+  'Brownies',
+  'Cakes',
+  'Cheesecakes',
+  'Cookies',
+  'Cupcakes',
+  'Donuts',
+  'Pastries',
+  'Puffs',
+  'Rolls',
+  'Samosas',
+  'Sandwiches',
+  'Savouries',
+]
+
 const emptyForm: ProductForm = {
   name: '',
   slug: '',
@@ -104,7 +120,7 @@ function availabilityBadge(availability: Availability, active: boolean) {
 
 function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
-  const [categories, setCategories] = useState<string[]>([])
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -179,7 +195,7 @@ function AdminProductsPage() {
       setTotal(fetchedTotal)
       setTotalPages(fetchedTotalPages)
       setCategories(
-        Array.from(new Set(fetchedProducts.map((product) => product.category)))
+        Array.from(new Set([...DEFAULT_CATEGORIES, ...fetchedProducts.map((product) => product.category)]))
           .sort((first, second) => first.localeCompare(second)),
       )
     } catch (err) {

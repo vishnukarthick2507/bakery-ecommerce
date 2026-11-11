@@ -14,6 +14,8 @@ type Product = {
   active: boolean
 }
 
+const MOVEMENTS_PAGE_SIZE = 20
+
 function AdminInventoryPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [stockDrafts, setStockDrafts] = useState<Record<string, string>>({})
@@ -37,6 +39,12 @@ function AdminInventoryPage() {
   }>>([])
   const [movementsLoading, setMovementsLoading] = useState(false)
   const [movementsError, setMovementsError] = useState('')
+  const [movementsPage, setMovementsPage] = useState(1)
+  const [movementsTotalPages, setMovementsTotalPages] = useState(0)
+
+  useEffect(() => {
+    setMovementsPage(1)
+  }, [movementsTab])
 
   async function fetchProducts() {
     try {
@@ -69,7 +77,7 @@ function AdminInventoryPage() {
     if (movementsTab === 'movements') {
       fetchMovements()
     }
-  }, [movementsTab])
+  }, [movementsTab, movementsPage])
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase()
@@ -123,15 +131,21 @@ function AdminInventoryPage() {
     try {
       setMovementsLoading(true)
       setMovementsError('')
-      const response = await fetch('/api/admin/inventory/movements', {
+      const params = new URLSearchParams({
+        page: String(movementsPage),
+        limit: String(MOVEMENTS_PAGE_SIZE),
+      })
+      const response = await fetch(`/api/admin/inventory/movements?${params}`, {
         cache: 'no-store',
         credentials: 'include',
       })
       if (!response.ok) {
-        throw new Error('Unable to fetch inventory movements')
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.message || 'Unable to fetch inventory movements')
       }
       const data = await response.json()
       setMovements(data.movements ?? [])
+      setMovementsTotalPages(data.pagination?.totalPages ?? 0)
     } catch (err) {
       setMovementsError(err instanceof Error ? err.message : 'Unable to fetch movements')
     } finally {
@@ -279,32 +293,59 @@ function AdminInventoryPage() {
               </div>
             )}
             {!movementsLoading && !movementsError && movements.length > 0 && (
-              <div className="divide-y divide-border">
-                {movements.map((m) => (
-                  <article key={m.id} className="p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h3 className="font-semibold text-primary">{m.productName}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {m.quantityChange > 0 ? '+' : ''}{m.quantityChange} units
-                      </p>
+              <>
+                <div className="divide-y divide-border">
+                  {movements.map((m) => (
+                    <article key={m.id} className="p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="font-semibold text-primary">{m.productName}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {m.quantityChange > 0 ? '+' : ''}{m.quantityChange} units
+                        </p>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        <span className="block">Reason: {m.reason.replaceAll('_', ' ')}</span>
+                        {m.relatedOrderId && (
+                          <span className="block">Order: {m.relatedOrderId}</span>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        <span className="block">
+                          Stock: {m.previousStock} → {m.newStock}
+                        </span>
+                        <span className="block">
+                          {new Date(m.createdAt).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                {movementsTotalPages > 1 && (
+                  <div className="flex items-center justify-between gap-4 border-t border-border p-4">
+                    <span className="text-sm text-muted-foreground">
+                      Page {movementsPage} of {movementsTotalPages}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMovementsPage((page) => Math.max(1, page - 1))}
+                        disabled={movementsPage === 1 || movementsLoading}
+                        className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMovementsPage((page) => Math.min(movementsTotalPages, page + 1))}
+                        disabled={movementsPage >= movementsTotalPages || movementsLoading}
+                        className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-50"
+                      >
+                        Next
+                      </button>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      <span className="block">Reason: {m.reason.replaceAll('_', ' ')}</span>
-                      {m.relatedOrderId && (
-                        <span className="block">Order: {m.relatedOrderId}</span>
-                      )}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      <span className="block">
-                        Stock: {m.previousStock} → {m.newStock}
-                      </span>
-                      <span className="block">
-                        {new Date(m.createdAt).toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                  </article>
-                ))}
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

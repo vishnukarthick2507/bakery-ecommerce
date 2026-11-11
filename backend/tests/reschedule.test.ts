@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { beforeAll, beforeEach, afterAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, afterAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import express from "express";
 import { MongoMemoryServer } from "mongodb-memory-server";
@@ -21,6 +21,12 @@ import {
   clearTestDB,
   disconnectTestDB,
 } from "./testDatabase.js";
+
+const customerNotificationMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("../src/services/customerOrderNotifications.js", () => ({
+  notifyCustomerOrder: (...args: unknown[]) => customerNotificationMock(...args),
+  orderEmailDetails: () => "mock order details",
+}));
 
 let mongoServer: MongoMemoryServer;
 
@@ -184,6 +190,7 @@ describe("Reschedule Proposal", () => {
   );
 
   beforeEach(async () => {
+      customerNotificationMock.mockClear();
     await clearTestDB();
     await Admin.create({
       username: "testadmin",
@@ -235,6 +242,11 @@ describe("Reschedule Proposal", () => {
       expect(updated?.orderStatus).toBe("RESCHEDULE_PROPOSED");
       expect(updated?.proposedSlot?.status).toBe("PENDING");
       expect(updated?.requestedSlot?.getTime()).toBe(order.requestedSlot.getTime()); // unchanged
+      expect(updated?.rescheduleProposals).toHaveLength(1);
+      expect(updated?.rescheduleProposals?.[0]?.reason).toBe("Requested slot unavailable");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(customerNotificationMock).toHaveBeenCalledTimes(1);
+      expect(customerNotificationMock.mock.calls[0]?.[1]).toBe("STATUS_CHANGED");
     });
 
     it("non-admin cannot propose a slot", async () => {
@@ -243,9 +255,18 @@ describe("Reschedule Proposal", () => {
       const response = await request(app)
         .post(`/api/admin/orders/${order._id}/propose-slot`)
         .set("Authorization", `Bearer ${customerToken}`)
-        .send({ time: futureTime.toISOString() });
+        .send({ time: futureBusinessHourTime().toISOString(), note: "Please try later" });
 
       expect(response.status).toBe(401);
+    });
+
+    it.each([undefined, "", "   "])("backend rejects missing/blank reason: %s", async (reason) => {
+      const response = await request(app)
+        .post(`/api/admin/orders/${order._id}/propose-slot`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ time: futureBusinessHourTime().toISOString(), ...(reason !== undefined ? { note: reason } : {}) });
+      expect(response.status).toBe(400);
+      expect((await Order.findById(order._id))?.rescheduleProposals).toHaveLength(0);
     });
 
     it("invalid order ID rejected", async () => {
@@ -254,7 +275,7 @@ describe("Reschedule Proposal", () => {
       const response = await request(app)
         .post("/api/admin/orders/invalid-id/propose-slot")
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ time: futureTime.toISOString() });
+        .send({ time: futureTime.toISOString(), note: "Changed requested delivery time" });
 
       expect(response.status).toBe(400);
     });
@@ -266,7 +287,7 @@ describe("Reschedule Proposal", () => {
       const response = await request(app)
         .post(`/api/admin/orders/${fakeId}/propose-slot`)
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ time: futureTime.toISOString() });
+        .send({ time: futureTime.toISOString(), note: "Changed requested delivery time" });
 
       expect(response.status).toBe(404);
     });
@@ -307,14 +328,14 @@ describe("Reschedule Proposal", () => {
       const firstResponse = await request(app)
         .post(`/api/admin/orders/${order._id}/propose-slot`)
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ time: futureTime.toISOString() });
+        .send({ time: futureTime.toISOString(), note: "Changed requested delivery time" });
 
       expect(firstResponse.status).toBe(200);
 
       const response = await request(app)
         .post(`/api/admin/orders/${order._id}/propose-slot`)
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ time: futureTime.toISOString() });
+        .send({ time: futureTime.toISOString(), note: "Changed requested delivery time" });
 
       expect(response.status).toBe(409);
     });
@@ -466,7 +487,7 @@ describe("Reschedule Proposal", () => {
       await request(app)
         .post(`/api/admin/orders/${order._id}/propose-slot`)
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ time: futureTime.toISOString() });
+        .send({ time: futureTime.toISOString(), note: "Changed requested delivery time" });
 
       const updated = await Order.findById(order._id).lean();
       expect(updated?.paymentStatus).toBe("PENDING");
@@ -482,7 +503,7 @@ describe("Reschedule Proposal", () => {
       await request(app)
         .post(`/api/admin/orders/${order._id}/propose-slot`)
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ time: futureTime.toISOString() });
+        .send({ time: futureTime.toISOString(), note: "Changed requested delivery time" });
 
       const after = await Product.findById(product._id).lean();
       expect(after?.stock).toBe(stockBefore);
@@ -530,6 +551,7 @@ describe("Reschedule Proposal", () => {
       const final = await Order.findById(order._id).lean();
       expect(final?.requestedSlot?.getTime()).toBe(order.requestedSlot.getTime()); // unchanged
       expect(final?.confirmedSlot?.getTime()).toBe(new Date(proposedTime!).getTime());
+      expect(final?.rescheduleProposals?.[0]?.customerResponse).toBe("ACCEPTED");
       expect(final?.createdAt?.getTime()).toBe(order.createdAt.getTime()); // unchanged
       expect(final!.slotHistory!.length).toBeGreaterThan(0);
     });
@@ -600,6 +622,45 @@ describe("Reschedule Proposal", () => {
         .send({ time: futureTime.toISOString(), note: "New suggested time" });
     });
 
+    it("decline preserves confirmed schedule and records response", async () => {
+      const original = order.confirmedSlot.getTime();
+      const response = await request(app)
+        .post(`/api/orders/${order._id}/proposal/decline`)
+        .set("Authorization", `Bearer ${customerToken}`);
+      expect(response.status).toBe(200);
+      const final = await Order.findById(order._id);
+      expect(final?.confirmedSlot?.getTime()).toBe(original);
+      expect(final?.rescheduleProposals?.[0]?.customerResponse).toBe("DECLINED");
+    });
+
+    it("customer alternative request is recorded without changing confirmed schedule", async () => {
+      const original = order.confirmedSlot.getTime();
+      const response = await request(app)
+        .post(`/api/orders/${order._id}/proposal/request-alternative`)
+        .set("Authorization", `Bearer ${customerToken}`)
+        .send({ time: futureBusinessHourTime().toISOString(), note: "Please try later" });
+      expect(response.status).toBe(200);
+      const final = await Order.findById(order._id);
+      expect(final?.confirmedSlot?.getTime()).toBe(original);
+      expect(final?.rescheduleProposals?.[0]?.status).toBe("ALTERNATIVE_REQUESTED");
+      expect(final?.rescheduleProposals?.[0]?.customerAlternativeNote).toBe("Please try later");
+    });
+
+    it("admin can issue a new proposal after the alternative request", async () => {
+      const alternativeTime = futureBusinessHourTime();
+      await request(app)
+        .post(`/api/orders/${order._id}/proposal/request-alternative`)
+        .set("Authorization", `Bearer ${customerToken}`)
+        .send({ time: alternativeTime.toISOString(), note: "Please try later" });
+      const response = await request(app)
+        .post(`/api/admin/orders/${order._id}/propose-slot`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ time: futureBusinessHourTime().toISOString(), note: "Reviewed request" });
+      expect(response.status).toBe(200);
+      const final = await Order.findById(order._id);
+      expect(final?.rescheduleProposals).toHaveLength(2);
+    });
+
     it("owner can decline proposal", async () => {
       const response = await request(app)
         .post(`/api/orders/${order._id}/proposal/decline`)
@@ -655,12 +716,13 @@ describe("Reschedule Proposal", () => {
       await request(app)
         .post(`/api/admin/orders/${order._id}/propose-slot`)
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ time: validTime.toISOString() });
+        .send({ time: validTime.toISOString(), note: "Changed requested delivery time" });
 
       // Manually expire the proposal by setting expiresAt to past
       await Order.findByIdAndUpdate(order._id, {
         "proposedSlot.expiresAt": new Date(Date.now() - 60 * 60 * 1000),
         "proposedSlot.status": "PENDING",
+        "rescheduleProposals.0.expiresAt": new Date(Date.now() - 60 * 60 * 1000),
       });
 
       const response = await request(app)
@@ -686,7 +748,7 @@ describe("Reschedule Proposal", () => {
       await request(app)
         .post(`/api/admin/orders/${order._id}/propose-slot`)
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ time: futureTime.toISOString() });
+        .send({ time: futureTime.toISOString(), note: "Changed requested delivery time" });
 
       await request(app)
         .post(`/api/orders/${order._id}/proposal/accept`)
@@ -707,7 +769,7 @@ describe("Reschedule Proposal", () => {
       await request(app)
         .post(`/api/admin/orders/${order._id}/propose-slot`)
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ time: futureTime.toISOString() });
+        .send({ time: futureTime.toISOString(), note: "Changed requested delivery time" });
       const after = new Date();
 
       const updated = await Order.findById(order._id).lean();

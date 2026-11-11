@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import { z } from "zod";
 
 import { Order } from "../models/Order.js";
-import type { IOrder, IOrderItem } from "../models/Order.js";
+import type { IOrder, IOrderItem, IRescheduleProposal } from "../models/Order.js";
 import { Product } from "../models/Product.js";
 import { Settings } from "../models/Settings.js";
 import type { AuthRequest } from "../middleware/auth.js";
@@ -16,6 +16,7 @@ import {
 import { recalculateCustomerMetrics } from "../services/customerMetrics.js";
 import { getRazorpayKeyId, getRazorpayKeySecret } from "../services/razorpay.js";
 import { ONLINE_RESERVATION_TTL_MS } from "../services/inventoryExpiry.js";
+import { notifyCustomerOrder, orderEmailDetails } from "../services/customerOrderNotifications.js";
 import {
   validateSlot,
   DEFAULT_PROPOSAL_EXPIRY_MS,
@@ -535,6 +536,10 @@ export const createOrder = async (
 
     const { order, replayed } = result;
 
+    if (!replayed) {
+      void notifyCustomerOrder(order, "ORDER_PLACED", "placed", orderEmailDetails(order), "PLACED");
+    }
+
     // Recalculate customer metrics for authenticated customers.
     // Best-effort: metrics recalculation failure must not block order creation.
     if (!replayed && req.customer) {
@@ -757,7 +762,7 @@ export const getMyOrders = async (
       .sort({ createdAt: -1 })
       .lean();
 
-    res.status(200).json({ orders });
+    res.status(200).json({ orders: orders.map((order) => ({ ...order, rescheduleProposals: order.rescheduleProposals ?? [] })) });
   } catch (error) {
     console.error("Get customer orders failed:", error);
     res.status(500).json({ message: "Unable to fetch orders" });
@@ -788,7 +793,7 @@ export const getMyOrderByNumber = async (
       return;
     }
 
-    res.status(200).json({ order });
+    res.status(200).json({ order: { ...order, rescheduleProposals: order.rescheduleProposals ?? [] } });
   } catch (error) {
     console.error("Get customer order failed:", error);
     res.status(500).json({ message: "Unable to fetch order" });
@@ -804,6 +809,7 @@ const orderQuerySchema = z.object({
     .optional(),
   paymentStatus: z.enum(["PENDING", "PAID", "FAILED"]).optional(),
   orderStatus: z.string().optional(),
+  fulfillmentType: z.enum(["DELIVERY", "PICKUP"]).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });
@@ -830,6 +836,7 @@ export const getAllOrders = async (
       paymentMethod,
       paymentStatus,
       orderStatus,
+      fulfillmentType,
       startDate,
       endDate,
     } = parsed.data;
@@ -863,6 +870,10 @@ export const getAllOrders = async (
 
     if (orderStatus) {
       filter.orderStatus = orderStatus;
+    }
+
+    if (fulfillmentType) {
+      filter.fulfillmentType = fulfillmentType;
     }
 
     if (startDate || endDate) {
@@ -1041,6 +1052,14 @@ export const updateOrderStatus = async (
       throw new Error("Order status transaction completed without an order");
     }
 
+    const statusEvent = order.orderStatus === "CANCELLED" ? "CANCELLED" : "STATUS_CHANGED";
+    void notifyCustomerOrder(
+      order,
+      statusEvent,
+      `status:${order.updatedAt?.toISOString() ?? order.orderStatus}`,
+      orderEmailDetails(order),
+    );
+
     res.status(200).json({
       message: "Order status updated successfully",
       order: {
@@ -1159,6 +1178,13 @@ export const markOrderPaid = async (
       return;
     }
 
+    void notifyCustomerOrder(
+      order,
+      "PAYMENT_CONFIRMED",
+      `manual-paid:${order.paidAt?.toISOString() ?? order.orderNumber}`,
+      orderEmailDetails(order),
+    );
+
     res.status(200).json({
       message: "Order marked as paid",
       order: {
@@ -1179,8 +1205,25 @@ const proposeSlotSchema = z.object({
   time: z.string().datetime({
     message: "Valid ISO datetime is required",
   }),
-  note: z.string().trim().max(500).optional(),
+  note: z.string().trim().min(1, "A rescheduling reason is required").max(500),
 });
+
+const alternativeSlotSchema = z.object({
+  time: z.string().datetime({ message: "Valid ISO datetime is required" }),
+  note: z.string().trim().max(500).optional().default(""),
+});
+
+function ensureProposalHistory(order: IOrder) {
+  const history = order.get("rescheduleProposals") as IRescheduleProposal[] | undefined;
+  return history ?? [];
+}
+
+function markExpiredProposal(order: IOrder) {
+  const history = ensureProposalHistory(order);
+  const current = history.find((entry) => entry.status === "PENDING");
+  if (current) current.status = "EXPIRED";
+  if (order.proposedSlot) order.proposedSlot.status = "EXPIRED";
+}
 
 const RESCHEDULE_ELIGIBLE_STATUSES: OrderStatusValue[] = [
   "PLACED",
@@ -1220,7 +1263,7 @@ export const proposeSlot = async (
     const proposedTime = new Date(proposedTimeStr);
     const session = await mongoose.startSession();
 
-    let result: { order: IOrder } | undefined;
+    let result: { order: IOrder; proposalId: string } | undefined;
 
     try {
       result = await session.withTransaction(async () => {
@@ -1242,9 +1285,11 @@ export const proposeSlot = async (
           );
         }
 
+        const hasPendingHistory = ((order.get("rescheduleProposals") as IRescheduleProposal[] | undefined) ?? [])
+          .some((proposal) => proposal.status === "PENDING");
         if (
-          order.proposedSlot &&
-          order.proposedSlot.status === "PENDING"
+          hasPendingHistory ||
+          (!order.get("rescheduleProposals") && order.proposedSlot?.status === "PENDING")
         ) {
           throw new OrderStatusError(
             "A pending proposal already exists for this order",
@@ -1277,9 +1322,23 @@ export const proposeSlot = async (
         const expiresAt = new Date(
           now.getTime() + DEFAULT_PROPOSAL_EXPIRY_MS(),
         );
-
+        const previousStatus = order.orderStatus;
         order.reschedulePreviousStatus = order.orderStatus;
+        const history = ensureProposalHistory(order);
+        history.push({
+          proposalId: crypto.randomUUID(),
+          ...(order.confirmedSlot ? { previousConfirmedSlot: order.confirmedSlot } : {}),
+          proposedSlot: proposedTime,
+          reason: note,
+          proposedBy: new mongoose.Types.ObjectId(adminId),
+          proposedAt: now,
+          status: "PENDING",
+          expiresAt,
+        });
+        order.set("rescheduleProposals", history);
+        order.markModified("rescheduleProposals");
         order.orderStatus = "RESCHEDULE_PROPOSED";
+        order.reschedulePreviousStatus = previousStatus;
         order.proposedSlot = {
           time: proposedTime,
           note: note ?? "",
@@ -1291,7 +1350,7 @@ export const proposeSlot = async (
 
         await order.save({ session });
 
-        return { order };
+        return { order, proposalId: history.at(-1)?.proposalId ?? "" };
       });
     } catch (error) {
       if (error instanceof OrderStatusError) {
@@ -1309,6 +1368,17 @@ export const proposeSlot = async (
 
     const { order } = result;
 
+    const proposal = ((order.get("rescheduleProposals") as IRescheduleProposal[] | undefined) ?? []).find((entry) => entry.proposalId === result.proposalId);
+    if (proposal) {
+      void notifyCustomerOrder(
+        order,
+        "STATUS_CHANGED",
+        `proposal:${proposal.proposalId}`,
+        `A new time was proposed: ${proposal.proposedSlot.toISOString()}. ${proposal.reason}`,
+        "RESCHEDULE_PROPOSED",
+      );
+    }
+
     res.status(200).json({
       message: "Slot proposal created successfully",
       order: {
@@ -1316,8 +1386,9 @@ export const proposeSlot = async (
         orderNumber: order.orderNumber,
         orderStatus: order.orderStatus,
         proposedSlot: order.proposedSlot,
-        requestedSlot: order.requestedSlot,
         confirmedSlot: order.confirmedSlot,
+        rescheduleProposals: order.toObject().rescheduleProposals ?? [],
+        requestedSlot: order.requestedSlot,
       },
     });
   } catch (error) {
@@ -1346,7 +1417,7 @@ export const acceptProposal = async (
 
     const session = await mongoose.startSession();
 
-    let result: { expired: boolean; order: IOrder } | undefined;
+    let result: { expired: boolean; order: IOrder; proposalId: string } | undefined;
 
     try {
       result = await session.withTransaction(async () => {
@@ -1360,39 +1431,45 @@ export const acceptProposal = async (
           throw new OrderStatusError("Order not found", 404);
         }
 
-        if (!order.proposedSlot) {
+        const history = ensureProposalHistory(order);
+        let proposal = history.find((entry) => entry.status === "PENDING");
+        if (!proposal && order.proposedSlot?.status === "PENDING") {
+          proposal = {
+            proposalId: crypto.randomUUID(),
+            ...(order.confirmedSlot ? { previousConfirmedSlot: order.confirmedSlot } : {}),
+            proposedSlot: order.proposedSlot.time,
+            reason: order.proposedSlot.note || "Legacy proposal reason unavailable",
+            proposedBy: order.proposedSlot.proposedBy,
+            proposedAt: order.proposedSlot.proposedAt,
+            status: "PENDING",
+            expiresAt: order.proposedSlot.expiresAt,
+          };
+          history.push(proposal);
+          order.set("rescheduleProposals", history);
+        }
+        if (!proposal) {
           throw new OrderStatusError(
             "No proposal exists for this order",
             400,
           );
         }
 
-        const confirmedSlotTime = order.proposedSlot.time;
-
-        if (order.proposedSlot.status !== "PENDING") {
-          throw new OrderStatusError(
-            `Proposal is already ${order.proposedSlot.status.toLowerCase()}`,
-            400,
-          );
-        }
+        const confirmedSlotTime = proposal.proposedSlot;
 
         const now = new Date();
 
         if (
-          order.proposedSlot.expiresAt &&
-          order.proposedSlot.expiresAt.getTime() <= now.getTime()
+          proposal.expiresAt.getTime() <= now.getTime()
         ) {
-          order.proposedSlot.status = "EXPIRED";
+          markExpiredProposal(order);
           order.orderStatus =
             order.reschedulePreviousStatus ?? "CONFIRMED";
           await order.save({ session });
-          return { expired: true, order };
+          return { expired: true as const, order, proposalId: proposal.proposalId };
         }
 
         if (
-          ["DELIVERED", "COLLECTED", "CANCELLED"].includes(
-            order.orderStatus,
-          )
+          !["RESCHEDULE_PROPOSED", "PLACED", "PAYMENT_CONFIRMED", "CONFIRMED"].includes(order.orderStatus)
         ) {
           throw new OrderStatusError(
             "Cannot accept proposal for this order",
@@ -1402,13 +1479,19 @@ export const acceptProposal = async (
 
         const previousConfirmedSlot = order.confirmedSlot;
         order.confirmedSlot = confirmedSlotTime;
-        order.proposedSlot.status = "ACCEPTED";
+        proposal.status = "ACCEPTED";
+        proposal.customerResponse = "ACCEPTED";
+        proposal.customerResponseAt = now;
+        if (order.proposedSlot) order.proposedSlot.status = "ACCEPTED";
+        const acceptedSlot = proposal.proposedSlot;
+        order.markModified("rescheduleProposals");
+        order.set("rescheduleProposals", history);
 
         order.slotHistory = [
           ...(order.slotHistory ?? []),
           {
             from: previousConfirmedSlot ?? order.requestedSlot ?? now,
-            to: order.proposedSlot.time,
+            to: acceptedSlot,
             reason: "Customer accepted reschedule proposal",
             by: customerId,
             at: now,
@@ -1436,7 +1519,7 @@ export const acceptProposal = async (
 
         await order.save({ session });
 
-        return { expired: false, order };
+        return { expired: false, order, proposalId: proposal.proposalId };
       });
     } catch (error) {
       if (error instanceof OrderStatusError) {
@@ -1459,6 +1542,17 @@ export const acceptProposal = async (
       return;
     }
 
+    const acceptedProposal = ((order.get("rescheduleProposals") as IRescheduleProposal[] | undefined) ?? []).find((entry) => entry.proposalId === result.proposalId);
+    if (acceptedProposal?.customerResponse === "ACCEPTED") {
+      void notifyCustomerOrder(
+        order,
+        "RESCHEDULE_ACCEPTED",
+        `proposal:${acceptedProposal.proposalId}:accepted`,
+        `Your new scheduled time is ${acceptedProposal.proposedSlot.toISOString()}.`,
+        order.orderStatus,
+      );
+    }
+
     res.status(200).json({
       message: "Proposal accepted successfully",
       order: {
@@ -1467,6 +1561,7 @@ export const acceptProposal = async (
         orderStatus: order.orderStatus,
         requestedSlot: order.requestedSlot,
         confirmedSlot: order.confirmedSlot,
+        rescheduleProposals: order.toObject().rescheduleProposals ?? [],
         scheduledDate: order.scheduledDate,
         scheduledTime: order.scheduledTime,
         proposedSlot: order.proposedSlot,
@@ -1499,7 +1594,7 @@ export const declineProposal = async (
 
     const session = await mongoose.startSession();
 
-    let result: { expired: boolean; order: IOrder } | undefined;
+    let result: { expired: boolean; order: IOrder; proposalId: string } | undefined;
 
     try {
       result = await session.withTransaction(async () => {
@@ -1512,17 +1607,25 @@ export const declineProposal = async (
         if (order.userId && order.userId.toString() !== customerId) {
           throw new OrderStatusError("Order not found", 404);
         }
-
-        if (!order.proposedSlot) {
+        const history = ensureProposalHistory(order);
+        let currentProposal = history.find((entry) => entry.status === "PENDING");
+        if (!currentProposal && order.proposedSlot?.status === "PENDING") {
+          currentProposal = {
+            proposalId: crypto.randomUUID(),
+            ...(order.confirmedSlot ? { previousConfirmedSlot: order.confirmedSlot } : {}),
+            proposedSlot: order.proposedSlot.time,
+            reason: order.proposedSlot.note || "Legacy proposal reason unavailable",
+            proposedBy: order.proposedSlot.proposedBy,
+            proposedAt: order.proposedSlot.proposedAt,
+            status: "PENDING",
+            expiresAt: order.proposedSlot.expiresAt,
+          };
+          history.push(currentProposal);
+          order.set("rescheduleProposals", history);
+        }
+        if (!currentProposal) {
           throw new OrderStatusError(
             "No proposal exists for this order",
-            400,
-          );
-        }
-
-        if (order.proposedSlot.status !== "PENDING") {
-          throw new OrderStatusError(
-            `Proposal is already ${order.proposedSlot.status.toLowerCase()}`,
             400,
           );
         }
@@ -1530,20 +1633,18 @@ export const declineProposal = async (
         const now = new Date();
 
         if (
-          order.proposedSlot.expiresAt &&
-          order.proposedSlot.expiresAt.getTime() <= now.getTime()
+          currentProposal.expiresAt &&
+          currentProposal.expiresAt.getTime() <= now.getTime()
         ) {
-          order.proposedSlot.status = "EXPIRED";
+          markExpiredProposal(order);
           order.orderStatus =
             order.reschedulePreviousStatus ?? "CONFIRMED";
           await order.save({ session });
-          return { expired: true, order };
+          return { expired: true as const, order, proposalId: currentProposal.proposalId };
         }
 
         if (
-          ["DELIVERED", "COLLECTED", "CANCELLED"].includes(
-            order.orderStatus,
-          )
+          !["RESCHEDULE_PROPOSED", "PLACED", "PAYMENT_CONFIRMED", "CONFIRMED"].includes(order.orderStatus)
         ) {
           throw new OrderStatusError(
             "Cannot decline proposal for this order",
@@ -1551,7 +1652,11 @@ export const declineProposal = async (
           );
         }
 
-        order.proposedSlot.status = "DECLINED";
+        currentProposal.status = "DECLINED";
+        currentProposal.customerResponse = "DECLINED";
+        order.markModified("rescheduleProposals");
+        if (order.proposedSlot) order.proposedSlot.status = "DECLINED";
+        order.set("rescheduleProposals", history);
 
         order.slotHistory = [
           ...(order.slotHistory ?? []),
@@ -1571,7 +1676,7 @@ export const declineProposal = async (
 
         await order.save({ session });
 
-        return { expired: false, order };
+        return { expired: false, order, proposalId: currentProposal.proposalId };
       });
     } catch (error) {
       if (error instanceof OrderStatusError) {
@@ -1594,6 +1699,17 @@ export const declineProposal = async (
       return;
     }
 
+    const declinedProposal = ((order.get("rescheduleProposals") as IRescheduleProposal[] | undefined) ?? []).find((entry) => entry.proposalId === result.proposalId);
+    if (declinedProposal?.customerResponse === "DECLINED") {
+      void notifyCustomerOrder(
+        order,
+        "RESCHEDULE_REJECTED",
+        `proposal:${declinedProposal.proposalId}:declined`,
+        "The proposed time was declined. Your existing schedule remains unchanged.",
+        order.orderStatus,
+      );
+    }
+
     res.status(200).json({
       message: "Proposal declined",
       order: {
@@ -1603,6 +1719,7 @@ export const declineProposal = async (
         requestedSlot: order.requestedSlot,
         confirmedSlot: order.confirmedSlot,
         proposedSlot: order.proposedSlot,
+        rescheduleProposals: order.toObject().rescheduleProposals ?? [],
         slotHistory: order.slotHistory,
       },
       nextAction:
@@ -1615,5 +1732,106 @@ export const declineProposal = async (
   } catch (error) {
     console.error("Decline proposal failed:", error);
     res.status(500).json({ message: "Unable to decline proposal" });
+  }
+};
+
+export const requestAlternativeSlot = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!req.customer) {
+    res.status(401).json({ message: "Customer authentication required" });
+    return;
+  }
+  const parsed = alternativeSlotSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid alternative slot", errors: parsed.error.flatten() });
+    return;
+  }
+  const orderId = String(req.params.id ?? "").trim();
+  if (!mongoose.isValidObjectId(orderId)) {
+    res.status(400).json({ message: "Invalid order ID" });
+    return;
+  }
+  const session = await mongoose.startSession();
+  try {
+    const result = await session.withTransaction(async () => {
+      const order = await Order.findById(orderId).session(session);
+      if (!order || (order.userId && order.userId.toString() !== req.customer!.id)) {
+        throw new OrderStatusError("Order not found", 404);
+      }
+      const history = ensureProposalHistory(order);
+      let proposal = history.find((entry) => entry.status === "PENDING");
+      if (!proposal && order.proposedSlot?.status === "PENDING") {
+        proposal = {
+          proposalId: crypto.randomUUID(),
+          ...(order.confirmedSlot ? { previousConfirmedSlot: order.confirmedSlot } : {}),
+          proposedSlot: order.proposedSlot.time,
+          reason: order.proposedSlot.note || "Legacy proposal reason unavailable",
+          proposedBy: order.proposedSlot.proposedBy,
+          proposedAt: order.proposedSlot.proposedAt,
+          status: "PENDING",
+          expiresAt: order.proposedSlot.expiresAt,
+        };
+      }
+      if (!proposal) throw new OrderStatusError("No pending proposal exists", 409);
+      if (!history.some((entry) => entry.proposalId === proposal!.proposalId)) {
+        history.push(proposal);
+        order.set("rescheduleProposals", history);
+      }
+      const now = new Date();
+      if (proposal.expiresAt.getTime() <= now.getTime()) {
+        markExpiredProposal(order);
+        order.orderStatus = order.reschedulePreviousStatus ?? "CONFIRMED";
+        order.reschedulePreviousStatus = undefined;
+        await order.save({ session });
+          return { expired: true as const, order, proposalId: proposal.proposalId };
+      }
+      const alternative = new Date(parsed.data.time);
+      const validation = validateSlot(alternative, order.fulfillmentType);
+      if (!validation.valid) throw new OrderStatusError(validation.error ?? "Invalid slot", 400);
+      proposal.status = "ALTERNATIVE_REQUESTED";
+      proposal.customerResponse = "REQUESTED_ALTERNATIVE";
+      proposal.customerResponseAt = now;
+      proposal.customerAlternativeSlot = alternative;
+      proposal.customerAlternativeNote = parsed.data.note;
+      order.markModified("rescheduleProposals");
+      if (order.proposedSlot) order.proposedSlot.status = "ALTERNATIVE_REQUESTED";
+      order.set("rescheduleProposals", history);
+      order.orderStatus = order.reschedulePreviousStatus ?? "CONFIRMED";
+      order.reschedulePreviousStatus = undefined;
+      await order.save({ session });
+      return { expired: false as const, order, proposal: { ...proposal } };
+    });
+    if (result.expired) {
+      res.status(400).json({ message: "Proposal has expired" });
+      return;
+    }
+    void notifyCustomerOrder(
+      result.order,
+      "RESCHEDULE_REQUESTED",
+      `proposal:${result.proposal.proposalId}:alternative-requested`,
+      `Your requested alternative time is ${result.proposal.customerAlternativeSlot?.toISOString() ?? "unavailable"}. ${result.proposal.customerAlternativeNote ?? ""}`,
+      result.order.orderStatus,
+    );
+    res.status(200).json({
+      message: "Alternative time request recorded",
+      order: {
+        id: result.order._id,
+        orderNumber: result.order.orderNumber,
+        orderStatus: result.order.orderStatus,
+        confirmedSlot: result.order.confirmedSlot,
+        rescheduleProposals: result.order.toObject().rescheduleProposals ?? [],
+      },
+    });
+  } catch (error) {
+    if (error instanceof OrderStatusError) {
+      res.status(error.status).json({ message: error.message });
+      return;
+    }
+    console.error("Alternative slot request failed:", error);
+    res.status(500).json({ message: "Unable to request alternative slot" });
+  } finally {
+    await session.endSession();
   }
 };

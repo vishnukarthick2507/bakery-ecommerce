@@ -665,7 +665,10 @@ export async function getInventoryAnalytics() {
     price: p.price,
     reorderLevel: p.reorderLevel ?? null,
     availability: p.availability,
-    isLowStock: p.stock <= 0 || p.availability === "OUT_OF_STOCK",
+    isLowStock:
+      p.stock <= 0 ||
+      p.availability === "OUT_OF_STOCK" ||
+      (p.reorderLevel != null && p.stock <= p.reorderLevel),
     unitsSold: salesMap.get(p._id.toString()) ?? 0,
   }));
 

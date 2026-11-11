@@ -9,13 +9,17 @@ import { createAuthTestApp } from "./authTestApp.js";
 
 vi.mock("../src/services/emailService.js", () => ({
   getBrevoPresenceChecks: vi.fn(),
+  sendAdminLoginAlertOnce: vi.fn().mockResolvedValue(true),
 }));
 
 function setCookieValues(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : value ? [value] : [];
 }
 
-import { getBrevoPresenceChecks } from "../src/services/emailService.js";
+import {
+  getBrevoPresenceChecks,
+  sendAdminLoginAlertOnce,
+} from "../src/services/emailService.js";
 
 const app = createAuthTestApp();
 
@@ -28,6 +32,8 @@ describe("Admin authentication API", () => {
   beforeEach(async () => {
     await clearTestDB();
     vi.mocked(getBrevoPresenceChecks).mockReset();
+    vi.mocked(sendAdminLoginAlertOnce).mockReset();
+    vi.mocked(sendAdminLoginAlertOnce).mockResolvedValue(true);
 
     await Admin.create({
       username: "testadmin",
@@ -90,6 +96,36 @@ describe("Admin authentication API", () => {
       role: "ADMIN",
     });
     expect(response.body.admin).not.toHaveProperty("password");
+    expect(sendAdminLoginAlertOnce).toHaveBeenCalledTimes(1);
+    expect(sendAdminLoginAlertOnce).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        username: "testadmin",
+        occurredAt: expect.any(Date),
+      }),
+    );
+    const alertInput = vi.mocked(sendAdminLoginAlertOnce).mock.calls[0]![1];
+    expect(JSON.stringify(alertInput)).not.toMatch(/password|otp|token|cookie|secret/i);
+  });
+
+  it("keeps successful login successful when alert delivery fails", async () => {
+    vi.mocked(sendAdminLoginAlertOnce).mockRejectedValueOnce(new Error("delivery failure"));
+
+    const response = await request(app)
+      .post("/api/auth/login")
+      .send({ username: "testadmin", password: "CorrectPassword123" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toBe("Login successful");
+  });
+
+  it("does not send an alert for failed login", async () => {
+    const response = await request(app)
+      .post("/api/auth/login")
+      .send({ username: "testadmin", password: "WrongPassword123" });
+
+    expect(response.status).toBe(401);
+    expect(sendAdminLoginAlertOnce).not.toHaveBeenCalled();
   });
 
   it("clears the admin cookie through the admin logout route", async () => {

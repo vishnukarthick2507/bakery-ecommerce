@@ -10,6 +10,8 @@ import { Order } from "../src/models/Order.js";
 import { Product } from "../src/models/Product.js";
 import { Settings } from "../src/models/Settings.js";
 import { User } from "../src/models/User.js";
+import { InventoryMovement } from "../src/models/InventoryMovement.js";
+import { reserveInventory, restoreInventory } from "../src/services/inventory.js";
 import orderRoutes from "../src/routes/orderRoutes.js";
 
 process.env.JWT_SECRET = "test-jwt-secret-that-is-at-least-32-chars-long";
@@ -323,6 +325,82 @@ describe("Order validation", () => {
       expect(conflictResponse.body.message).toContain("Idempotency key was already used");
       expect(await Order.countDocuments()).toBe(1);
       expect((await Product.findById(baseOrderPayload.items[0]!.productId))?.stock).toBe(9);
+    });
+  });
+
+  describe("atomic inventory reservations and releases", () => {
+    it("prevents concurrent checkouts from overselling", async () => {
+      await Product.updateOne(
+        { _id: baseOrderPayload.items[0]!.productId },
+        { $set: { stock: 1 } },
+      );
+      const payload = {
+        ...baseOrderPayload,
+        items: [{ ...baseOrderPayload.items[0]!, quantity: 1 }],
+      };
+
+      const responses = await Promise.all([
+        postOrderWithKey(randomUUID(), payload),
+        postOrderWithKey(randomUUID(), payload),
+      ]);
+
+      expect(responses.filter((response) => response.status === 201)).toHaveLength(1);
+      expect(responses.filter((response) => response.status === 400)).toHaveLength(1);
+      expect((await Product.findById(baseOrderPayload.items[0]!.productId))?.stock).toBe(0);
+      expect(await Order.countDocuments()).toBe(1);
+    });
+
+    it("allows only one concurrent reservation for the same final stock", async () => {
+      const product = await Product.findById(baseOrderPayload.items[0]!.productId);
+      expect(product).not.toBeNull();
+      await Product.updateOne({ _id: product!._id }, { $set: { stock: 3 } });
+
+      const orderIds = [new mongoose.Types.ObjectId(), new mongoose.Types.ObjectId()];
+      const results = await Promise.allSettled(
+        orderIds.map(async (orderId) => {
+          const session = await mongoose.startSession();
+          try {
+            await session.withTransaction(() =>
+              reserveInventory(
+                session,
+                [{ productId: product!._id, quantity: 2 }],
+                orderId,
+              ),
+            );
+          } finally {
+            await session.endSession();
+          }
+        }),
+      );
+
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect((await Product.findById(product!._id))?.stock).toBe(1);
+      expect(await InventoryMovement.countDocuments({ reason: "ORDER_RESERVATION" })).toBe(1);
+    });
+
+    it("restores a reservation once and records its cancellation movement", async () => {
+      const product = await Product.findById(baseOrderPayload.items[0]!.productId);
+      expect(product).not.toBeNull();
+      const orderId = new mongoose.Types.ObjectId();
+      await Product.updateOne({ _id: product!._id }, { $set: { stock: 7 } });
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(() =>
+          restoreInventory(session, [{ productId: product!._id, quantity: 3 }], orderId),
+        );
+      } finally {
+        await session.endSession();
+      }
+
+      expect((await Product.findById(product!._id))?.stock).toBe(10);
+      const movements = await InventoryMovement.find({
+        productId: product!._id,
+        reason: "ORDER_RESTORE",
+        relatedOrderId: orderId,
+      });
+      expect(movements).toHaveLength(1);
+      expect(movements[0]!.quantityChange).toBe(3);
+      expect(movements[0]!.createdAt).toBeInstanceOf(Date);
     });
   });
 

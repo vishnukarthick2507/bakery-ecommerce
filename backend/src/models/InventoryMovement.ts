@@ -14,6 +14,7 @@ export interface IInventoryMovement extends Document {
   previousStock: number;
   newStock: number;
   reason: InventoryMovementReason;
+  adjustmentReason?: string;
   relatedOrderId?: mongoose.Types.ObjectId;
   relatedUserId?: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -56,6 +57,12 @@ const inventoryMovementSchema = new Schema<IInventoryMovement>(
         "EXPIRY_RELEASE",
       ],
       required: true,
+    },
+
+    adjustmentReason: {
+      type: String,
+      trim: true,
+      maxlength: 200,
     },
 
     relatedOrderId: {

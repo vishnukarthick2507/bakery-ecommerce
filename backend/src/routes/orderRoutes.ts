@@ -11,6 +11,7 @@ import {
   markOrderPaid,
   acceptProposal,
   declineProposal,
+  requestAlternativeSlot,
 } from "../controllers/orderController.js";
 import {
   authenticateAdmin,
@@ -56,6 +57,12 @@ router.post(
   "/:id/proposal/decline",
   authenticateCustomer,
   declineProposal,
+);
+
+router.post(
+  "/:id/proposal/request-alternative",
+  authenticateCustomer,
+  requestAlternativeSlot,
 );
 
 // Get one order by order number (public)

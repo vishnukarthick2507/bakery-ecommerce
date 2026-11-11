@@ -103,7 +103,10 @@ export default function CustomerOrderDetailPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [proposing, setProposing] = useState<'accept' | 'decline' | null>(null)
+  const [proposing, setProposing] = useState<'accept' | 'decline' | 'alternative' | null>(null)
+  const [alternativeDate, setAlternativeDate] = useState('')
+  const [alternativeTime, setAlternativeTime] = useState('')
+  const [alternativeNote, setAlternativeNote] = useState('')
 
   useEffect(() => {
     fetch(`/api/orders/me/${encodeURIComponent(params.orderNumber)}`, {
@@ -323,6 +326,30 @@ export default function CustomerOrderDetailPage() {
     }
   }
 
+  async function handleRequestAlternative() {
+    if (!order || !alternativeDate || !alternativeTime) return
+    setProposing('alternative')
+    setError('')
+    try {
+      const time = new Date(`${alternativeDate}T${alternativeTime}:00`).toISOString()
+      const response = await fetch(`/api/orders/${encodeURIComponent(order._id)}/proposal/request-alternative`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ time, note: alternativeNote.trim() }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Unable to request another time')
+      const refresh = await fetch(`/api/orders/me/${encodeURIComponent(order.orderNumber)}`, { credentials: 'include', cache: 'no-store' })
+      const refreshed = await refresh.json()
+      if (refresh.ok) setOrder(refreshed.order)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to request another time')
+    } finally {
+      setProposing(null)
+    }
+  }
+
   if (loading) return (
     <main className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -405,6 +432,9 @@ export default function CustomerOrderDetailPage() {
                 <span className="font-medium">Note:</span> {order.proposedSlot.note}
               </div>
             )}
+            {order.rescheduleProposals?.find((proposal) => proposal.status === 'PENDING') && (
+              <p className="text-sm"><span className="font-medium">Reason:</span> {order.rescheduleProposals.find((proposal) => proposal.status === 'PENDING')?.reason}</p>
+            )}
             {order.proposedSlot.expiresAt && (
               <div className="text-sm text-muted-foreground">
                 <span className="font-medium">Expires:</span>{' '}
@@ -415,7 +445,7 @@ export default function CustomerOrderDetailPage() {
           <div className="mt-6 flex gap-3 sm:flex-row">
             <button
               type="button"
-              disabled={proposing === 'accept' || isSubmitting}
+              disabled={proposing !== null || isSubmitting}
               onClick={handleAcceptProposal}
               className="flex-1 rounded-xl bg-caramel px-5 py-3 font-medium text-caramel-foreground disabled:opacity-60 hover:bg-caramel/90"
             >
@@ -423,18 +453,43 @@ export default function CustomerOrderDetailPage() {
             </button>
             <button
               type="button"
-              disabled={proposing === 'decline' || isSubmitting}
+              disabled={proposing !== null || isSubmitting}
               onClick={handleDeclineProposal}
               className="flex-1 rounded-xl border border-destructive px-5 py-3 font-medium text-destructive disabled:opacity-60 hover:bg-destructive/5"
             >
               {proposing === 'decline' ? 'Declining…' : 'Decline'}
             </button>
           </div>
+          <div className="mt-6 grid gap-3 rounded-xl border border-border p-4 sm:grid-cols-2">
+            <label className="text-sm">Preferred date<input aria-label="Preferred alternative date" type="date" value={alternativeDate} onChange={(event) => setAlternativeDate(event.target.value)} className="mt-1 w-full rounded-lg border border-border p-2" /></label>
+            <label className="text-sm">Preferred time<input aria-label="Preferred alternative time" type="time" value={alternativeTime} onChange={(event) => setAlternativeTime(event.target.value)} className="mt-1 w-full rounded-lg border border-border p-2" /></label>
+            <label className="text-sm sm:col-span-2">Explanation (optional)<textarea value={alternativeNote} onChange={(event) => setAlternativeNote(event.target.value)} maxLength={500} className="mt-1 w-full rounded-lg border border-border p-2" rows={2} /></label>
+            <button type="button" disabled={proposing !== null || !alternativeDate || !alternativeTime} onClick={handleRequestAlternative} className="rounded-xl border border-caramel px-4 py-3 text-sm text-caramel disabled:opacity-60 sm:col-span-2">{proposing === 'alternative' ? 'Sending request…' : 'Request another time'}</button>
+          </div>
           {error && (
             <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
               {error}
             </div>
           )}
+        </section>
+      )}
+
+      {order.rescheduleProposals && order.rescheduleProposals.length > 0 && (
+        <section className="mt-10 rounded-[2rem] border border-border bg-card p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-semibold text-primary">Delivery reschedule history</h2>
+          <div className="mt-4 space-y-3">
+            {order.rescheduleProposals.map((proposal) => (
+              <article key={proposal.proposalId} className="rounded-xl bg-cream/40 p-4 text-sm space-y-1">
+                <p>Previous confirmed time: {proposal.previousConfirmedSlot ? new Date(proposal.previousConfirmedSlot).toLocaleString('en-IN') : 'Not recorded'}</p>
+                <p>Suggested time: {new Date(proposal.proposedSlot).toLocaleString('en-IN')}</p>
+                <p>Reason: {proposal.reason}</p>
+                <p>Proposal date: {new Date(proposal.proposedAt).toLocaleString('en-IN')}</p>
+                <p>Response: {proposal.customerResponse?.replaceAll('_', ' ') ?? 'Awaiting response'}{proposal.customerResponseAt ? ` · ${new Date(proposal.customerResponseAt).toLocaleString('en-IN')}` : ''}</p>
+                {proposal.customerAlternativeSlot && <p>Requested alternative: {new Date(proposal.customerAlternativeSlot).toLocaleString('en-IN')}{proposal.customerAlternativeNote ? ` · ${proposal.customerAlternativeNote}` : ''}</p>}
+                <p>Status: {proposal.status.replaceAll('_', ' ')}</p>
+              </article>
+            ))}
+          </div>
         </section>
       )}
 
@@ -446,6 +501,13 @@ export default function CustomerOrderDetailPage() {
             scheduled time. Contact the bakery if you need to arrange a new
             time.
           </p>
+        </section>
+      )}
+
+      {order.proposedSlot?.status === 'ALTERNATIVE_REQUESTED' && (
+        <section className="mt-10 rounded-[2rem] border border-caramel bg-caramel/5 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-semibold text-primary">Alternative time requested</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Your confirmed delivery schedule has not changed. The bakery will review your preferred time.</p>
         </section>
       )}
 

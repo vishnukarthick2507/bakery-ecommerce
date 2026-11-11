@@ -15,6 +15,11 @@ process.env.RAZORPAY_WEBHOOK_SECRET = "mock_webhook_secret";
 
 // Mock Razorpay client before importing payment controller.
 const mockOrdersCreate = vi.fn();
+const customerNotificationMock = vi.fn();
+vi.mock("../src/services/customerOrderNotifications.js", () => ({
+  notifyCustomerOrder: (...args: unknown[]) => customerNotificationMock(...args),
+  orderEmailDetails: () => "mock order details",
+}));
 vi.mock("../src/services/razorpay.js", () => ({
   getRazorpayClient: vi.fn(() => ({
     orders: { create: mockOrdersCreate },
@@ -202,6 +207,7 @@ describe("Payments API", () => {
   );
 
   beforeEach(async () => {
+    customerNotificationMock.mockClear();
     await clearTestDB();
     mockOrdersCreate.mockReset();
     vi.restoreAllMocks();
@@ -288,6 +294,8 @@ describe("Payments API", () => {
 
       expect(validVerification.status).toBe(200);
       expect((await Order.findOne({ orderNumber }).lean())?.paymentStatus).toBe("PAID");
+      expect(customerNotificationMock).toHaveBeenCalledTimes(2);
+      expect(customerNotificationMock.mock.calls[1]?.[1]).toBe("PAYMENT_CONFIRMED");
     });
   });
 
@@ -324,6 +332,9 @@ describe("Payments API", () => {
       const updated = await Order.findById(order._id).lean();
       expect(updated?.paymentStatus).toBe("PAID");
       expect(updated?.razorpayPaymentId).toBe(razorpayPaymentId);
+      expect(customerNotificationMock).toHaveBeenCalledTimes(1);
+      expect(customerNotificationMock.mock.calls[0]?.[1]).toBe("PAYMENT_CONFIRMED");
+      expect(customerNotificationMock.mock.calls[0]?.[2]).toBe(`paid:${razorpayPaymentId}`);
     });
 
     it("rejects an invalid Razorpay signature", async () => {
@@ -347,6 +358,7 @@ describe("Payments API", () => {
 
       expect(response.status).toBe(400);
       expect(response.body.message).toContain("Payment verification failed");
+      expect(customerNotificationMock).not.toHaveBeenCalled();
 
       const updated = await Order.findById(order._id).lean();
       expect(updated?.paymentStatus).toBe("PENDING");
@@ -464,6 +476,7 @@ describe("Payments API", () => {
 
       const updated = await Order.findById(order._id).lean();
       expect(updated?.paymentStatus).toBe("PAID");
+      expect(customerNotificationMock).toHaveBeenCalledTimes(1);
     });
 
     it("handles payment.failed and marks the order FAILED", async () => {
@@ -501,11 +514,56 @@ describe("Payments API", () => {
 
       const updated = await Order.findById(order._id).lean();
       expect(updated?.paymentStatus).toBe("FAILED");
+      expect(customerNotificationMock).not.toHaveBeenCalled();
       expect(updated?.inventoryStatus).toBe("RELEASED");
+      expect(customerNotificationMock).not.toHaveBeenCalled();
 
       // Stock should be restored by one unit
       const restoredProduct = await Product.findById(product._id).lean();
       expect(restoredProduct?.stock).toBe(stockBefore + 1);
+    });
+
+    it("records a later captured payment after a failure for manual reconciliation", async () => {
+      const user = await createTestUser();
+      const { order } = await createTestOrder({}, user._id);
+      const razorpayOrderId = "rzp_order_interrupted_then_captured";
+      const razorpayPaymentId = "rzp_payment_interrupted_then_captured";
+      await Order.findByIdAndUpdate(order._id, {
+        razorpayOrderId,
+        razorpayOrderIds: [razorpayOrderId],
+      });
+
+      const failedPayload = JSON.stringify({
+        event: "payment.failed",
+        payload: { payment: { entity: { order_id: razorpayOrderId } } },
+      });
+      await request(app)
+        .post("/api/payments/webhook")
+        .set("Content-Type", "application/json")
+        .set("x-razorpay-signature", makeWebhookSignature(failedPayload))
+        .send(failedPayload);
+
+      const capturedPayload = JSON.stringify({
+        event: "payment.captured",
+        payload: { payment: { entity: { order_id: razorpayOrderId, id: razorpayPaymentId } } },
+      });
+      const response = await request(app)
+        .post("/api/payments/webhook")
+        .set("Content-Type", "application/json")
+        .set("x-razorpay-signature", makeWebhookSignature(capturedPayload))
+        .send(capturedPayload);
+
+      expect(response.status).toBe(200);
+      const updated = await Order.findById(order._id).lean();
+      expect(updated?.paymentStatus).toBe("PAID");
+      expect(updated?.reconciliationStatus).toBe("REVIEW_REQUIRED");
+      expect(updated?.reconciliationReason).toContain("inventory was released");
+      expect(customerNotificationMock).not.toHaveBeenCalledWith(
+        expect.anything(),
+        "PAYMENT_CONFIRMED",
+        expect.anything(),
+        expect.anything(),
+      );
     });
 
     it("rejects invalid webhook signature", async () => {
@@ -609,6 +667,25 @@ describe("Payments API", () => {
 
       const updated = await Order.findById(order._id).lean();
       expect(updated?.paymentStatus).toBe("PAID");
+      expect(customerNotificationMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not mark an order PAID when payment creation is interrupted", async () => {
+      const user = await createTestUser();
+      const token = makeCustomerToken(user._id);
+      const { order } = await createTestOrder({}, user._id);
+      mockOrdersCreate.mockRejectedValueOnce(new Error("mock gateway unavailable"));
+
+      const response = await request(app)
+        .post("/api/payments/create-order")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ orderNumber: order.orderNumber });
+
+      expect(response.status).toBe(502);
+      const unchanged = await Order.findById(order._id).lean();
+      expect(unchanged?.paymentStatus).toBe("PENDING");
+      expect(unchanged?.razorpayPaymentId).toBeUndefined();
+      expect(customerNotificationMock).not.toHaveBeenCalled();
     });
   });
 

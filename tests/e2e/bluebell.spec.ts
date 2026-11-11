@@ -1,90 +1,67 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Cinematic Intro', () => {
+  const intro = (page: import('@playwright/test').Page) => page.getByRole('dialog', { name: 'Bluebell Bakehouse introduction' });
+
   test.beforeEach(async ({ page }) => {
-    // Clear session storage so intro always shows for testing
     await page.goto('/');
     await page.evaluate(() => sessionStorage.removeItem('bb_cinematic_intro_shown'));
-    await page.waitForTimeout(500);
+    await page.reload();
   });
 
-  test('plays all scenes with logo reveal, tagline, and smooth transition', async ({ page }) => {
-    // Intro should be visible initially
-    const intro = page.locator('[aria-label="Brevo diagnostic settings"]');
-    await expect(intro).toBeVisible();
+  test('plays the four stages in sequence and reveals the homepage', async ({ page }) => {
+    const dialog = intro(page);
+    await expect(dialog).toBeVisible();
 
-    // Skip button present
     const skipButton = page.getByRole('button', { name: 'Skip intro' });
     await expect(skipButton).toBeVisible();
+    await expect(page.locator('.bluebell-intro__navy')).toBeVisible();
 
-    // Bakery scene reveals itself
-    const bakeryImage = page.locator('img[alt="Artisan bakery interior"]');
-    await expect(bakeryImage).toBeVisible({ timeout: 10000 });
+    const brandHeading = page.getByRole('heading', { name: /BLUEBELL BAKEHOUSE/ });
+    await expect(brandHeading).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.bluebell-intro__bakery')).toHaveClass(/is-visible/);
 
-    // Brand reveal overlaid on the bakery scene
-    const brandHeading = page.getByRole('heading', { name: /BLUEBELL.*BAKEHOUSE/ });
-    await expect(brandHeading).toBeVisible({ timeout: 10000 });
+    const showcase = page.locator('.bluebell-intro__showcase');
+    await expect(showcase).toHaveClass(/is-visible/, { timeout: 6000 });
+    await expect(page.locator('.bluebell-intro__showcase-copy')).toBeVisible();
+    const firstImage = await page.locator('.bluebell-intro__food-image').getAttribute('src');
+    await page.waitForTimeout(650);
+    const nextImage = await page.locator('.bluebell-intro__food-image').getAttribute('src');
+    expect(nextImage).not.toBe(firstImage);
 
-    // Tagline reveal (brand stays visible near lower centre)
-    const tagline = page.getByText('Freshly Baked Happiness.');
-    await expect(tagline).toBeVisible({ timeout: 10000 });
-
-    // Fade out transition (intro fades out and unmounts at ~5s)
-    await expect(intro).toBeHidden({ timeout: 10000 });
+    await expect(page.getByText('Freshly Baked Happiness.')).toBeVisible();
+    await expect(page.locator('.homepage-under-intro--ready')).toBeVisible({ timeout: 8000 });
+    await expect(dialog).toBeHidden({ timeout: 9000 });
+    await expect(page.getByRole('heading', { name: /Freshly Baked/ }).last()).toBeVisible();
   });
 
-  test('no black flash before homepage appears', async ({ page }) => {
-    const intro = page.locator('[aria-label="Brevo diagnostic settings"]');
-    await expect(intro).toBeVisible();
-
-    // Wait for intro to complete (~5s)
-    await page.waitForTimeout(5500);
-
-    // Intro should be hidden after completion
-    await expect(intro).toBeHidden();
-
-    // Homepage hero should be visible
-    const heroTitle = page.getByRole('heading', { name: /Freshly Baked/ });
-    await expect(heroTitle).toBeVisible();
+  test('skip dismisses intro and reveals homepage', async ({ page }) => {
+    await page.getByRole('button', { name: 'Skip intro' }).click();
+    await expect(intro(page)).toBeHidden();
+    await expect(page.locator('.homepage-under-intro--ready')).toBeVisible();
   });
 
-  test('hero entrance animation plays after intro', async ({ page }) => {
-    // Wait for intro to complete
-    await page.waitForTimeout(5500);
-
-    // Hero elements should be visible and animated
-    const eyebrow = page.getByText('Artisan bakery · Chromepet, Chennai');
-    await expect(eyebrow).toBeVisible();
-
-    const heroHeading = page.getByRole('heading', { name: /Freshly Baked/ });
-    await expect(heroHeading).toBeVisible();
-
-    const orderButton = page.locator('main').getByRole('link', { name: 'Order now' });
-    await expect(orderButton).toBeVisible();
+  test('reduced motion bypasses the animation and shows the homepage', async ({ browser }) => {
+    const context = await browser.newContext({ reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    await page.goto('/');
+    await expect(intro(page)).toBeHidden();
+    await expect(page.locator('.homepage-under-intro--ready')).toBeVisible();
+    await context.close();
   });
 
-  test('skip button dismisses intro and shows homepage', async ({ page }) => {
-    const skipButton = page.getByRole('button', { name: 'Skip intro' });
-    await skipButton.click();
-
-    // Intro should be hidden
-    const intro = page.locator('[aria-label="Brevo diagnostic settings"]');
-    await expect(intro).toBeHidden();
-
-    // Homepage should be visible
-    const heroHeading = page.getByRole('heading', { name: /Freshly Baked/ });
-    await expect(heroHeading).toBeVisible();
+  test('intro is not rendered on internal routes', async ({ page }) => {
+    for (const route of ['/admin/login', '/checkout', '/cart', '/account/login']) {
+      await page.goto(route);
+      await expect(intro(page)).toHaveCount(0);
+    }
   });
 
   test('intro is session-based - does not reappear on reload', async ({ page }) => {
-    // Skip to mark as shown
     await page.getByRole('button', { name: 'Skip intro' }).click();
-
-    // Reload - intro should NOT appear
     await page.reload();
-
-    const intro = page.locator('[aria-label="Brevo diagnostic settings"]');
-    await expect(intro).toBeHidden();
+    await expect(intro(page)).toHaveCount(0);
+    await expect(page.locator('.homepage-under-intro--ready')).toBeVisible();
   });
 });
 

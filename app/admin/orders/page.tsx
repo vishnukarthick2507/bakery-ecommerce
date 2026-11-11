@@ -40,9 +40,21 @@ type Order = {
   proposedSlot?: {
     time: string
     note: string
-    status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED'
+    status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'ALTERNATIVE_REQUESTED'
     expiresAt?: string
   }
+  rescheduleProposals?: Array<{
+    proposalId: string
+    previousConfirmedSlot?: string
+    proposedSlot: string
+    reason: string
+    proposedAt: string
+    status: string
+    customerResponse?: string
+    customerResponseAt?: string
+    customerAlternativeSlot?: string
+    customerAlternativeNote?: string
+  }>
   paymentMethod: 'COD' | 'ONLINE' | 'PAY_AT_STORE'
   paymentStatus: 'PENDING' | 'PAID' | 'FAILED'
   paidAt?: string
@@ -268,10 +280,7 @@ function AdminOrdersPage() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            time: dateTime.toISOString(),
-            note: note.trim(),
-          }),
+          body: JSON.stringify({ time: dateTime.toISOString(), note: note.trim() }),
         },
       )
 
@@ -280,6 +289,10 @@ function AdminOrdersPage() {
       if (!response.ok) {
         throw new Error(data.message || 'Unable to propose slot')
       }
+
+      setOrders((current) => current.map((item) => item._id === order._id
+        ? { ...item, ...data.order }
+        : item))
 
       // Refresh orders to reflect the proposal
       void fetchOrders()
@@ -815,18 +828,20 @@ function AdminOrdersPage() {
                                 />
                               </div>
                               <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
-                                Note (optional)
+                                Reason for rescheduling (required)
                               </label>
                               <textarea
                                 value={proposeNote}
                                 onChange={(e) => setProposeNote(e.target.value)}
+                                required
+                                maxLength={500}
                                 rows={2}
                                 className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
-                                placeholder="e.g. Requested slot unavailable"
+                                placeholder="Explain why the delivery time needs to change"
                               />
                               <button
                                 type="button"
-                                disabled={proposing || !proposeDate || !proposeTime}
+                                disabled={proposing || !proposeDate || !proposeTime || !proposeNote.trim()}
                                 onClick={() =>
                                   proposeSlot(
                                     order.orderNumber,
@@ -867,6 +882,22 @@ function AdminOrdersPage() {
                               Suggest Another Time
                             </button>
                           )}
+
+                          {order.rescheduleProposals?.length ? (
+                            <section className="mt-4 space-y-3 border-t border-border pt-4" aria-label="Reschedule history">
+                              <h4 className="text-sm font-semibold">Reschedule history</h4>
+                              {order.rescheduleProposals.map((proposal) => (
+                                <div key={proposal.proposalId} className="rounded-lg bg-cream/40 p-3 text-xs space-y-1">
+                                  <p>Previous confirmed: {proposal.previousConfirmedSlot ? new Date(proposal.previousConfirmedSlot).toLocaleString('en-IN') : 'Not recorded'}</p>
+                                  <p>Proposed: {new Date(proposal.proposedSlot).toLocaleString('en-IN')}</p>
+                                  <p>Reason: {proposal.reason}</p>
+                                  <p>Proposal date: {new Date(proposal.proposedAt).toLocaleString('en-IN')} · {proposal.status.replaceAll('_', ' ')}</p>
+                                  {proposal.customerResponse && <p>Customer response: {proposal.customerResponse.replaceAll('_', ' ')}{proposal.customerResponseAt ? ` · ${new Date(proposal.customerResponseAt).toLocaleString('en-IN')}` : ''}</p>}
+                                  {proposal.customerAlternativeSlot && <p className="font-medium">Requested alternative: {new Date(proposal.customerAlternativeSlot).toLocaleString('en-IN')}{proposal.customerAlternativeNote ? ` · ${proposal.customerAlternativeNote}` : ''}</p>}
+                                </div>
+                              ))}
+                            </section>
+                          ) : null}
 
                           {/* WhatsApp click-to-chat */}
                           {order.phone && (

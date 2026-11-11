@@ -141,6 +141,21 @@ describe("Inventory movement ledger", () => {
     });
   });
 
+  it.each(["OUT_OF_STOCK", "DISABLED"] as const)(
+    "does not reserve a product marked %s",
+    async (availability) => {
+      const product = await createProduct({ availability });
+
+      await withSession(async (session) => {
+        await expect(
+          reserveInventory(session, [{ productId: product._id, quantity: 1 }]),
+        ).rejects.toBeInstanceOf(InventoryUnavailableError);
+      });
+
+      expect(await Product.findById(product._id).then((saved) => saved?.stock)).toBe(10);
+    },
+  );
+
   it("does not create a ledger entry when quantity is zero on restore", async () => {
     const product = await createProduct({ stock: 5 });
 

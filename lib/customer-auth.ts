@@ -33,9 +33,21 @@ export type CustomerOrder = {
   proposedSlot?: {
     time: string
     note: string
-    status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED'
+    status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'ALTERNATIVE_REQUESTED'
     expiresAt?: string
   }
+  rescheduleProposals?: Array<{
+    proposalId: string
+    previousConfirmedSlot?: string
+    proposedSlot: string
+    reason: string
+    proposedAt: string
+    status: string
+    customerResponse?: string
+    customerResponseAt?: string
+    customerAlternativeSlot?: string
+    customerAlternativeNote?: string
+  }>
   paymentMethod: 'COD' | 'ONLINE' | 'PAY_AT_STORE'
   paymentStatus: 'PENDING' | 'PAID' | 'FAILED'
   paidAt?: string
@@ -50,6 +62,7 @@ export type CustomerOrder = {
     | 'DELIVERED'
     | 'COLLECTED'
     | 'CANCELLED'
+    | 'RESCHEDULE_PROPOSED'
   items: CustomerOrderItem[]
   subtotal: number
   deliveryFee: number

@@ -10,6 +10,7 @@ import {
   getFinancialAnalytics,
   getSalesAnalytics,
   getProductAnalytics,
+  getInventoryAnalytics,
 } from "../src/services/analyticsService.js";
 import { buildFinancialReport } from "../src/services/pdfReportService.js";
 import {
@@ -112,6 +113,16 @@ describe("Analytics business logic — COD revenue recognition", () => {
 
   beforeEach(async () => {
     await clearTestDB();
+  });
+
+  it("flags products at or below their configured reorder level as low stock", async () => {
+    await createProduct({ stock: 4, reorderLevel: 5 });
+    await createProduct({ stock: 6, reorderLevel: 5 });
+
+    const inventory = await getInventoryAnalytics();
+    expect(inventory.lowStockCount).toBe(1);
+    expect(inventory.products.find((product) => product.stock === 4)?.isLowStock).toBe(true);
+    expect(inventory.products.find((product) => product.stock === 6)?.isLowStock).toBe(false);
   });
 
   afterAll(async () => {

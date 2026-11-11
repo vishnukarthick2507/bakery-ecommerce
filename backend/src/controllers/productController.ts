@@ -28,6 +28,8 @@ const productSchema = z.object({
 
   stock: z.number().int().min(0).optional(),
 
+  stockAdjustmentReason: z.string().trim().min(1).max(200).optional(),
+
   availability: z
     .enum(["AVAILABLE", "OUT_OF_STOCK", "DISABLED"])
     .optional(),
@@ -439,6 +441,8 @@ export const updateProduct = async (
             previousStock: existingStock,
             newStock,
             reason: "MANUAL_ADJUSTMENT",
+            adjustmentReason:
+              parsed.data.stockAdjustmentReason ?? "Manual stock adjustment",
             ...(adminId
               ? { relatedUserId: new mongoose.Types.ObjectId(adminId) }
               : {}),
@@ -504,6 +508,8 @@ export const updateProduct = async (
             previousStock: existingStock,
             newStock,
             reason: "MANUAL_ADJUSTMENT",
+            adjustmentReason:
+              parsed.data.stockAdjustmentReason ?? "Manual stock adjustment",
             ...(adminId
               ? { relatedUserId: new mongoose.Types.ObjectId(adminId) }
               : {}),

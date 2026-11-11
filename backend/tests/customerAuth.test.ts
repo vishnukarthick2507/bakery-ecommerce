@@ -11,10 +11,17 @@ import { createAuthTestApp } from "./authTestApp.js";
 import { Admin } from "../src/models/Admin.js";
 import { sendOtpEmail, isBrevoConfigured } from "../src/services/emailService.js";
 
+const googleAuthMocks = vi.hoisted(() => ({
+  verifyGoogleIdToken: vi.fn(),
+  isGoogleConfigured: vi.fn(() => true),
+}));
+
 vi.mock("../src/services/emailService.js", () => ({
   sendOtpEmail: vi.fn(),
   isBrevoConfigured: vi.fn(() => true),
 }));
+
+vi.mock("../src/services/googleAuth.js", () => googleAuthMocks);
 
 function setCookieValues(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : value ? [value] : [];
@@ -41,6 +48,13 @@ describe("Customer password-based authentication", () => {
     await clearTestDB();
     (sendOtpEmail as ReturnType<typeof vi.fn>).mockResolvedValue(true);
     (isBrevoConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    googleAuthMocks.isGoogleConfigured.mockReturnValue(true);
+    googleAuthMocks.verifyGoogleIdToken.mockResolvedValue({
+      googleId: "google-customer-1",
+      email: "google@example.com",
+      emailVerified: true,
+      name: "Google Customer",
+    });
   });
 
   afterAll(async () => {
@@ -134,6 +148,29 @@ describe("Customer password-based authentication", () => {
       // Invalid input should be rejected (400) or rate-limited (429)
       expect([400, 429]).toContain(res.status);
     });
+  });
+
+  describe("POST /api/auth/google redirect handling", () => {
+    it("keeps same-site relative redirect paths", async () => {
+      const response = await request(app)
+        .post("/api/auth/google")
+        .send({ idToken: "mock-google-id-token", redirectTo: "/account/orders" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.redirectTo).toBe("/account/orders");
+    });
+
+    it.each(["//attacker.example/path", "/\\\\attacker.example", "https://attacker.example"])(
+      "falls back for unsafe redirect %s",
+      async (redirectTo) => {
+        const response = await request(app)
+          .post("/api/auth/google")
+          .send({ idToken: "mock-google-id-token", redirectTo });
+
+        expect(response.status).toBe(200);
+        expect(response.body.redirectTo).toBe("/account");
+      },
+    );
   });
 
   describe("POST /api/auth/customer/login", () => {

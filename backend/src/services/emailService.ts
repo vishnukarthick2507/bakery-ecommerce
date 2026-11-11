@@ -1,4 +1,5 @@
 import { OTP_EXPIRY_MINUTES } from "./otpService.js";
+import { z } from "zod";
 
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
@@ -209,5 +210,189 @@ export async function sendOtpEmail(
     return false;
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Sends a secret-free alert after a successful administrator login.
+ * The recipient must be explicitly configured; the verified sender is never
+ * treated as the notification destination.
+ */
+export async function sendAdminLoginAlert(input: {
+  username: string;
+  occurredAt: Date;
+  ipAddress?: string;
+  userAgent?: string;
+}): Promise<boolean> {
+  const recipient = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
+  if (!recipient) return false;
+
+  const parsedRecipient = z.string().email().safeParse(recipient);
+  if (!parsedRecipient.success || !isBrevoConfigured()) return false;
+
+  const { apiKey, from, fromName } = getBrevoConfig();
+  const safeText = (value: string) => value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[char]!);
+  const dateTime = input.occurredAt.toISOString();
+  const ipAddress = input.ipAddress?.trim() || "Unavailable";
+  const userAgent = input.userAgent?.trim() || "Unavailable";
+  const subject = "Admin sign-in alert — Bluebell Bakehouse";
+  const htmlContent = `
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;background:#f5f1ea;font-family:Arial,Helvetica,sans-serif;color:#342719">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px"><tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border:1px solid #e6d9c7;border-radius:12px;overflow:hidden">
+      <tr><td style="padding:24px;background:#70451f;color:#fff;text-align:center"><h1 style="margin:0;font-size:24px">Bluebell Bakehouse</h1><p style="margin:8px 0 0">Admin security alert</p></td></tr>
+      <tr><td style="padding:24px"><h2 style="margin-top:0;font-size:20px">Successful administrator sign-in</h2>
+        <p>A successful admin login was recorded. If this was not you, secure the administrator account immediately.</p>
+        <table role="presentation" width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;overflow-wrap:anywhere">
+          <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Username</td><td style="border-bottom:1px solid #eee">${safeText(input.username)}</td></tr>
+          <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Date and time (UTC)</td><td style="border-bottom:1px solid #eee">${safeText(dateTime)}</td></tr>
+          <tr><td style="font-weight:bold;border-bottom:1px solid #eee">IP address</td><td style="border-bottom:1px solid #eee">${safeText(ipAddress)}</td></tr>
+          <tr><td style="font-weight:bold">Browser/device</td><td>${safeText(userAgent)}</td></tr>
+        </table>
+        <p style="margin:24px 0 0;color:#786c5e;font-size:12px">Automated security notification from Bluebell Bakehouse. This email does not contain credentials or session information.</p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(BREVO_API_URL, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        sender: { email: from, name: fromName },
+        to: [{ email: parsedRecipient.data }],
+        subject,
+        htmlContent,
+      }),
+      signal: controller.signal,
+    });
+    return response.ok;
+  } catch {
+    // Security alerts are best-effort and must not change login success.
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+const sentAdminLoginAlertEvents = new Set<string>();
+const ADMIN_ALERT_DEDUPE_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * Suppresses repeated dispatch of the same request event within this process.
+ * This is intentionally best-effort; durable cross-process delivery guarantees
+ * require a persisted notification ledger/outbox.
+ */
+export async function sendAdminLoginAlertOnce(
+  eventId: string,
+  input: Parameters<typeof sendAdminLoginAlert>[0],
+): Promise<boolean> {
+  const normalizedEventId = eventId.trim();
+  if (!normalizedEventId || sentAdminLoginAlertEvents.has(normalizedEventId)) {
+    return false;
+  }
+
+  try {
+    const sent = await sendAdminLoginAlert(input);
+    if (sent) {
+      sentAdminLoginAlertEvents.add(normalizedEventId);
+      setTimeout(() => sentAdminLoginAlertEvents.delete(normalizedEventId), ADMIN_ALERT_DEDUPE_WINDOW_MS).unref?.();
+    }
+    return sent;
+  } catch {
+    // Defensive boundary: notification delivery cannot affect authentication.
+    return false;
+  }
+}
+
+export interface CustomerOrderEmailInput {
+  recipient: string;
+  customerName: string;
+  orderNumber: string;
+  event: "ORDER_PLACED" | "PAYMENT_CONFIRMED" | "STATUS_CHANGED" | "CANCELLED" | "RESCHEDULE_REQUESTED" | "RESCHEDULE_ACCEPTED" | "RESCHEDULE_REJECTED";
+  status: string;
+  details: string;
+  eventId: string;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]!);
+}
+
+const customerOrderEmailEvents = new Set<string>();
+const CUSTOMER_ORDER_EMAIL_DEDUPE_MS = 15 * 60 * 1000;
+
+/** Sends a best-effort order update; suppression is process-local, not durable. */
+export async function sendCustomerOrderEmailOnce(
+  input: CustomerOrderEmailInput,
+): Promise<boolean> {
+  const eventId = input.eventId.trim();
+  if (!eventId || customerOrderEmailEvents.has(eventId)) return false;
+
+  const recipient = z.string().trim().email().safeParse(input.recipient);
+  if (!recipient.success) return false;
+
+  const labels: Record<CustomerOrderEmailInput["event"], { subject: string; heading: string }> = {
+    ORDER_PLACED: { subject: "Order received", heading: "Thank you for your order" },
+    PAYMENT_CONFIRMED: { subject: "Payment confirmed", heading: "Your payment is confirmed" },
+    STATUS_CHANGED: { subject: "Order update", heading: "Your order status has changed" },
+    CANCELLED: { subject: "Order cancelled", heading: "Your order has been cancelled" },
+    RESCHEDULE_REQUESTED: { subject: "Rescheduling request received", heading: "We received your timing request" },
+    RESCHEDULE_ACCEPTED: { subject: "New order time confirmed", heading: "Your new time is confirmed" },
+    RESCHEDULE_REJECTED: { subject: "Rescheduling update", heading: "Your rescheduling request was declined" },
+  };
+
+  const label = labels[input.event];
+  const htmlContent = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f5f1ea;color:#342719;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border:1px solid #e6d9c7;border-radius:12px"><tr><td style="padding:24px;background:#70451f;color:#fff;text-align:center"><h1 style="margin:0;font-size:24px">Bluebell Bakehouse</h1></td></tr><tr><td style="padding:24px"><h2 style="margin-top:0;font-size:20px">${escapeHtml(label.heading)}</h2><p>Hello ${escapeHtml(input.customerName)},</p><p>Here are the latest details for your order.</p><table role="presentation" width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;overflow-wrap:anywhere"><tr><td style="font-weight:bold;border-bottom:1px solid #eee">Order</td><td style="border-bottom:1px solid #eee">${escapeHtml(input.orderNumber)}</td></tr><tr><td style="font-weight:bold;border-bottom:1px solid #eee">Status</td><td style="border-bottom:1px solid #eee">${escapeHtml(input.status)}</td></tr><tr><td style="font-weight:bold">Details</td><td>${escapeHtml(input.details)}</td></tr></table><p style="margin:24px 0 0;color:#786c5e;font-size:12px">Automated order update from Bluebell Bakehouse.</p></td></tr></table></td></tr></table></body></html>`;
+
+  try {
+    const { apiKey, from, fromName } = getBrevoConfig();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let sent = false;
+    try {
+      const response = await fetch(BREVO_API_URL, {
+        method: "POST",
+        headers: { "api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          sender: { email: from, name: fromName },
+          to: [{ email: recipient.data }],
+          subject: `Bluebell Bakehouse — ${label.subject} ${input.orderNumber}`,
+          htmlContent,
+        }),
+        signal: controller.signal,
+      });
+      sent = response.ok;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (sent) {
+      customerOrderEmailEvents.add(eventId);
+      setTimeout(() => customerOrderEmailEvents.delete(eventId), CUSTOMER_ORDER_EMAIL_DEDUPE_MS).unref?.();
+    }
+    return sent;
+  } catch {
+    return false;
   }
 }

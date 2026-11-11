@@ -13,6 +13,10 @@ import { Product } from "../src/models/Product.js";
 import { CustomCakeRequest } from "../src/models/CustomCakeRequest.js";
 import productRoutes from "../src/routes/productRoutes.js";
 import customCakeRoutes from "../src/routes/customCakeRoutes.js";
+import orderRoutes from "../src/routes/orderRoutes.js";
+import { Order } from "../src/models/Order.js";
+import { InventoryMovement } from "../src/models/InventoryMovement.js";
+import adminInventoryRoutes from "../src/routes/adminInventoryRoutes.js";
 import {
   connectTestDB,
   clearTestDB,
@@ -272,5 +276,119 @@ describe("Custom cake requests pagination", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe("Admin order filters", () => {
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    await mongoose.connect(mongoServer.getUri());
+  });
+
+  beforeEach(async () => {
+    await clearTestDB();
+    await seedAdmin();
+  });
+
+  afterAll(async () => {
+    await mongoose.disconnect();
+    if (mongoServer) await mongoServer.stop();
+  });
+
+  const app = express();
+  app.use(express.json());
+  app.use("/api/orders", orderRoutes);
+
+  it("filters paginated orders by supported fulfillment type", async () => {
+    const admin = await Admin.findOne({ username: "testadmin" });
+    const token = makeAdminToken(admin!._id.toString());
+    const common = {
+      customerName: "Test Customer",
+      phone: "9840916058",
+      scheduledDate: "2026-12-01",
+      scheduledTime: "10:00 AM",
+      paymentMethod: "COD",
+      paymentStatus: "PENDING",
+      orderStatus: "PLACED",
+      items: [{ productId: new mongoose.Types.ObjectId(), productName: "Cake", variantId: "default", quantity: 1, unitPrice: 100, itemTotal: 100, totalPrice: 100 }],
+      subtotal: 100,
+      deliveryFee: 0,
+      totalAmount: 100,
+    };
+    await Order.insertMany([
+      { ...common, orderNumber: "SV-PICKUP-001", fulfillmentType: "PICKUP", idempotencyKey: "pickup-key", idempotencyHash: "pickup-hash" },
+      { ...common, orderNumber: "SV-DELIVERY-001", fulfillmentType: "DELIVERY", idempotencyKey: "delivery-key", idempotencyHash: "delivery-hash" },
+    ]);
+
+    const response = await request(app)
+      .get("/api/orders?page=1&limit=5&fulfillmentType=PICKUP&paymentStatus=PENDING&orderStatus=PLACED")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.orders).toHaveLength(1);
+    expect(response.body.orders[0].fulfillmentType).toBe("PICKUP");
+    expect(response.body.pagination.total).toBe(1);
+  });
+
+  it("rejects unsupported fulfillment types", async () => {
+    const admin = await Admin.findOne({ username: "testadmin" });
+    const token = makeAdminToken(admin!._id.toString());
+    const response = await request(app)
+      .get("/api/orders?fulfillmentType=SHIPMENT")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("Inventory movement pagination", () => {
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    await mongoose.connect(mongoServer.getUri());
+  });
+
+  beforeEach(async () => {
+    await clearTestDB();
+    await seedAdmin();
+  });
+
+  afterAll(async () => {
+    await mongoose.disconnect();
+    if (mongoServer) await mongoServer.stop();
+  });
+
+  const app = express();
+  app.use(express.json());
+  app.use("/api/admin/inventory", adminInventoryRoutes);
+
+  it("returns only the requested page and pagination metadata", async () => {
+    const admin = await Admin.findOne({ username: "testadmin" });
+    const token = makeAdminToken(admin!._id.toString());
+    const product = await Product.create({
+      name: "Movement test product",
+      slug: "movement-test-product",
+      description: "Test product",
+      price: 100,
+      category: "Cakes",
+      stock: 10,
+      preparationTime: 30,
+      availability: "AVAILABLE",
+    });
+    await InventoryMovement.insertMany(Array.from({ length: 3 }, (_, index) => ({
+      productId: product._id,
+      quantityChange: -1,
+      previousStock: 10 - index,
+      newStock: 9 - index,
+      reason: "ORDER_RESERVATION",
+      createdAt: new Date(Date.UTC(2026, 0, index + 1)),
+    })));
+
+    const response = await request(app)
+      .get("/api/admin/inventory/movements?page=2&limit=2")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.movements).toHaveLength(1);
+    expect(response.body.pagination).toMatchObject({ page: 2, limit: 2, total: 3, totalPages: 2 });
   });
 });

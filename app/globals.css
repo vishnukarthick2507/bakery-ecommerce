@@ -202,3 +202,263 @@
     }
   }
 }
+
+/* Bluebell customer-homepage cinematic introduction */
+.homepage-under-intro {
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.homepage-under-intro--ready {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  animation: bluebell-home-reveal 1.15s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.bluebell-intro {
+  --intro-gold: #C6A46A;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: #F7F3EB;
+  background: #101A2B;
+  animation: bluebell-intro-in 600ms ease-out both;
+}
+
+.bluebell-intro--revealing {
+  animation: bluebell-intro-out 1.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+  pointer-events: none;
+}
+
+.bluebell-intro__navy,
+.bluebell-intro__bakery,
+.bluebell-intro__showcase {
+  position: absolute;
+  inset: 0;
+}
+
+.bluebell-intro__navy {
+  z-index: 0;
+  background: radial-gradient(ellipse at 50% 46%, rgba(198, 164, 106, .24), transparent 35%),
+    radial-gradient(ellipse at 50% 50%, #17243A 0%, #101A2B 76%);
+  animation: bluebell-light-bloom 1.6s ease-out both;
+}
+
+.bluebell-intro__bakery {
+  z-index: 1;
+  opacity: 0;
+  clip-path: inset(50% 0 50% 0);
+  transition: opacity 1.1s ease, clip-path 1.25s cubic-bezier(.22, 1, .36, 1);
+}
+
+.bluebell-intro__bakery.is-visible {
+  opacity: 1;
+  clip-path: inset(0);
+}
+
+.bluebell-intro__bakery-image,
+.bluebell-intro__food-image {
+  object-fit: cover;
+}
+
+.bluebell-intro__bakery-image {
+  object-position: center 56%;
+  animation: bluebell-camera-drift 7s ease-in-out both;
+}
+
+.bluebell-intro__bakery-shade,
+.bluebell-intro__showcase-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(16,26,43,.5), rgba(16,26,43,.12) 55%, rgba(16,26,43,.34)),
+    linear-gradient(0deg, rgba(16,26,43,.76), transparent 65%);
+}
+
+.bluebell-intro__showcase {
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 800ms ease;
+}
+
+.bluebell-intro__showcase.is-visible { opacity: 1; }
+
+.bluebell-intro__frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+
+.bluebell-intro__frame.is-active { opacity: 1; }
+
+.bluebell-intro__food-image {
+  animation: bluebell-food-drift 2.6s ease-in-out both;
+}
+
+.bluebell-intro__showcase-shade {
+  background: linear-gradient(0deg, rgba(16,26,43,.82), rgba(16,26,43,.08) 75%),
+    linear-gradient(90deg, rgba(16,26,43,.18), transparent 55%, rgba(16,26,43,.12));
+}
+
+.bluebell-intro__identity {
+  position: relative;
+  z-index: 3;
+  width: min(92vw, 950px);
+  padding: 2rem 1rem;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 850ms ease, transform 1s cubic-bezier(.22, 1, .36, 1);
+}
+
+.bluebell-intro__identity.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.bluebell-intro__ornament {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 1.35rem;
+  border: 1px solid rgba(198,164,106,.72);
+  border-radius: 50%;
+  box-shadow: 0 0 36px rgba(198,164,106,.16), inset 0 0 22px rgba(198,164,106,.1);
+}
+
+.bluebell-intro__ornament span {
+  width: 11px;
+  height: 11px;
+  border: 1px solid #C6A46A;
+  transform: rotate(45deg);
+}
+
+.bluebell-intro__eyebrow {
+  margin: 0 0 .9rem;
+  color: #E1C99D;
+  font: 500 .65rem/1.5 var(--font-inter), sans-serif;
+  letter-spacing: .3em;
+}
+
+.bluebell-intro__identity h1 {
+  margin: 0;
+  color: #F7F3EB;
+  font: 500 clamp(2rem, 7.2vw, 5.5rem)/1.05 var(--font-playfair), Georgia, serif;
+  letter-spacing: .055em;
+  text-wrap: balance;
+  text-shadow: 0 4px 32px rgba(16,26,43,.35);
+}
+
+.bluebell-intro__identity h1 span { color: #D7B779; }
+
+.bluebell-intro__identity h1 span { display: inline-block; }
+
+.bluebell-intro__tagline {
+  margin: 1.25rem 0 0;
+  color: #F7F3EB;
+  font: 400 clamp(.95rem, 2vw, 1.25rem)/1.5 var(--font-playfair), Georgia, serif;
+  letter-spacing: .08em;
+}
+
+.bluebell-intro__showcase-copy {
+  position: absolute;
+  right: 5vw;
+  bottom: max(14vh, 5rem);
+  left: 5vw;
+  margin: 0;
+  color: #F7F3EB;
+  text-align: center;
+  font: 500 clamp(1.25rem, 3.5vw, 2.5rem)/1.2 var(--font-playfair), Georgia, serif;
+  text-shadow: 0 2px 18px rgba(16,26,43,.55);
+  animation: bluebell-copy-in 500ms ease both;
+}
+
+.bluebell-intro__skip {
+  position: absolute;
+  z-index: 2;
+  top: max(1.25rem, env(safe-area-inset-top));
+  right: max(1.25rem, env(safe-area-inset-right));
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
+  min-height: 44px;
+  padding: .55rem 1rem;
+  border: 1px solid rgba(215,183,121,.52);
+  border-radius: 999px;
+  color: #F7F3EB;
+  background: rgba(16,26,43,.38);
+  backdrop-filter: blur(12px);
+  font: 500 .75rem var(--font-inter), sans-serif;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+
+.bluebell-intro__skip:hover { background: rgba(198,164,106,.2); }
+.bluebell-intro__skip:focus-visible { outline: 2px solid #C6A46A; outline-offset: 3px; }
+
+.bluebell-intro__progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  transform-origin: left;
+  background: linear-gradient(90deg, #B28C52, #E4CB98);
+  animation: bluebell-progress 7s linear both;
+}
+
+@keyframes bluebell-light-bloom {
+  from { opacity: .15; transform: scale(.84); }
+  to { opacity: 1; transform: scale(1.08); }
+}
+@keyframes bluebell-camera-drift {
+  from { transform: scale(1.04) translateX(1%); }
+  to { transform: scale(1.14) translateX(-1%); }
+}
+@keyframes bluebell-food-drift {
+  from { transform: scale(1.02) translateX(.6%); }
+  to { transform: scale(1.1) translateX(-.6%); }
+}
+@keyframes bluebell-copy-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes bluebell-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes bluebell-intro-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bluebell-intro-out { to { opacity: 0; visibility: hidden; } }
+@keyframes bluebell-home-reveal {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .bluebell-intro__bakery-image { object-position: 57% center; }
+  .bluebell-intro__identity { padding: 1rem .5rem; }
+  .bluebell-intro__eyebrow { font-size: .55rem; letter-spacing: .2em; }
+  .bluebell-intro__ornament { width: 42px; height: 42px; margin-bottom: 1rem; }
+  .bluebell-intro__tagline { margin-top: .9rem; }
+}
+
+@media (max-width: 800px) {
+  .bluebell-intro__identity h1 span { display: block; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bluebell-intro *, .bluebell-intro::before, .bluebell-intro::after,
+  .homepage-under-intro--ready {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}

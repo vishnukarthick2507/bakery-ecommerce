@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   sendOtpEmail,
+  sendAdminLoginAlertOnce,
+  sendCustomerOrderEmailOnce,
   isBrevoConfigured,
   getBrevoPresenceChecks,
 } from "../src/services/emailService.js";
@@ -9,7 +11,7 @@ const fetchMock = vi.fn();
 
 vi.stubGlobal("fetch", fetchMock);
 
-const brevoEnvVars = ["BREVO_API_KEY", "BREVO_SMTP_HOST", "BREVO_SMTP_USER", "BREVO_SMTP_KEY", "BREVO_FROM_EMAIL", "BREVO_FROM_NAME"];
+const brevoEnvVars = ["BREVO_API_KEY", "BREVO_SMTP_HOST", "BREVO_SMTP_USER", "BREVO_SMTP_KEY", "BREVO_FROM_EMAIL", "BREVO_FROM_NAME", "ADMIN_NOTIFICATION_EMAIL"];
 
 function setBrevoEnv(values: Record<string, string>) {
   for (const [key, value] of Object.entries(values)) {
@@ -196,5 +198,118 @@ describe("getBrevoPresenceChecks", () => {
     const serialized = JSON.stringify(checks);
     expect(serialized).not.toContain("super-secret-api-key-value");
     expect(Object.values(checks).every((value) => typeof value === "boolean")).toBe(true);
+  });
+});
+
+describe("admin login email alerts", () => {
+  beforeEach(() => {
+    clearBrevoEnv();
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 201 });
+    setBrevoEnv({
+      BREVO_API_KEY: "test-api-key",
+      ADMIN_NOTIFICATION_EMAIL: "security@example.com",
+    });
+  });
+
+  afterEach(() => clearBrevoEnv());
+
+  it("sends a branded, escaped alert using only approved security context", async () => {
+    const result = await sendAdminLoginAlertOnce("event-unique-001", {
+      username: "admin<script>",
+      occurredAt: new Date("2026-11-10T12:34:56.000Z"),
+      ipAddress: "192.0.2.10",
+      userAgent: "TestBrowser/1.0",
+    });
+
+    expect(result).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(init.body as string);
+    expect(body.to).toEqual([{ email: "security@example.com" }]);
+    expect(body.subject).toContain("Admin sign-in alert");
+    expect(body.htmlContent).toContain("&lt;script&gt;");
+    expect(body.htmlContent).toContain("192.0.2.10");
+    expect(body.htmlContent).toContain("TestBrowser/1.0");
+    expect(body.htmlContent).not.toMatch(/password|otp|jwt|cookie|token|secret/i);
+  });
+
+  it("suppresses a duplicate request event", async () => {
+    await sendAdminLoginAlertOnce("event-unique-duplicate", {
+      username: "admin",
+      occurredAt: new Date(),
+    });
+    const duplicate = await sendAdminLoginAlertOnce("event-unique-duplicate", {
+      username: "admin",
+      occurredAt: new Date(),
+    });
+
+    expect(duplicate).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns false without sending when notification destination is missing", async () => {
+    delete process.env.ADMIN_NOTIFICATION_EMAIL;
+    const sent = await sendAdminLoginAlertOnce("event-no-recipient", {
+      username: "admin",
+      occurredAt: new Date(),
+    });
+
+    expect(sent).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns false and does not throw when Brevo delivery fails", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("network failure"));
+    await expect(sendAdminLoginAlertOnce("event-network-failure", {
+      username: "admin",
+      occurredAt: new Date(),
+    })).resolves.toBe(false);
+  });
+});
+
+describe("customer order email notifications", () => {
+  beforeEach(() => {
+    clearBrevoEnv();
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 201 });
+    setBrevoEnv({ BREVO_API_KEY: "test-api-key" });
+  });
+  afterEach(() => clearBrevoEnv());
+
+  const notification = (eventId: string) => ({
+    recipient: "verified@example.com",
+    customerName: "A <b>Customer</b>",
+    orderNumber: "BB-123",
+    event: "ORDER_PLACED" as const,
+    status: "PLACED",
+    details: "Cake <script>alert(1)</script> × 2; total 500",
+    eventId,
+  });
+
+  it("sends a branded escaped notice to the provided customer address without secrets", async () => {
+    await expect(sendCustomerOrderEmailOnce(notification("customer-test-order"))).resolves.toBe(true);
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(init.body as string);
+    expect(body.to).toEqual([{ email: "verified@example.com" }]);
+    expect(body.subject).toContain("BB-123");
+    expect(body.htmlContent).toContain("&lt;b&gt;Customer&lt;/b&gt;");
+    expect(body.htmlContent).toContain("&lt;script&gt;");
+    expect(body.htmlContent).not.toContain("<script>");
+    expect(body.htmlContent).not.toMatch(/otp|password|token|credential|razorpay_payment_id/i);
+  });
+
+  it("suppresses duplicate event delivery in this process", async () => {
+    await sendCustomerOrderEmailOnce(notification("customer-test-duplicate"));
+    await expect(sendCustomerOrderEmailOnce(notification("customer-test-duplicate"))).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache failed delivery and safely handles invalid addresses", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("network failure"));
+    await expect(sendCustomerOrderEmailOnce(notification("customer-test-retry"))).resolves.toBe(false);
+    await expect(sendCustomerOrderEmailOnce(notification("customer-test-retry"))).resolves.toBe(true);
+    await expect(sendCustomerOrderEmailOnce({ ...notification("customer-test-invalid"), recipient: "invalid" })).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

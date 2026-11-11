@@ -1,167 +1,117 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { cn } from '@/lib/utils'
 
 const INTRO_SESSION_KEY = 'bb_cinematic_intro_shown'
+const SHOWCASE = [
+  { src: '/images/products/butter-croissant.png', alt: 'Golden butter croissants', title: 'Crafted with Passion.' },
+  { src: '/images/products/sourdough-loaf.png', alt: 'Fresh artisan sourdough bread', title: 'Baked Fresh. Served with Love.' },
+  { src: '/images/products/chocolate-truffle-cake.png', alt: 'Chocolate celebration cake', title: 'Made for life’s sweetest moments.' },
+  { src: '/images/products/choco-chip-cookies.png', alt: 'Fresh chocolate chip cookies', title: 'A little joy in every bite.' },
+] as const
 
-export function CinematicIntro({ onComplete }: { onComplete: () => void }) {
-  const [scene, setScene] = useState(1)
-  const [mounted, setMounted] = useState(false)
-  const [fadingOut, setFadingOut] = useState(false)
-  const introCompleteRef = useRef(false)
+type CinematicIntroProps = { onComplete: () => void }
+
+export function BluebellCinematicIntro({ onComplete }: CinematicIntroProps) {
+  const [visible, setVisible] = useState(false)
+  const [stage, setStage] = useState(0)
+  const [showcaseIndex, setShowcaseIndex] = useState(0)
+  const [homepageReveal, setHomepageReveal] = useState(false)
+  const completed = useRef(false)
+  const finishRef = useRef(onComplete)
+  finishRef.current = onComplete
+
+  const finish = useCallback(() => {
+    if (completed.current) return
+    completed.current = true
+    try {
+      sessionStorage.setItem(INTRO_SESSION_KEY, 'true')
+    } catch {
+      // The intro still completes if browser storage is unavailable.
+    }
+    setVisible(false)
+    finishRef.current()
+  }, [])
 
   useEffect(() => {
-    // Skip intro if already shown in this session
-    if (sessionStorage.getItem(INTRO_SESSION_KEY)) {
-      setMounted(false)
-      onComplete()
+    let alreadyShown = false
+    try {
+      alreadyShown = sessionStorage.getItem(INTRO_SESSION_KEY) === 'true'
+    } catch {
+      // Private browsing/storage restrictions should not block the intro.
+    }
+
+    if (alreadyShown || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      completed.current = true
+      setVisible(false)
+      finishRef.current()
       return
     }
 
-    setMounted(true)
-
-    const timers: NodeJS.Timeout[] = []
-
-    // Original motion: navy bg (0-1s) -> bakery scene reveals (1-2.5s)
-    // -> brand name overlaid (2.5-3.5s) -> tagline (3.5-4.3s)
-    // brand stays visible near lower centre through the handoff
-    timers.push(setTimeout(() => setScene(2), 1000))
-    timers.push(setTimeout(() => setScene(3), 2500))
-    timers.push(setTimeout(() => setScene(4), 3500))
-
-    // Begin fade-out at 4.3s, complete transition at ~5s
-    timers.push(setTimeout(() => {
-      setFadingOut(true)
-    }, 4300))
-
-    timers.push(setTimeout(() => {
-      introCompleteRef.current = true
-      sessionStorage.setItem(INTRO_SESSION_KEY, 'true')
-      setMounted(false)
-      onComplete()
-    }, 5000))
+    setVisible(true)
+    const timers = [
+      window.setTimeout(() => setStage(1), 1500),
+      window.setTimeout(() => setStage(2), 3500),
+      window.setTimeout(() => setHomepageReveal(true), 5700),
+      window.setTimeout(finish, 7000),
+    ]
+    const showcaseTimer = window.setInterval(() => {
+      setShowcaseIndex((index) => (index + 1) % SHOWCASE.length)
+    }, 580)
 
     return () => {
-      timers.forEach((t) => clearTimeout(t))
+      timers.forEach(window.clearTimeout)
+      window.clearInterval(showcaseTimer)
     }
-  }, [])
+  }, [finish])
 
-  const skipIntro = () => {
-    introCompleteRef.current = true
-    sessionStorage.setItem(INTRO_SESSION_KEY, 'true')
-    setMounted(false)
-    onComplete()
-  }
-
-  if (!mounted) return null
+  if (!visible) return null
 
   return (
     <div
-      className={cn(
-        'fixed inset-0 z-[9999] flex flex-col items-center justify-center',
-        'bg-gradient-to-b from-midnight-navy via-deep-navy to-midnight-navy',
-        'transition-opacity duration-700',
-        fadingOut ? 'opacity-0' : 'opacity-100',
-      )}
-      aria-hidden={!mounted}
-      aria-label="Brevo diagnostic settings"
+      className={`bluebell-intro${homepageReveal ? ' bluebell-intro--revealing' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Bluebell Bakehouse introduction"
     >
-      {/* Skip button */}
-      {scene === 1 && !fadingOut && (
-        <button
-          onClick={skipIntro}
-          className="absolute top-6 right-6 z-[9999] rounded-lg px-3 py-2 bg-champagne-gold/10 backdrop-blur-sm text-champagne-gold hover:text-white hover:bg-champagne-gold/20 transition-colors border border-champagne-gold/30"
-          aria-label="Skip intro"
-        >
-          Skip intro
-        </button>
-      )}
+      <div className="bluebell-intro__navy" aria-hidden="true" />
 
-      {/* Scene 1 — Dark navy atmospheric background (0-1s) */}
-      {scene === 1 && !fadingOut && (
-        <div className="absolute inset-0" />
-      )}
+      <div className={`bluebell-intro__bakery${stage >= 1 ? ' is-visible' : ''}`} aria-hidden="true">
+        <Image
+          src="/images/about-bakers.png"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="bluebell-intro__bakery-image"
+          onError={(event) => { event.currentTarget.style.display = 'none' }}
+        />
+        <div className="bluebell-intro__bakery-shade" />
+      </div>
 
-      {/* Scene 2 — Bakery scene reveals itself (1-2.5s) */}
-      {scene === 2 && !fadingOut && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative aspect-square w-3/4 max-w-[860px] overflow-hidden rounded-3xl shadow-[0_20px_50px_rgba(16,26,43,0.5)] border border-champagne-gold/20 animate-scale-up">
-            <Image
-              src="/images/about-bakers.png"
-              alt="Artisan bakery interior"
-              fill
-              priority
-              className="object-cover object-center animate-fade-in-up"
-              style={{ animationDelay: '200ms' }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-midnight-navy/70 via-midnight-navy/20 to-transparent" />
-          </div>
+      <div className={`bluebell-intro__showcase${stage >= 2 ? ' is-visible' : ''}`} aria-hidden="true">
+        <div className="bluebell-intro__frame is-active" key={SHOWCASE[showcaseIndex].src}>
+          <Image src={SHOWCASE[showcaseIndex].src} alt="" fill sizes="100vw" className="bluebell-intro__food-image" />
         </div>
-      )}
+        <div className="bluebell-intro__showcase-shade" />
+        <p className="bluebell-intro__showcase-copy" key={showcaseIndex}>{SHOWCASE[showcaseIndex].title}</p>
+      </div>
 
-      {/* Scene 3 — Brand reveal overlaid on the bakery scene (2.5-3.5s) */}
-      {scene === 3 && !fadingOut && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {/* Bakery scene remains visible behind the brand */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="relative aspect-square w-3/4 max-w-[860px] overflow-hidden rounded-3xl shadow-[0_20px_50px_rgba(16,26,43,0.5)] border border-champagne-gold/20 animate-scale-up">
-              <Image
-                src="/images/about-bakers.png"
-                alt="Artisan bakery interior"
-                fill
-                priority
-                className="object-cover object-center animate-fade-in-up"
-                style={{ animationDelay: '200ms' }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-midnight-navy/70 via-midnight-navy/20 to-transparent" />
-            </div>
-          </div>
-          <div className="relative z-10 flex flex-col items-center justify-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-champagne-gold/20 text-champagne-gold border border-champagne-gold/40 mb-6 animate-fade-in-up shadow-[0_10px_30px_rgba(198,164,106,0.2)]" style={{ animationDelay: '200ms' }}>
-              <span className="text-xs font-semibold tracking-widest uppercase">Established 2024</span>
-            </div>
-            <h1 className="font-heading text-6xl font-bold tracking-tight leading-tight animate-fade-in-up bg-[linear-gradient(to_right,_#C6A46A,_#B28C52)] bg-clip-text text-transparent" style={{ animationDelay: '400ms' }}>
-              BLUEBELL BAKEHOUSE
-            </h1>
-          </div>
-        </div>
-      )}
+      <div className={`bluebell-intro__identity${stage >= 1 ? ' is-visible' : ''}`}>
+        <span className="bluebell-intro__ornament" aria-hidden="true"><span /></span>
+        <p className="bluebell-intro__eyebrow">ARTISAN BAKERY · FRESH EVERY DAY</p>
+        <h1>BLUEBELL <span>BAKEHOUSE</span></h1>
+        <p className="bluebell-intro__tagline">Freshly Baked Happiness.</p>
+      </div>
 
-      {/* Scene 4 — Tagline reveal, brand stays visible near lower centre (3.5-4.3s) */}
-      {scene === 4 && !fadingOut && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {/* Bakery scene remains visible behind */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="relative aspect-square w-3/4 max-w-[860px] overflow-hidden rounded-3xl shadow-[0_20px_50px_rgba(16,26,43,0.5)] border border-champagne-gold/20 animate-scale-up">
-              <Image
-                src="/images/about-bakers.png"
-                alt="Artisan bakery interior"
-                fill
-                priority
-                className="object-cover object-center animate-fade-in-up"
-                style={{ animationDelay: '200ms' }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-midnight-navy/70 via-midnight-navy/20 to-transparent" />
-            </div>
-          </div>
-          <div className="relative z-10 flex flex-col items-center justify-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-champagne-gold/20 text-champagne-gold border border-champagne-gold/40 mb-6 animate-fade-in-up shadow-[0_10px_30px_rgba(198,164,106,0.2)]" style={{ animationDelay: '200ms' }}>
-              <span className="text-xs font-semibold tracking-widest uppercase">Established 2024</span>
-            </div>
-            <h1 className="font-heading text-6xl font-bold tracking-tight leading-tight animate-fade-in-up bg-[linear-gradient(to_right,_#C6A46A,_#B28C52)] bg-clip-text text-transparent" style={{ animationDelay: '400ms' }}>
-              BLUEBELL BAKEHOUSE
-            </h1>
-            <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-champagne-gold text-midnight-navy mt-6 animate-fade-in-up shadow-[0_10px_30px_rgba(198,164,106,0.3)]" style={{ animationDelay: '600ms' }}>
-              <span className="text-xs font-semibold tracking-widest uppercase">Freshly Baked</span>
-            </div>
-            <h2 className="mt-2 text-5xl font-bold text-white tracking-tight animate-fade-in-up" style={{ animationDelay: '800ms' }}>
-              Freshly Baked Happiness.
-            </h2>
-          </div>
-        </div>
-      )}
+      <button className="bluebell-intro__skip" type="button" onClick={finish}>
+        Skip intro <span aria-hidden="true">→</span>
+      </button>
+      <span className="bluebell-intro__progress" aria-hidden="true" />
     </div>
-  );
+  )
 }
+
+// Retain the previous export name for compatibility with any untracked callers.
+export const CinematicIntro = BluebellCinematicIntro

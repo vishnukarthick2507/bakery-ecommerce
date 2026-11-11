@@ -18,6 +18,17 @@ import { isBackendProduct, mapBackendProduct } from './map-backend-product'
 
 export class ApiError extends Error {}
 
+function apiUrl(path: string) {
+  if (typeof window !== 'undefined') return path
+
+  const baseUrl =
+    process.env.BACKEND_INTERNAL_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    'http://localhost:5000'
+
+  return new URL(path, baseUrl).toString()
+}
+
 function apiBaseUrl() {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL
   if (!baseUrl) {
@@ -58,10 +69,7 @@ export function basePrice(product: Product) {
 async function fetchBackendProducts(): Promise<Product[]> {
   let response: Response
   try {
-    // Use a relative path so the request is proxied through Next.js's
-    // server-side rewrite (/api/:path* -> backend URL) instead of a
-    // cross-origin browser fetch to the absolute backend URL.
-    response = await fetch('/api/products', { cache: 'no-store' })
+    response = await fetch(apiUrl('/api/products'), { cache: 'no-store' })
   } catch {
     throw new ApiError('Unable to reach the product API.')
   }
@@ -118,11 +126,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 
   let response: Response
   try {
-    // Use a relative path so the request is proxied through Next.js's
-    // server-side rewrite (/api/:path* -> backend URL), consistent with the
-    // other catalogue functions. This avoids a hard dependency on
-    // NEXT_PUBLIC_API_URL for product detail pages.
-    response = await fetch(`/api/products/slug/${encodeURIComponent(normalizedSlug)}`, {
+    response = await fetch(apiUrl(`/api/products/slug/${encodeURIComponent(normalizedSlug)}`), {
       cache: 'no-store',
     })
   } catch {
