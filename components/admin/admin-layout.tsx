@@ -35,7 +35,7 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/custom-cakes', label: 'Custom Cakes', icon: Cake },
   { href: '/admin/inventory', label: 'Inventory', icon: Package },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
-  { href: '/admin/reports', label: 'Reports', icon: FileText },
+  { href: '/admin/analytics/reports', label: 'Reports', icon: FileText },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 

@@ -52,6 +52,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
 
   // ---- OTP flow state ----
   const [otpStep, setOtpStep] = useState<OtpStep>('send')
+  const [otpPurpose, setOtpPurpose] = useState<'LOGIN' | 'REGISTER' | 'AUTH' | 'GUEST_CHECKOUT' | 'PASSWORD_RESET'>('AUTH')
   const [otp, setOtp] = useState('')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -103,6 +104,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
     setError('')
     setFieldErrors({})
     setResendCooldown(0)
+    setOtpPurpose('AUTH')
     setShowPassword(false)
     setShowConfirmPassword(false)
     if (resendCooldownTimer.current) {
@@ -319,6 +321,20 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         return
       }
 
+      // Registration via /api/auth/register only sends the OTP and creates a
+      // pending registration; the account is created after OTP verification.
+      // Transition to OTP verification instead of redirecting to /account
+      // (no customer session exists yet). The backend created the OTP session
+      // with purpose "REGISTER", so we must verify with the same purpose.
+      if (mode === 'register') {
+        setAuthMethod('email-otp')
+        setOtpPurpose('REGISTER')
+        setOtpStep('verify')
+        setEmail(email.trim().toLowerCase())
+        setSubmitting(false)
+        return
+      }
+
       const redirectTo = (data as { redirectTo?: string })?.redirectTo
       if (redirectTo && typeof redirectTo === 'string') {
         router.push(redirectTo)
@@ -381,13 +397,21 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
       return
     }
 
+    // When the registration form was already submitted, the backend created
+    // the OTP session with purpose "REGISTER"; re-sending here should reuse
+    // the same purpose so verification matches.
+    const purpose: 'LOGIN' | 'REGISTER' | 'AUTH' | 'GUEST_CHECKOUT' | 'PASSWORD_RESET' =
+      mode === 'register' ? 'REGISTER' : 'LOGIN'
+
+    setOtpPurpose(purpose)
+
     setSubmitting(true)
     try {
       const response = await fetch('/api/auth/otp/send', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail(email) }),
+        body: JSON.stringify({ email: cleanEmail(email), purpose }),
       })
       const data = await readJsonSafe(response)
       if (!response.ok) {
@@ -453,7 +477,7 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail(email), otp: otp.trim() }),
+        body: JSON.stringify({ email: cleanEmail(email), otp: otp.trim(), purpose: otpPurpose }),
       })
       const data = await readJsonSafe(response)
       if (!response.ok) {

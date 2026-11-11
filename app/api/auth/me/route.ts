@@ -27,6 +27,11 @@ export async function GET(req: NextRequest) {
     headers.cookie = cookie
   }
 
+  // Forward the original origin so the backend CSRF middleware can validate
+  // the request. Same-origin browser requests to Next.js do not include an
+  // Origin header, so we reconstruct it from the request URL.
+  headers.origin = `${req.nextUrl.protocol}//${req.nextUrl.host}`
+
   const response = await fetch(
     `${backendUrl.replace(/\/+$/, '')}/api/auth/me`,
     {

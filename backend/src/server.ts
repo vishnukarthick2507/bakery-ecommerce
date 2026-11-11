@@ -43,9 +43,28 @@ app.use(requestIdMiddleware);
 // Must come after cookieParser() to read cookies, and before route handlers.
 app.use(csrfProtection);
 
+function getCorsOriginList(): string[] {
+  const corsOrigin = process.env.CORS_ORIGIN;
+  if (!corsOrigin || !corsOrigin.trim()) {
+    return ["http://localhost:3000"];
+  }
+  return corsOrigin.split(",").map((o) => o.trim()).filter(Boolean);
+}
+
+const corsOriginList = getCorsOriginList();
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    origin: (_origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (e.g. same-origin, mobile apps, curl).
+      if (!_origin) {
+        return callback(null, true);
+      }
+      if (corsOriginList.includes(_origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
   }),
 );

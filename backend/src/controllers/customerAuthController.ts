@@ -39,10 +39,14 @@ const otpVerifySchema = z.object({
 
 const registrationCompleteSchema = z.object({
   name: z.string().trim().min(2).max(100),
-  // Email is optional in the body because the verified email comes from the
-  // httpOnly registration token cookie (set after OTP verification). It is
-  // accepted here only for forward-compatibility and is not authoritative.
+  // Email is accepted here only for forward-compatibility; the verified
+  // email comes exclusively from the httpOnly registration token cookie.
   email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()).optional(),
+  // Password and confirmPassword are accepted for forward-compatibility but
+  // not required: the existing secure registration flow sets the password
+  // via registerCustomer -> PendingRegistration -> verifyOtp(REGISTER).
+  password: z.string().optional(),
+  confirmPassword: z.string().optional(),
 });
 
 const registerSchema = z.object({
@@ -815,8 +819,32 @@ export const verifyOtp = async (
       }
     }
 
-    // Preserve existing behavior: set the otp-registration-token cookie
-    // for subsequent registration completion.
+    // For LOGIN purpose, authenticate an existing customer by email after
+    // successful OTP verification. Never create an account through login OTP.
+    if (purpose === "LOGIN") {
+      const user = await User.findOne({ email }).select("+tokenVersion").lean();
+      if (!user || !user.active) {
+        // Generic response to avoid account enumeration via OTP login.
+        res.status(401).json({ message: "Invalid or expired OTP" });
+        return;
+      }
+
+      const customerToken = createCustomerToken(
+        user._id.toString(),
+        user.tokenVersion ?? 0,
+      );
+      setCustomerTokenCookie(res, customerToken);
+
+      res.status(200).json({
+        message: "Signed in successfully",
+        redirectTo: "/account",
+      });
+      return;
+    }
+
+    // For other purposes (AUTH, GUEST_CHECKOUT, PASSWORD_RESET), preserve
+    // existing behavior: set the otp-registration-token cookie for
+    // subsequent registration or reset completion.
     const regToken = await createRegistrationToken(email);
     setRegistrationTokenCookie(res, regToken);
     res.status(200).json({
