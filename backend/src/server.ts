@@ -31,6 +31,9 @@ const app = express();
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5000;
 
+// Database readiness, tracked so /health can report it accurately.
+let dbReady = false;
+
 app.use(helmet());
 
 app.use(cookieParser());
@@ -78,9 +81,13 @@ app.use(
 
 app.use(express.json());
 
-// Health check endpoint — no secrets, no database dependency.
+// Health check endpoint — lightweight, no secrets, reports database readiness.
 app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "ok", service: "bakery-api" });
+  res.status(200).json({
+    status: dbReady ? "ok" : "degraded",
+    service: "bakery-api",
+    database: dbReady ? "connected" : "disconnected",
+  });
 });
 
 app.get("/", (_req, res) => {
@@ -105,21 +112,95 @@ app.use("/api/settings", settingsRoutes);
 
 let server: ReturnType<typeof app.listen> | null = null;
 
-const startServer = async (): Promise<void> => {
-  getJwtSecret();
-  await connectDB();
-  await Order.init();
-  startInventoryExpiryWorker();
+/**
+ * Connect to MongoDB in the background. Never calls process.exit — a
+ * database outage must degrade the service, not kill the HTTP server, so
+ * /health can keep responding and the platform can route traffic.
+ */
+async function connectDatabase(): Promise<void> {
+  try {
+    const mongoURI = process.env.MONGODB_URI;
 
+    if (!mongoURI) {
+      logger.error("Database connection skipped: MONGODB_URI is not configured.");
+      return;
+    }
+
+    await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+    });
+
+    dbReady = true;
+    logger.info("MongoDB connected successfully");
+  } catch (error) {
+    dbReady = false;
+    logger.error(
+      "Database connection failed: " +
+        (error instanceof Error ? error.message : String(error)) +
+        ". Check MONGODB_URI and MongoDB Atlas Network Access. The HTTP server will keep running in degraded mode.",
+    );
+  }
+}
+
+const startServer = async (): Promise<void> => {
+  // Validate JWT secret before listening — this is a required dependency.
+  // Failure is logged clearly without exposing the secret value.
+  try {
+    getJwtSecret();
+  } catch (error) {
+    logger.error(
+      "JWT_SECRET is not configured correctly (must be at least 32 characters). " +
+        "Authentication will not work until it is set. " +
+        (error instanceof Error ? error.message : String(error)),
+    );
+  }
+
+  // Start the HTTP server first so /health responds immediately, even if
+  // the database is not yet reachable. Render needs a listening process.
   server = app.listen(PORT, () => {
     logger.info("API server started", {
       port: PORT,
       env: process.env.NODE_ENV,
+      database: dbReady ? "connected" : "connecting",
     });
   });
+
+  // Connect to the database in the background — do not block startup.
+  await connectDatabase();
+
+  // Ensure Mongoose indexes exist. Non-fatal: orders still work without
+  // index creation, just potentially slower queries.
+  if (dbReady) {
+    try {
+      await Order.init();
+    } catch (error) {
+      logger.error(
+        "Order index initialization failed: " +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
+  }
+
+  // Start the inventory expiry worker. Non-fatal if the DB is unavailable.
+  try {
+    startInventoryExpiryWorker();
+  } catch (error) {
+    logger.error(
+      "Inventory expiry worker failed to start: " +
+        (error instanceof Error ? error.message : String(error)),
+    );
+  }
 };
 
-startServer();
+// Start the server. Any startup error is logged clearly (no secrets)
+// instead of crashing the process silently.
+void startServer().catch((error) => {
+  logger.error(
+    "Server startup failed: " +
+      (error instanceof Error ? error.message : String(error)),
+  );
+});
 
 // Graceful shutdown: close HTTP server, MongoDB, and expiry worker.
 async function gracefulShutdown(signal: string): Promise<void> {
