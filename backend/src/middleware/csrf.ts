@@ -36,12 +36,32 @@ const AUTH_COOKIES = [
   "otp-reset-token",
 ];
 
+/**
+ * Normalizes an origin string for consistent comparison.
+ * - Trims whitespace
+ * - Removes trailing slashes so "https://example.com/" matches "https://example.com"
+ * - Validates the string is a parseable URL
+ * Returns null for invalid origins.
+ */
+function normalizeOrigin(origin: string): string | null {
+  try {
+    const url = new URL(origin.trim());
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return null;
+  }
+}
+
 function getTrustedOrigins(): string[] {
   const corsOrigin = process.env.CORS_ORIGIN;
-  if (!corsOrigin) {
+  if (!corsOrigin || !corsOrigin.trim()) {
     return ["http://localhost:3000"];
   }
-  return corsOrigin.split(",").map((o) => o.trim()).filter(Boolean);
+  return corsOrigin
+    .split(",")
+    .map((o) => normalizeOrigin(o))
+    .filter((o): o is string => Boolean(o));
 }
 
 export function csrfProtection(
@@ -81,8 +101,17 @@ export function csrfProtection(
     return;
   }
 
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) {
+    res.status(403).json({
+      message: "CSRF protection: invalid Origin header",
+    });
+    return;
+  }
+
   const trustedOrigins = getTrustedOrigins();
-  if (!trustedOrigins.includes(origin)) {
+  if (!trustedOrigins.includes(normalizedOrigin)) {
+    console.warn("CSRF protection: untrusted origin", origin);
     res.status(403).json({
       message: "CSRF protection: untrusted origin",
     });
