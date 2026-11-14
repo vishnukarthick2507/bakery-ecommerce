@@ -6,6 +6,11 @@ import request from "supertest";
 import { Admin } from "../src/models/Admin.js";
 import { connectTestDB, clearTestDB, disconnectTestDB } from "./testDatabase.js";
 import { createAuthTestApp } from "./authTestApp.js";
+import {
+  adminLoginLimiter,
+  customerLoginLimiter,
+} from "../src/middleware/rateLimit.js";
+import { ipKeyGenerator } from "express-rate-limit";
 
 vi.mock("../src/services/emailService.js", () => ({
   getBrevoPresenceChecks: vi.fn(),
@@ -34,6 +39,14 @@ describe("Admin authentication API", () => {
     vi.mocked(getBrevoPresenceChecks).mockReset();
     vi.mocked(sendAdminLoginAlertOnce).mockReset();
     vi.mocked(sendAdminLoginAlertOnce).mockResolvedValue(true);
+
+    // Reset shared rate-limit buckets so each test starts from a clean state.
+    // Rate limiting is preserved (not disabled); only the in-memory bucket is
+    // cleared between tests to avoid 429 responses caused by sequential test
+    // execution reusing the same loopback IP.
+    const testIpKey = ipKeyGenerator("127.0.0.1");
+    await adminLoginLimiter.resetKey(testIpKey);
+    await customerLoginLimiter.resetKey(testIpKey);
 
     await Admin.create({
       username: "testadmin",
@@ -369,7 +382,17 @@ describe("Admin authentication API", () => {
       const login = await request(app)
         .post("/api/auth/login")
         .send({ username: "testadmin", password: "CorrectPassword123" });
-      return login.headers["set-cookie"]?.[0]?.split(";")[0]!;
+
+      if (login.status !== 200) {
+        throw new Error(`Admin login failed: ${login.status}`);
+      }
+
+      const cookie = login.headers["set-cookie"]?.[0]?.split(";")[0];
+      if (!cookie) {
+        throw new Error(`Admin login did not set cookie: ${login.status}`);
+      }
+
+      return cookie;
     };
 
     it("rejects unauthorized access without admin token", async () => {

@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { getTrustedOrigins, normalizeOrigin } from "../lib/origin.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -35,34 +36,6 @@ const AUTH_COOKIES = [
   "otp-registration-token",
   "otp-reset-token",
 ];
-
-/**
- * Normalizes an origin string for consistent comparison.
- * - Trims whitespace
- * - Removes trailing slashes so "https://example.com/" matches "https://example.com"
- * - Validates the string is a parseable URL
- * Returns null for invalid origins.
- */
-function normalizeOrigin(origin: string): string | null {
-  try {
-    const url = new URL(origin.trim());
-    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return null;
-  }
-}
-
-function getTrustedOrigins(): string[] {
-  const corsOrigin = process.env.CORS_ORIGIN;
-  if (!corsOrigin || !corsOrigin.trim()) {
-    return ["http://localhost:3000"];
-  }
-  return corsOrigin
-    .split(",")
-    .map((o) => normalizeOrigin(o))
-    .filter((o): o is string => Boolean(o));
-}
 
 export function csrfProtection(
   req: Request,

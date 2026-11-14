@@ -25,6 +25,7 @@ import { startProposalExpiryWorker, stopProposalExpiryWorker } from "./services/
 import { csrfProtection } from "./middleware/csrf.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { logger } from "./lib/logger.js";
+import { getTrustedOrigins, normalizeOrigin } from "./lib/origin.js";
 
 dotenv.config();
 
@@ -47,35 +48,7 @@ app.use(requestIdMiddleware);
 // Must come after cookieParser() to read cookies, and before route handlers.
 app.use(csrfProtection);
 
-function getCorsOriginList(): string[] {
-  const corsOrigin = process.env.CORS_ORIGIN;
-  if (!corsOrigin || !corsOrigin.trim()) {
-    return ["http://localhost:3000"];
-  }
-  return corsOrigin
-    .split(",")
-    .map((o) => normalizeOrigin(o))
-    .filter((o): o is string => Boolean(o));
-}
-
-/**
- * Normalizes an origin string for consistent comparison.
- * - Trims whitespace
- * - Removes trailing slashes so "https://example.com/" matches "https://example.com"
- * - Validates the string is a parseable URL
- * Returns null for invalid origins.
- */
-function normalizeOrigin(origin: string): string | null {
-  try {
-    const url = new URL(origin.trim());
-    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return null;
-  }
-}
-
-const corsOriginList = getCorsOriginList();
+const corsOriginList = getTrustedOrigins();
 
 app.use(
   cors({
@@ -84,7 +57,8 @@ app.use(
       if (!_origin) {
         return callback(null, true);
       }
-      if (corsOriginList.includes(_origin)) {
+      const normalizedOrigin = normalizeOrigin(_origin);
+      if (normalizedOrigin && corsOriginList.includes(normalizedOrigin)) {
         return callback(null, true);
       }
       return callback(null, false);

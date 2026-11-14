@@ -18,7 +18,7 @@ function setAdminTokenCookie(res: Response, token: string): void {
   res.cookie("admin-token", token, {
     httpOnly: true,
     path: "/",
-    sameSite: "lax",
+    sameSite: isProduction ? "none" : "lax",
     secure: isProduction,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days, matches JWT_EXPIRES_IN
   });
@@ -27,7 +27,7 @@ function setAdminTokenCookie(res: Response, token: string): void {
 function clearAdminTokenCookie(res: Response): void {
   res.clearCookie("admin-token", {
     path: "/",
-    sameSite: "lax",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     secure: process.env.NODE_ENV === "production",
   });
 }

@@ -247,4 +247,89 @@ describe("CSRF Protection Middleware", () => {
       process.env.CORS_ORIGIN = TRUSTED_ORIGIN;
     });
   });
+
+  describe("Origin normalization", () => {
+    it("accepts trusted origin with trailing slash", async () => {
+      const res = await request(app)
+        .post("/api/orders")
+        .set("Origin", `${TRUSTED_ORIGIN}/`)
+        .set("Cookie", customerCookie)
+        .send({});
+      expect(res.status).not.toBe(403);
+    });
+
+    it("rejects trusted origin with different port", async () => {
+      const res = await request(app)
+        .post("/api/orders")
+        .set("Origin", "https://bakery-ecommerce-topaz.vercel.app:8080")
+        .set("Cookie", customerCookie)
+        .send({});
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects different scheme (http instead of https)", async () => {
+      const res = await request(app)
+        .post("/api/orders")
+        .set("Origin", "http://bakery-ecommerce-topaz.vercel.app")
+        .set("Cookie", customerCookie)
+        .send({});
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects subdomain of trusted origin", async () => {
+      const res = await request(app)
+        .post("/api/orders")
+        .set("Origin", "https://www.bakery-ecommerce-topaz.vercel.app")
+        .set("Cookie", customerCookie)
+        .send({});
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects temporary unapproved Vercel deployment URL", async () => {
+      const tempUrl = "https://bakery-ecommerce-qdge684cf-vishnukarthick2507-4760.vercel.app";
+      const res = await request(app)
+        .post("/api/orders")
+        .set("Origin", tempUrl)
+        .set("Cookie", customerCookie)
+        .send({});
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects missing Origin header for cookie-authenticated request", async () => {
+      const res = await request(app)
+        .post("/api/orders")
+        .set("Cookie", customerCookie)
+        .send({});
+      expect(res.status).toBe(403);
+      expect(res.body.message).toContain("Origin header required");
+    });
+
+    it("rejects invalid Origin header", async () => {
+      const res = await request(app)
+        .post("/api/orders")
+        .set("Origin", "not-a-valid-origin")
+        .set("Cookie", customerCookie)
+        .send({});
+      expect(res.status).toBe(403);
+      expect(res.body.message).toContain("invalid Origin header");
+    });
+
+    it("accepts localhost origin in development when CORS_ORIGIN unset", async () => {
+      const savedCorsOrigin = process.env.CORS_ORIGIN;
+      delete process.env.CORS_ORIGIN;
+
+      const res = await request(app)
+        .post("/api/orders")
+        .set("Origin", "http://localhost:3000")
+        .set("Cookie", customerCookie)
+        .send({});
+      expect(res.status).not.toBe(403);
+
+      if (savedCorsOrigin) {
+        process.env.CORS_ORIGIN = savedCorsOrigin;
+      } else {
+        delete process.env.CORS_ORIGIN;
+      }
+    });
+  });
 });
