@@ -19,7 +19,6 @@ import { ONLINE_RESERVATION_TTL_MS } from "../services/inventoryExpiry.js";
 import { notifyCustomerOrder, orderEmailDetails } from "../services/customerOrderNotifications.js";
 import {
   validateSlot,
-  DEFAULT_PROPOSAL_EXPIRY_MS,
   parseCheckoutSlot,
 } from "../services/slotValidation.js";
 
@@ -812,6 +811,7 @@ const orderQuerySchema = z.object({
   fulfillmentType: z.enum(["DELIVERY", "PICKUP"]).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  archived: z.enum(["true", "false"]).optional(),
 });
 
 export const getAllOrders = async (
@@ -839,6 +839,7 @@ export const getAllOrders = async (
       fulfillmentType,
       startDate,
       endDate,
+      archived,
     } = parsed.data;
 
     const pageNum = page !== undefined ? parseInt(page, 10) : undefined;
@@ -874,6 +875,14 @@ export const getAllOrders = async (
 
     if (fulfillmentType) {
       filter.fulfillmentType = fulfillmentType;
+    }
+
+    // Default: exclude archived orders from admin operational lists.
+    // ?archived=true returns only archived orders (admin archive tab).
+    if (archived === "true") {
+      filter.isArchived = true;
+    } else {
+      filter.isArchived = { $ne: true };
     }
 
     if (startDate || endDate) {
@@ -1206,6 +1215,13 @@ const proposeSlotSchema = z.object({
     message: "Valid ISO datetime is required",
   }),
   note: z.string().trim().min(1, "A rescheduling reason is required").max(500),
+  responseWindowHours: z
+    .number()
+    .int()
+    .min(1, "Response window must be at least 1 hour")
+    .max(72, "Response window must be at most 72 hours")
+    .optional()
+    .default(3),
 });
 
 const alternativeSlotSchema = z.object({
@@ -1259,7 +1275,7 @@ export const proposeSlot = async (
       return;
     }
 
-    const { time: proposedTimeStr, note } = parsed.data;
+    const { time: proposedTimeStr, note, responseWindowHours } = parsed.data;
     const proposedTime = new Date(proposedTimeStr);
     const session = await mongoose.startSession();
 
@@ -1313,15 +1329,14 @@ export const proposeSlot = async (
           proposedTime.getTime() === order.confirmedSlot.getTime()
         ) {
           throw new OrderStatusError(
-            "Proposed time is the same as the current confirmed slot",
+            "Proposed time is the same as the confirmed slot",
             400,
           );
         }
 
         const now = new Date();
-        const expiresAt = new Date(
-          now.getTime() + DEFAULT_PROPOSAL_EXPIRY_MS(),
-        );
+        const responseWindowMs = (responseWindowHours ?? 3) * 60 * 60 * 1000;
+        const expiresAt = new Date(now.getTime() + responseWindowMs);
         const previousStatus = order.orderStatus;
         order.reschedulePreviousStatus = order.orderStatus;
         const history = ensureProposalHistory(order);
@@ -1833,5 +1848,132 @@ export const requestAlternativeSlot = async (
     res.status(500).json({ message: "Unable to request alternative slot" });
   } finally {
     await session.endSession();
+  }
+};
+
+const archiveEligibleStatuses = [
+  "DELIVERED",
+  "COLLECTED",
+  "CANCELLED",
+] as const;
+
+export const archiveOrder = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.admin) {
+      res.status(401).json({ message: "Authentication required" });
+      return;
+    }
+
+    const orderNumber = String(req.params.orderNumber ?? "")
+      .trim()
+      .toUpperCase();
+
+    if (!orderNumber) {
+      res.status(400).json({ message: "Order number is required" });
+      return;
+    }
+
+    const adminId = req.admin.id;
+
+    const order = await Order.findOne({ orderNumber });
+
+    if (!order) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    if (order.isArchived) {
+      res.status(409).json({ message: "Order is already archived" });
+      return;
+    }
+
+    if (!archiveEligibleStatuses.includes(order.orderStatus as (typeof archiveEligibleStatuses)[number])) {
+      res.status(400).json({
+        message:
+          "Only delivered, collected or cancelled orders can be archived",
+      });
+      return;
+    }
+
+    order.isArchived = true;
+    order.archivedAt = new Date();
+    order.archivedBy = new mongoose.Types.ObjectId(adminId);
+
+    await order.save();
+
+    res.status(200).json({
+      message: "Order archived successfully",
+      order: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        orderStatus: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+        inventoryStatus: order.inventoryStatus,
+        totalAmount: order.totalAmount,
+        isArchived: order.isArchived,
+        archivedAt: order.archivedAt,
+        archivedBy: order.archivedBy,
+      },
+    });
+  } catch (error) {
+    console.error("Archive order failed:", error);
+    res.status(500).json({ message: "Unable to archive order" });
+  }
+};
+
+export const restoreOrder = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.admin) {
+      res.status(401).json({ message: "Authentication required" });
+      return;
+    }
+
+    const orderNumber = String(req.params.orderNumber ?? "")
+      .trim()
+      .toUpperCase();
+
+    if (!orderNumber) {
+      res.status(400).json({ message: "Order number is required" });
+      return;
+    }
+
+    const order = await Order.findOne({ orderNumber });
+
+    if (!order) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    if (!order.isArchived) {
+      res.status(409).json({ message: "Order is not archived" });
+      return;
+    }
+
+    order.isArchived = false;
+    delete order.archivedAt;
+    delete order.archivedBy;
+
+    await order.save();
+
+    res.status(200).json({
+      message: "Order restored successfully",
+      order: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        orderStatus: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+        inventoryStatus: order.inventoryStatus,
+        isArchived: order.isArchived,
+      },
+    });
+  } catch (error) {
+    console.error("Restore order failed:", error);
+    res.status(500).json({ message: "Unable to restore order" });
   }
 };

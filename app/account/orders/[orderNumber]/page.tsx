@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ArrowLeftIcon, ClockIcon } from 'lucide-react'
 import { CustomerOrder, formatOrderStatus } from '@/lib/customer-auth'
-
 type RazorpayHandlerResponse = {
   razorpay_order_id: string
   razorpay_payment_id: string
@@ -107,6 +106,66 @@ export default function CustomerOrderDetailPage() {
   const [alternativeDate, setAlternativeDate] = useState('')
   const [alternativeTime, setAlternativeTime] = useState('')
   const [alternativeNote, setAlternativeNote] = useState('')
+const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null)
+const [showAlternativeForm, setShowAlternativeForm] = useState(false)
+const [switchToPickupConfirmed, setSwitchToPickupConfirmed] = useState(false)
+
+function formatDateTime(dateString: string): string {
+  try {
+    return new Date(dateString).toLocaleString('en-IN', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return dateString
+  }
+}
+
+function formatDate(dateString: string): string {
+  try {
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  } catch {
+    return dateString
+  }
+}
+
+function formatTime(dateString: string): string {
+  try {
+    return new Date(dateString).toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return dateString
+  }
+}
+
+function getCountdownSeconds(expiresAt: string | undefined): number | null {
+  if (!expiresAt) return null
+  const expiry = new Date(expiresAt).getTime()
+  const now = new Date().getTime()
+  const seconds = Math.max(0, Math.floor((expiry - now) / 1000))
+  return seconds > 0 ? seconds : null
+}
+
+function formatCountdown(seconds: number | null): string {
+  if (seconds === null) return 'Expired'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}h ${m}m ${s}s`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
 
   useEffect(() => {
     fetch(`/api/orders/me/${encodeURIComponent(params.orderNumber)}`, {
@@ -124,6 +183,36 @@ export default function CustomerOrderDetailPage() {
       .catch((requestError: unknown) => setError(requestError instanceof Error ? requestError.message : 'Unable to load order.'))
       .finally(() => setLoading(false))
   }, [params.orderNumber, router])
+
+  useEffect(() => {
+    const expiresAt = order?.proposedSlot?.expiresAt
+    const status = order?.proposedSlot?.status
+
+    if (!expiresAt || status !== 'PENDING') {
+      setCountdownSeconds(null)
+      return
+    }
+
+    const updateCountdown = () => {
+      const seconds = getCountdownSeconds(expiresAt)
+      setCountdownSeconds(seconds)
+      return seconds
+    }
+
+    const initial = updateCountdown()
+    if (initial === null) {
+      return
+    }
+
+    const timerId = setInterval(() => {
+      const remaining = updateCountdown()
+      if (remaining === null) {
+        clearInterval(timerId)
+      }
+    }, 1000)
+
+    return () => clearInterval(timerId)
+  }, [order?.proposedSlot?.expiresAt, order?.proposedSlot?.status])
 
   const startRetryPayment = async (
     orderNumber: string,
@@ -285,6 +374,10 @@ export default function CustomerOrderDetailPage() {
       const refreshData = await refreshResponse.json()
       if (refreshResponse.ok) {
         setOrder(refreshData.order)
+        setShowAlternativeForm(false)
+        setAlternativeDate('')
+        setAlternativeTime('')
+        setAlternativeNote('')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to accept proposal')
@@ -318,6 +411,10 @@ export default function CustomerOrderDetailPage() {
       const refreshData = await refreshResponse.json()
       if (refreshResponse.ok) {
         setOrder(refreshData.order)
+        setShowAlternativeForm(true)
+        setAlternativeDate('')
+        setAlternativeTime('')
+        setAlternativeNote('')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to decline proposal')
@@ -408,37 +505,61 @@ export default function CustomerOrderDetailPage() {
 
       {order.proposedSlot?.status === 'PENDING' && (
         <section className="mt-10 rounded-[2rem] border border-caramel bg-caramel/5 p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-semibold text-primary">New time suggested</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            The bakery has suggested a different time for your order.
-          </p>
-          <div className="mt-4 space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Original time:</span>
-              <span>
-                {order.requestedSlot
-                  ? new Date(order.requestedSlot).toLocaleString('en-IN')
-                  : order.scheduledDate + ' ' + order.scheduledTime}
-              </span>
+          <div className="flex items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="flex-1">
+              <h2 className="text-xl font-semibold text-primary">
+                We need to change your delivery time
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                The bakery has suggested a different time for your order.
+              </p>
             </div>
-            <div className="flex justify-between text-sm font-semibold">
-              <span className="text-muted-foreground">Suggested time:</span>
-              <span>
-                {new Date(order.proposedSlot.time).toLocaleString('en-IN')}
-              </span>
-            </div>
-            {order.proposedSlot.note && (
-              <div className="text-sm text-muted-foreground">
-                <span className="font-medium">Note:</span> {order.proposedSlot.note}
+            <div className="text-right flex-1 sm:flex-none">
+              <div className="text-sm font-semibold text-caramel">
+                {formatCountdown(countdownSeconds)}
               </div>
-            )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Time left to respond
+              </p>
+            </div>
+          </div>
+          <div className="mt-6 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-caramel/30 bg-caramel/10 p-4">
+                <p className="text-xs font-semibold text-caramel uppercase tracking-wider mb-2">
+                  Original time
+                </p>
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <ClockIcon className="size-4" aria-hidden="true" />
+                  <span>
+                    {order.requestedSlot
+                      ? formatDateTime(order.requestedSlot)
+                      : `${formatDate(order.scheduledDate)} · ${formatTime(order.scheduledTime)}`}
+                  </span>
+                </p>
+              </div>
+              <div className="rounded-xl border border-caramel bg-caramel/20 p-4">
+                <p className="text-xs font-semibold text-caramel uppercase tracking-wider mb-2">
+                  Suggested time
+                </p>
+                <p className="text-sm font-semibold text-primary flex items-center gap-2">
+                  <ClockIcon className="size-4" aria-hidden="true" />
+                  <span>
+                    {formatDateTime(order.proposedSlot.time)}
+                  </span>
+                </p>
+                {order.proposedSlot.note && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    <span className="font-medium">Note:</span>{' '}
+                    {order.proposedSlot.note}
+                  </p>
+                )}
+              </div>
+            </div>
             {order.rescheduleProposals?.find((proposal) => proposal.status === 'PENDING') && (
-              <p className="text-sm"><span className="font-medium">Reason:</span> {order.rescheduleProposals.find((proposal) => proposal.status === 'PENDING')?.reason}</p>
-            )}
-            {order.proposedSlot.expiresAt && (
-              <div className="text-sm text-muted-foreground">
-                <span className="font-medium">Expires:</span>{' '}
-                {new Date(order.proposedSlot.expiresAt).toLocaleString('en-IN')}
+              <div className="rounded-xl border border-caramel/30 bg-caramel/5 p-3 text-xs text-muted-foreground">
+                <span className="font-medium">Reason:</span>{' '}
+                {order.rescheduleProposals.find((proposal) => proposal.status === 'PENDING')?.reason}
               </div>
             )}
           </div>
@@ -449,7 +570,7 @@ export default function CustomerOrderDetailPage() {
               onClick={handleAcceptProposal}
               className="flex-1 rounded-xl bg-caramel px-5 py-3 font-medium text-caramel-foreground disabled:opacity-60 hover:bg-caramel/90"
             >
-              {proposing === 'accept' ? 'Accepting…' : 'Accept'}
+              {proposing === 'accept' ? 'Accepting…' : 'Accept new time'}
             </button>
             <button
               type="button"
@@ -460,14 +581,56 @@ export default function CustomerOrderDetailPage() {
               {proposing === 'decline' ? 'Declining…' : 'Decline'}
             </button>
           </div>
-          <div className="mt-6 grid gap-3 rounded-xl border border-border p-4 sm:grid-cols-2">
-            <label className="text-sm">Preferred date<input aria-label="Preferred alternative date" type="date" value={alternativeDate} onChange={(event) => setAlternativeDate(event.target.value)} className="mt-1 w-full rounded-lg border border-border p-2" /></label>
-            <label className="text-sm">Preferred time<input aria-label="Preferred alternative time" type="time" value={alternativeTime} onChange={(event) => setAlternativeTime(event.target.value)} className="mt-1 w-full rounded-lg border border-border p-2" /></label>
-            <label className="text-sm sm:col-span-2">Explanation (optional)<textarea value={alternativeNote} onChange={(event) => setAlternativeNote(event.target.value)} maxLength={500} className="mt-1 w-full rounded-lg border border-border p-2" rows={2} /></label>
-            <button type="button" disabled={proposing !== null || !alternativeDate || !alternativeTime} onClick={handleRequestAlternative} className="rounded-xl border border-caramel px-4 py-3 text-sm text-caramel disabled:opacity-60 sm:col-span-2">{proposing === 'alternative' ? 'Sending request…' : 'Request another time'}</button>
-          </div>
+          {countdownSeconds === null && (
+            <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              Your response time has expired. Your original confirmed delivery
+              slot remains unchanged. The bakery will follow up with you.
+            </div>
+          )}
+          {countdownSeconds !== null && showAlternativeForm && (
+            <div className="mt-6 grid gap-3 rounded-xl border border-border p-4 sm:grid-cols-2">
+              <label className="text-sm">
+                Preferred date
+                <input
+                  aria-label="Preferred alternative date"
+                  type="date"
+                  value={alternativeDate}
+                  onChange={(event) => setAlternativeDate(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-border p-2"
+                />
+              </label>
+              <label className="text-sm">
+                Preferred time
+                <input
+                  aria-label="Preferred alternative time"
+                  type="time"
+                  value={alternativeTime}
+                  onChange={(event) => setAlternativeTime(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-border p-2"
+                />
+              </label>
+              <label className="text-sm sm:col-span-2">
+                Explanation (optional)
+                <textarea
+                  value={alternativeNote}
+                  onChange={(event) => setAlternativeNote(event.target.value)}
+                  maxLength={500}
+                  className="mt-1 w-full rounded-lg border border-border p-2"
+                  rows={2}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={proposing !== null || !alternativeDate || !alternativeTime}
+                onClick={handleRequestAlternative}
+                className="rounded-xl border border-caramel px-4 py-3 text-sm text-caramel disabled:opacity-60 sm:col-span-2"
+              >
+                {proposing === 'alternative' ? 'Sending request…' : 'Request another time'}
+              </button>
+            </div>
+          )}
           {error && (
-            <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -498,9 +661,59 @@ export default function CustomerOrderDetailPage() {
           <h2 className="text-xl font-semibold text-primary">Proposal declined</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             You declined the suggested time. Your order retains its original
-            scheduled time. Contact the bakery if you need to arrange a new
-            time.
+            scheduled time.
           </p>
+          {showAlternativeForm && (
+            <div className="mt-6 grid gap-3 rounded-xl border border-border p-4 sm:grid-cols-2">
+              <label className="text-sm">
+                Preferred date
+                <input
+                  aria-label="Preferred alternative date"
+                  type="date"
+                  value={alternativeDate}
+                  onChange={(event) => setAlternativeDate(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-border p-2"
+                />
+              </label>
+              <label className="text-sm">
+                Preferred time
+                <input
+                  aria-label="Preferred alternative time"
+                  type="time"
+                  value={alternativeTime}
+                  onChange={(event) => setAlternativeTime(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-border p-2"
+                />
+              </label>
+              <label className="text-sm sm:col-span-2">
+                Explanation (optional)
+                <textarea
+                  value={alternativeNote}
+                  onChange={(event) => setAlternativeNote(event.target.value)}
+                  maxLength={500}
+                  className="mt-1 w-full rounded-lg border border-border p-2"
+                  rows={2}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={proposing !== null || !alternativeDate || !alternativeTime}
+                onClick={handleRequestAlternative}
+                className="rounded-xl border border-caramel px-4 py-3 text-sm text-caramel disabled:opacity-60 sm:col-span-2"
+              >
+                {proposing === 'alternative' ? 'Sending request…' : 'Request another time'}
+              </button>
+            </div>
+          )}
+          <div className="mt-6 rounded-xl border border-caramel/30 bg-caramel/5 p-4">
+            <h3 className="text-sm font-semibold text-caramel uppercase tracking-wider mb-2">
+              Switch to store pickup
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Pickup changes cannot be made online. Please contact Bluebell
+              Bakehouse directly to switch your order to store pickup.
+            </p>
+          </div>
         </section>
       )}
 
@@ -508,6 +721,17 @@ export default function CustomerOrderDetailPage() {
         <section className="mt-10 rounded-[2rem] border border-caramel bg-caramel/5 p-6 sm:p-8 shadow-sm">
           <h2 className="text-xl font-semibold text-primary">Alternative time requested</h2>
           <p className="mt-2 text-sm text-muted-foreground">Your confirmed delivery schedule has not changed. The bakery will review your preferred time.</p>
+        </section>
+      )}
+
+      {order.proposedSlot?.status === 'EXPIRED' && (
+        <section className="mt-10 rounded-[2rem] border border-destructive bg-destructive/5 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-semibold text-primary">Your response time has expired</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The bakery's suggested time is no longer available. Your original
+            confirmed delivery slot remains unchanged. The bakery will follow up
+            with you shortly.
+          </p>
         </section>
       )}
 

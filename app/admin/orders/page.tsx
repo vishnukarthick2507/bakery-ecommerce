@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
 import AdminLayout from '@/components/admin/admin-layout'
+import { cn } from '@/lib/utils'
 
 type OrderStatus =
   | 'PLACED'
@@ -72,6 +73,9 @@ type Order = {
   deliveryFee: number
   totalAmount: number
   createdAt: string
+  isArchived?: boolean
+  archivedAt?: string
+  archivedBy?: string
 }
 
 // Controlled progression — mirrors the transition
@@ -121,11 +125,72 @@ const cancellableStatuses: OrderStatus[] = [
   'READY_FOR_PICKUP',
 ]
 
+const archiveEligibleStatuses: OrderStatus[] = [
+  'DELIVERED',
+  'COLLECTED',
+  'CANCELLED',
+]
+
 function formatStatus(status: OrderStatus) {
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+const RESPONSE_WINDOW_OPTIONS = [
+  { value: 1, label: '1 hour' },
+  { value: 2, label: '2 hours' },
+  { value: 3, label: '3 hours (default)' },
+  { value: 4, label: '4 hours' },
+  { value: 6, label: '6 hours' },
+  { value: 12, label: '12 hours' },
+  { value: 24, label: '24 hours (1 day)' },
+  { value: 48, label: '48 hours (2 days)' },
+  { value: 72, label: '72 hours (3 days)' },
+]
+
+function proposalStatusBadge(status?: string) {
+  if (!status) return null
+
+  const badges: Record<string, { label: string; className: string }> = {
+    PENDING: {
+      label: 'Proposal Pending',
+      className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+    },
+    ALTERNATIVE_REQUESTED: {
+      label: 'Alternative Requested',
+      className: 'border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-400',
+    },
+    ACCEPTED: {
+      label: 'Proposal Accepted',
+      className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+    },
+    DECLINED: {
+      label: 'Proposal Declined',
+      className: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400',
+    },
+    EXPIRED: {
+      label: 'Proposal Expired',
+      className: 'border-destructive/30 bg-destructive/10 text-destructive',
+    },
+  }
+
+  const badge = badges[status] ?? {
+    label: status.replaceAll('_', ' '),
+    className: 'border-border bg-cream text-muted-foreground',
+  }
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold',
+        badge.className,
+      )}
+    >
+      {badge.label}
+    </span>
+  )
 }
 
 function AdminOrdersPage() {
@@ -145,6 +210,12 @@ function AdminOrdersPage() {
   const [proposeTime, setProposeTime] = useState('')
   const [proposeNote, setProposeNote] = useState('')
   const [proposing, setProposing] = useState(false)
+  const [proposeResponseWindow, setProposeResponseWindow] = useState<number>(3)
+  const [tab, setTab] = useState<'active' | 'archived'>('active')
+  const [archivingOrderNumber, setArchivingOrderNumber] = useState<string | null>(null)
+  const [restoringOrderNumber, setRestoringOrderNumber] = useState<string | null>(null)
+  const [confirmArchiveOrderNumber, setConfirmArchiveOrderNumber] = useState<string | null>(null)
+  const [confirmRestoreOrderNumber, setConfirmRestoreOrderNumber] = useState<string | null>(null)
 
   async function fetchOrders() {
     try {
@@ -159,6 +230,7 @@ function AdminOrdersPage() {
       if (paymentStatusFilter !== 'ALL') params.set('paymentStatus', paymentStatusFilter)
       if (startDate) params.set('startDate', startDate)
       if (endDate) params.set('endDate', endDate)
+      if (tab === 'archived') params.set('archived', 'true')
 
       const response = await fetch(`/api/orders?${params}`, {
         cache: 'no-store',
@@ -185,7 +257,7 @@ function AdminOrdersPage() {
 
   useEffect(() => {
     fetchOrders()
-  }, [])
+  }, [tab])
 
   const filteredOrders = orders.filter((order) => {
     const normalizedSearch = search.trim().toLowerCase()
@@ -258,6 +330,7 @@ function AdminOrdersPage() {
     date: string,
     time: string,
     note: string,
+    responseWindowHours: number = proposeResponseWindow,
   ) {
     setProposing(true)
     setError('')
@@ -280,7 +353,11 @@ function AdminOrdersPage() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ time: dateTime.toISOString(), note: note.trim() }),
+          body: JSON.stringify({
+            time: dateTime.toISOString(),
+            note: note.trim(),
+            responseWindowHours,
+          }),
         },
       )
 
@@ -302,12 +379,85 @@ function AdminOrdersPage() {
       setProposeDate('')
       setProposeTime('')
       setProposeNote('')
+      setProposeResponseWindow(3)
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Unable to propose slot',
       )
     } finally {
       setProposing(false)
+    }
+  }
+
+  async function handleArchiveOrder(orderNumber: string) {
+    if (!window.confirm(
+      `Archive order ${orderNumber}?\n\nThe order will be removed from the active list but will remain stored and accessible to customers and guests.`
+    )) {
+      return
+    }
+    setArchivingOrderNumber(orderNumber)
+    setError('')
+    try {
+      const response = await fetch(
+        `/api/orders/${encodeURIComponent(orderNumber)}/archive`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      )
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to archive order')
+      }
+      setOrders((currentOrders) =>
+        currentOrders.map((o) =>
+          o.orderNumber === orderNumber
+            ? { ...o, ...data.order, isArchived: true }
+            : o,
+        ),
+      )
+      setError('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to archive order')
+    } finally {
+      setArchivingOrderNumber(null)
+    }
+  }
+
+  async function handleRestoreOrder(orderNumber: string) {
+    if (!window.confirm(
+      `Restore order ${orderNumber}?\n\nThe order will be returned to the active list.`
+    )) {
+      return
+    }
+    setRestoringOrderNumber(orderNumber)
+    setError('')
+    try {
+      const response = await fetch(
+        `/api/orders/${encodeURIComponent(orderNumber)}/restore`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      )
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to restore order')
+      }
+      setOrders((currentOrders) =>
+        currentOrders.map((o) =>
+          o.orderNumber === orderNumber
+            ? { ...o, ...data.order, isArchived: false }
+            : o,
+        ),
+      )
+      setError('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to restore order')
+    } finally {
+      setRestoringOrderNumber(null)
     }
   }
 
@@ -353,6 +503,31 @@ function AdminOrdersPage() {
               View Store
             </Link>
           </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setTab('active')}
+            className={`px-5 py-2.5 text-sm font-medium rounded-xl border ${
+              tab === 'active'
+                ? 'bg-caramel text-caramel-foreground border-caramel'
+                : 'border-border text-muted-foreground hover:bg-cream/50'
+            } transition-colors`}
+          >
+            Active Orders
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('archived')}
+            className={`px-5 py-2.5 text-sm font-medium rounded-xl border ${
+              tab === 'archived'
+                ? 'bg-caramel text-caramel-foreground border-caramel'
+                : 'border-border text-muted-foreground hover:bg-cream/50'
+            } transition-colors`}
+          >
+            Archived Orders
+          </button>
         </div>
 
         <div className="mt-10 grid gap-5 sm:grid-cols-3">
@@ -471,11 +646,13 @@ function AdminOrdersPage() {
         {!loading && !error && orders.length === 0 && (
           <div className="mt-10 rounded-[2rem] border border-border bg-card p-12 text-center shadow-sm">
             <h2 className="text-xl font-semibold text-primary">
-              No orders yet
+              {tab === 'archived' ? 'No archived orders yet' : 'No orders yet'}
             </h2>
 
             <p className="mt-3 text-muted-foreground">
-              Customer orders will appear here.
+              {tab === 'archived'
+                ? 'Archived orders will appear here.'
+                : 'Customer orders will appear here.'}
             </p>
           </div>
         )}
@@ -503,9 +680,12 @@ function AdminOrdersPage() {
                       Order Number
                     </p>
 
-                    <h2 className="mt-1.5 text-2xl font-bold text-primary tracking-tight">
-                      {order.orderNumber}
-                    </h2>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <h2 className="text-2xl font-bold text-primary tracking-tight">
+                        {order.orderNumber}
+                      </h2>
+                      {order.proposedSlot && proposalStatusBadge(order.proposedSlot.status)}
+                    </div>
 
                     <p className="mt-3 text-sm text-muted-foreground">
                       Placed{' '}
@@ -606,23 +786,25 @@ function AdminOrdersPage() {
 
                     {order.proposedSlot && (
                       <div className="mt-4 rounded-[1.5rem] border border-caramel/20 bg-caramel/5 p-4">
-                        <p className="text-xs font-semibold text-caramel uppercase tracking-wider mb-2">
-                          Reschedule Proposal
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Status: {order.proposedSlot.status.charAt(0).toUpperCase() + order.proposedSlot.status.slice(1).toLowerCase()}
-                        </p>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-xs font-semibold text-caramel uppercase tracking-wider">
+                            Reschedule Proposal
+                          </p>
+                          {proposalStatusBadge(order.proposedSlot.status)}
+                        </div>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Proposed: {new Date(order.proposedSlot.time).toLocaleString('en-IN')}
+                          <span className="font-medium text-foreground">Proposed:</span>{' '}
+                          {new Date(order.proposedSlot.time).toLocaleString('en-IN')}
                         </p>
                         {order.proposedSlot.note && (
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Note: {order.proposedSlot.note}
+                            <span className="font-medium text-foreground">Reason:</span> {order.proposedSlot.note}
                           </p>
                         )}
                         {order.proposedSlot.expiresAt && (
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Expires: {new Date(order.proposedSlot.expiresAt).toLocaleString('en-IN')}
+                            <span className="font-medium text-foreground">Expires:</span>{' '}
+                            {new Date(order.proposedSlot.expiresAt).toLocaleString('en-IN')}
                           </p>
                         )}
                       </div>
@@ -643,6 +825,14 @@ function AdminOrdersPage() {
                       <p role="status" className="mt-3 text-sm font-medium text-destructive">
                         Manual review required{order.reconciliationReason ? `: ${order.reconciliationReason}` : ''}
                       </p>
+                    )}
+                    {order.isArchived && (
+                      <div className="mt-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                        <p className="font-semibold">Archived</p>
+                        <p className="mt-1">
+                          Archived on {order.archivedAt ? new Date(order.archivedAt).toLocaleString('en-IN') : 'Unknown date'}
+                        </p>
+                      </div>
                     )}
                   </div>
 
@@ -678,6 +868,88 @@ function AdminOrdersPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* Customer Alternative Request Alert */}
+                {(() => {
+                  const latestAlternative = order.rescheduleProposals?.slice().reverse().find(
+                    (p) => p.customerAlternativeSlot || p.status === 'ALTERNATIVE_REQUESTED',
+                  )
+                  if (!latestAlternative?.customerAlternativeSlot && order.proposedSlot?.status !== 'ALTERNATIVE_REQUESTED') {
+                    return null
+                  }
+
+                  return (
+                    <div className="mt-6 rounded-2xl border-2 border-purple-500/30 bg-purple-500/5 p-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="flex size-2 rounded-full bg-purple-600 animate-pulse" />
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400">
+                              Customer Requested Another Time
+                            </h4>
+                          </div>
+
+                          {latestAlternative?.customerAlternativeSlot && (
+                            <p className="mt-2 text-sm text-foreground">
+                              <span className="font-semibold text-primary">Requested Slot:</span>{' '}
+                              {new Date(latestAlternative.customerAlternativeSlot).toLocaleString('en-IN', {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          )}
+
+                          {latestAlternative?.customerAlternativeNote && (
+                            <p className="mt-1 text-sm text-foreground">
+                              <span className="font-semibold text-primary">Customer Explanation:</span>{' '}
+                              &ldquo;{latestAlternative.customerAlternativeNote}&rdquo;
+                            </p>
+                          )}
+
+                          {latestAlternative?.customerResponseAt && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Requested on {new Date(latestAlternative.customerResponseAt).toLocaleString('en-IN')}
+                            </p>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProposingOrder(order._id)
+                            if (latestAlternative?.customerAlternativeSlot) {
+                              const d = new Date(latestAlternative.customerAlternativeSlot)
+                              const yyyy = d.getFullYear()
+                              const mm = String(d.getMonth() + 1).padStart(2, '0')
+                              const dd = String(d.getDate()).padStart(2, '0')
+                              const hh = String(d.getHours()).padStart(2, '0')
+                              const min = String(d.getMinutes()).padStart(2, '0')
+                              setProposeDate(`${yyyy}-${mm}-${dd}`)
+                              setProposeTime(`${hh}:${min}`)
+                              setProposeNote(
+                                latestAlternative.customerAlternativeNote
+                                  ? `Responding to request: ${latestAlternative.customerAlternativeNote}`
+                                  : 'Proposed slot based on customer request',
+                              )
+                            } else {
+                              setProposeDate('')
+                              setProposeTime('')
+                              setProposeNote('')
+                            }
+                            setProposeResponseWindow(3)
+                          }}
+                          className="shrink-0 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition-colors"
+                        >
+                          Respond & Propose Time
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Status */}
                 <div className="flex flex-col gap-5 pt-7 sm:flex-row sm:items-end sm:justify-between">
@@ -809,7 +1081,7 @@ function AdminOrdersPage() {
 
                           {/* Suggest another time */}
                           {proposingOrder === order._id ? (
-                            <div className="flex flex-col gap-3">
+                            <div className="flex flex-col gap-3 rounded-2xl border border-caramel/40 bg-caramel/5 p-4">
                               <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
                                 New date & time
                               </label>
@@ -827,6 +1099,22 @@ function AdminOrdersPage() {
                                   className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
                                 />
                               </div>
+
+                              <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
+                                Customer response window
+                              </label>
+                              <select
+                                value={proposeResponseWindow}
+                                onChange={(e) => setProposeResponseWindow(Number(e.target.value))}
+                                className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
+                              >
+                                {RESPONSE_WINDOW_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+
                               <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
                                 Reason for rescheduling (required)
                               </label>
@@ -848,9 +1136,10 @@ function AdminOrdersPage() {
                                     proposeDate,
                                     proposeTime,
                                     proposeNote,
+                                    proposeResponseWindow,
                                   )
                                 }
-                                className="w-full rounded-xl bg-caramel px-3 py-2.5 text-xs text-caramel-foreground disabled:opacity-60 transition-colors"
+                                className="w-full rounded-xl bg-caramel px-3 py-2.5 text-xs font-semibold text-caramel-foreground disabled:opacity-60 transition-colors shadow-sm hover:bg-caramel/90"
                               >
                                 {proposing ? 'Proposing…' : 'Suggest Time'}
                               </button>
@@ -861,6 +1150,7 @@ function AdminOrdersPage() {
                                   setProposeDate('')
                                   setProposeTime('')
                                   setProposeNote('')
+                                  setProposeResponseWindow(3)
                                 }}
                                 className="w-full rounded-xl border border-border px-3 py-2.5 text-xs text-caramel hover:bg-cream/50 transition-colors"
                               >
@@ -876,6 +1166,7 @@ function AdminOrdersPage() {
                                 setProposeDate('')
                                 setProposeTime('')
                                 setProposeNote('')
+                                setProposeResponseWindow(3)
                               }}
                               className="w-full rounded-xl border border-caramel px-3 py-2.5 text-xs text-caramel hover:bg-caramel/5 disabled:opacity-60 transition-colors"
                             >
@@ -932,6 +1223,40 @@ function AdminOrdersPage() {
                               className="w-full rounded-xl border border-destructive/30 px-5 py-3 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60 transition-colors"
                             >
                               Cancel Order
+                            </button>
+                          )}
+
+                          {!order.isArchived &&
+                            archiveEligibleStatuses.includes(
+                              order.orderStatus as typeof archiveEligibleStatuses[number],
+                            ) && (
+                            <button
+                              type="button"
+                              disabled={
+                                isUpdating ||
+                                archivingOrderNumber === order.orderNumber
+                              }
+                              onClick={() => handleArchiveOrder(order.orderNumber)}
+                              className="w-full rounded-xl border border-destructive/30 px-5 py-3 font-medium text-destructive hover:bg-destructive/5 disabled:opacity-60 transition-colors"
+                            >
+                              {archivingOrderNumber === order.orderNumber
+                                ? 'Archiving…'
+                                : 'Archive Order'}
+                            </button>
+                          )}
+                          {order.isArchived && (
+                            <button
+                              type="button"
+                              disabled={
+                                isUpdating ||
+                                restoringOrderNumber === order.orderNumber
+                              }
+                              onClick={() => handleRestoreOrder(order.orderNumber)}
+                              className="w-full rounded-xl border border-caramel px-5 py-3 font-medium text-caramel hover:bg-caramel/5 disabled:opacity-60 transition-colors"
+                            >
+                              {restoringOrderNumber === order.orderNumber
+                                ? 'Restoring…'
+                                : 'Restore Order'}
                             </button>
                           )}
 

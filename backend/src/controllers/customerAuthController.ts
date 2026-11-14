@@ -447,7 +447,7 @@ export const googleAuth = async (
       redirectTo: safeRedirect,
     });
   } catch (error) {
-    console.error("Google auth failed:", error);
+    console.error("Google auth failed:", error instanceof Error ? error.message : String(error));
     res.status(401).json({ message: "Invalid Google credentials" });
   }
 };

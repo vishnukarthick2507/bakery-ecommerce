@@ -20,6 +20,8 @@ export type InventoryStatus = "RESERVED" | "COMMITTED" | "RELEASED";
 
 export type ProposalStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "ALTERNATIVE_REQUESTED";
 
+export type ExpiryNotificationStatus = "PENDING" | "SENT" | "FAILED";
+
 export interface IRescheduleProposal {
   proposalId: string;
   previousConfirmedSlot?: Date;
@@ -33,6 +35,11 @@ export interface IRescheduleProposal {
   customerResponseAt?: Date;
   customerAlternativeSlot?: Date;
   customerAlternativeNote?: string;
+  expiryNotificationStatus?: ExpiryNotificationStatus;
+  expiryNotificationAttempts?: number;
+  expiryNotificationNextRetryAt?: Date | null;
+  expiryNotificationSentAt?: Date | null;
+  expiryNotificationLastError?: string | null;
 }
 
 export interface IProposedSlot {
@@ -115,6 +122,9 @@ export interface IOrder extends Document {
   dispatchedAt?: Date;
   deliveredAt?: Date;
   acquisitionSource?: string;
+  isArchived: boolean;
+  archivedAt?: Date;
+  archivedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -358,6 +368,24 @@ const orderSchema = new Schema<IOrder>(
           customerResponseAt: { type: Date },
           customerAlternativeSlot: { type: Date },
           customerAlternativeNote: { type: String, trim: true, maxlength: 500 },
+          expiryNotificationStatus: {
+            type: String,
+            enum: ["PENDING", "SENT", "FAILED"],
+          },
+          expiryNotificationAttempts: {
+            type: Number,
+            default: 0,
+          },
+          expiryNotificationNextRetryAt: {
+            type: Date,
+          },
+          expiryNotificationSentAt: {
+            type: Date,
+          },
+          expiryNotificationLastError: {
+            type: String,
+            trim: true,
+          },
         },
       ],
       default: [],
@@ -452,6 +480,23 @@ const orderSchema = new Schema<IOrder>(
       type: String,
       trim: true,
       maxlength: 100,
+    },
+
+    // Archive (soft delete) fields for order lifecycle management.
+    // Archived orders are hidden from admin operational lists but remain
+    // visible to customers and guests. Archiving never deletes the record
+    // or modifies payment, inventory, or financial data.
+    isArchived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    archivedAt: {
+      type: Date,
+    },
+    archivedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
     },
   },
   {

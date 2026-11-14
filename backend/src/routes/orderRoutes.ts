@@ -12,6 +12,8 @@ import {
   acceptProposal,
   declineProposal,
   requestAlternativeSlot,
+  archiveOrder,
+  restoreOrder,
 } from "../controllers/orderController.js";
 import {
   authenticateAdmin,
@@ -44,6 +46,19 @@ router.post(
   "/:orderNumber/mark-paid",
   authenticateAdmin,
   markOrderPaid,
+);
+
+// Archive and restore orders (admin only)
+router.patch(
+  "/:orderNumber/archive",
+  authenticateAdmin,
+  archiveOrder,
+);
+
+router.patch(
+  "/:orderNumber/restore",
+  authenticateAdmin,
+  restoreOrder,
 );
 
 // Customer proposal actions

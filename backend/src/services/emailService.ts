@@ -212,7 +212,6 @@ export async function sendOtpEmail(
     clearTimeout(timeoutId);
   }
 }
-
 /**
  * Sends a secret-free alert after a successful administrator login.
  * The recipient must be explicitly configured; the verified sender is never
@@ -289,7 +288,6 @@ export async function sendAdminLoginAlert(input: {
     clearTimeout(timeoutId);
   }
 }
-
 const sentAdminLoginAlertEvents = new Set<string>();
 const ADMIN_ALERT_DEDUPE_WINDOW_MS = 15 * 60 * 1000;
 
@@ -394,5 +392,107 @@ export async function sendCustomerOrderEmailOnce(
     return sent;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Sends an admin notification when a reschedule proposal expires.
+ * Reuses ADMIN_NOTIFICATION_EMAIL and Brevo infrastructure.
+ * Best-effort: failures are logged but never prevent proposal expiry.
+ */
+export async function sendRescheduleExpiryAlert(input: {
+  orderNumber: string;
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  originalSlot?: Date | null;
+  proposedSlot: Date;
+  expiresAt: Date;
+}): Promise<boolean> {
+  const recipient = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
+  if (!recipient) {
+    console.warn(
+      "Reschedule expiry notification skipped: ADMIN_NOTIFICATION_EMAIL is not configured.",
+    );
+    return false;
+  }
+
+  const parsedRecipient = z.string().email().safeParse(recipient);
+  if (!parsedRecipient.success || !isBrevoConfigured()) {
+    console.warn(
+      "Reschedule expiry notification skipped: Brevo is not configured or admin email is invalid.",
+    );
+    return false;
+  }
+
+  const { apiKey, from, fromName } = getBrevoConfig();
+  const safeText = (value: string) => value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[char]!);
+  const orderLink = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://bakery-ecommerce-topaz.vercel.app"}/admin/orders`;
+  const expiresAtStr = input.expiresAt.toISOString();
+  const proposedSlotStr = input.proposedSlot.toISOString();
+  const originalSlotStr = input.originalSlot
+    ? new Date(input.originalSlot).toISOString()
+    : "Not set";
+  const customerEmailSafe = input.customerEmail
+    ? safeText(input.customerEmail)
+    : "Not provided";
+  const customerPhoneSafe = input.customerPhone
+    ? safeText(input.customerPhone)
+    : "Not provided";
+  const subject = "Reschedule proposal expired — Bluebell Bakehouse";
+  const htmlContent = `
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;background:#f5f1ea;color:#342719;font-family:Arial,Helvetica,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px"><tr><td align="center">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border:1px solid #e6d9c7;border-radius:12px;overflow:hidden">
+    <tr><td style="padding:24px;background:#70451f;color:#fff;text-align:center"><h1 style="margin:0;font-size:24px">Bluebell Bakehouse</h1></td></tr>
+    <tr><td style="padding:24px"><h2 style="margin-top:0;font-size:20px">Reschedule Proposal Expired</h2>
+      <p>The customer did not respond to a reschedule proposal before it expired. The original confirmed slot has been restored.</p>
+      <table role="presentation" width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;overflow-wrap:anywhere">
+        <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Order Number</td><td style="border-bottom:1px solid #eee">${safeText(input.orderNumber)}</td></tr>
+        <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Customer Name</td><td style="border-bottom:1px solid #eee">${safeText(input.customerName)}</td></tr>
+        <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Customer Email</td><td style="border-bottom:1px solid #eee">${customerEmailSafe}</td></tr>
+        <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Customer Phone</td><td style="border-bottom:1px solid #eee">${customerPhoneSafe}</td></tr>
+        <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Original Confirmed Slot</td><td style="border-bottom:1px solid #eee">${originalSlotStr}</td></tr>
+        <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Proposed Slot</td><td style="border-bottom:1px solid #eee">${proposedSlotStr}</td></tr>
+        <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Proposal Expired At</td><td style="border-bottom:1px solid #eee">${expiresAtStr}</td></tr>
+      </table>
+      <p style="margin:24px 0 0">Review and manage this order: <a href="${safeText(orderLink)}" style="color:#70451f">View Order in Admin</a></p>
+      <p style="margin:24px 0 0;color:#786c5e;font-size:12px">Automated notification from Bluebell Bakehouse.</p>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(BREVO_API_URL, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        sender: { email: from, name: fromName },
+        to: [{ email: parsedRecipient.data }],
+        subject,
+        htmlContent,
+      }),
+      signal: controller.signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

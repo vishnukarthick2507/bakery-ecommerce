@@ -21,6 +21,7 @@ import customerUploadRoutes from "./routes/customerUploadRoutes.js";
 import { getJwtSecret } from "./config/jwt.js";
 import { Order } from "./models/Order.js";
 import { startInventoryExpiryWorker, stopInventoryExpiryWorker } from "./services/inventoryExpiry.js";
+import { startProposalExpiryWorker, stopProposalExpiryWorker } from "./services/proposalExpiry.js";
 import { csrfProtection } from "./middleware/csrf.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { logger } from "./lib/logger.js";
@@ -211,6 +212,16 @@ const startServer = async (): Promise<void> => {
         (error instanceof Error ? error.message : String(error)),
     );
   }
+
+  // Start the proposal expiry worker. Non-fatal if the DB is unavailable.
+  try {
+    startProposalExpiryWorker();
+  } catch (error) {
+    logger.error(
+      "Proposal expiry worker failed to start: " +
+        (error instanceof Error ? error.message : String(error)),
+    );
+  }
 };
 
 // Start the server. Any startup error is logged clearly (no secrets)
@@ -231,6 +242,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   }
   await mongoose.disconnect();
   stopInventoryExpiryWorker();
+  stopProposalExpiryWorker();
   logger.info("Graceful shutdown complete");
   process.exit(0);
 }

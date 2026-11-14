@@ -139,9 +139,11 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         })
         const data = await readJsonSafe(response)
         if (!response.ok) {
-          throw new Error(
+          const err = new Error(
             (data as { message?: string })?.message || 'Google sign-in failed.',
           )
+          ;(err as { status?: number }).status = response.status
+          throw err
         }
 
         const redirectTo = (data as { redirectTo?: string })?.redirectTo
@@ -151,7 +153,15 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
           router.push('/account')
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unable to sign in with Google.'
+        const status = (err as { status?: number })?.status
+        let msg: string
+        if (status === 503) {
+          msg = 'Google sign-in is temporarily unavailable.'
+        } else if (err instanceof TypeError && /failed to fetch/i.test(err.message)) {
+          msg = 'Network error. Please check your internet connection and try again.'
+        } else {
+          msg = err instanceof Error ? err.message : 'Unable to sign in with Google.'
+        }
         setError(msg)
         setGoogleError(msg)
         toast.error(msg)

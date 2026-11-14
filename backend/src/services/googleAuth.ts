@@ -81,3 +81,7 @@ export async function verifyGoogleIdToken(
 export function isGoogleConfigured(): boolean {
   return Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID.trim());
 }
+
+if (!isGoogleConfigured()) {
+  console.warn("Google OAuth is not configured. Set GOOGLE_CLIENT_ID env var.");
+}
