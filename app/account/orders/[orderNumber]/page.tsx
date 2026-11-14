@@ -503,6 +503,26 @@ function formatCountdown(seconds: number | null): string {
         </div>
       </div>
 
+      {order.proposedSlot?.status === 'ACCEPTED' && (
+        <section className="mt-8 rounded-[2rem] border border-emerald/30 bg-emerald/5 p-6 sm:p-8 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex size-7 items-center justify-center rounded-full bg-emerald/10 text-emerald shrink-0">
+              <ClockIcon className="size-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-primary">Schedule Updated</h2>
+              <p className="mt-1 text-sm text-secondary-text">
+                Your delivery/pickup time has been changed to{' '}
+                <span className="font-semibold text-emerald">
+                  {formatDateTime(order.confirmedSlot || order.proposedSlot.time)}
+                </span>
+                .
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
       {order.proposedSlot?.status === 'PENDING' && (
         <section className="mt-10 rounded-[2rem] border border-caramel bg-caramel/5 p-6 sm:p-8 shadow-sm">
           <div className="flex items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -820,9 +840,30 @@ function formatCountdown(seconds: number | null): string {
               ? `${order.address.addressLine}, ${order.address.city}, ${order.address.pincode}`
               : 'Pick up from Bluebell Bakehouse'}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {order.scheduledDate} · {order.scheduledTime}
-          </p>
+          {order.proposedSlot?.status === 'ACCEPTED' && order.confirmedSlot ? (
+            <>
+              <p className="mt-1 text-sm text-emerald font-semibold flex items-center gap-1">
+                <ClockIcon className="size-4" aria-hidden="true" />
+                Current schedule:{' '}
+                {new Date(order.confirmedSlot).toLocaleString('en-IN')}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
+                <span className="text-line-through">Previously scheduled:</span>{' '}
+                {order.rescheduleProposals?.find((p) => p.customerResponse === 'ACCEPTED')?.previousConfirmedSlot
+                  ? new Date(
+                      order.rescheduleProposals.find(
+                        (p) => p.customerResponse === 'ACCEPTED',
+                      )!.previousConfirmedSlot as string,
+                    ).toLocaleString('en-IN')
+                  : order.scheduledDate + ' · ' + order.scheduledTime
+                }
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {order.scheduledDate} · {order.scheduledTime}
+            </p>
+          )}
           <p className="mt-1 text-sm text-muted-foreground">{order.paymentMethod}</p>
         </div>
       </section>

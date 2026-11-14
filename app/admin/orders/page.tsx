@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { withAdminAuth } from '@/components/admin/admin-auth'
 import AdminLayout from '@/components/admin/admin-layout'
 import { cn } from '@/lib/utils'
+import { ClockIcon } from 'lucide-react'
 
 type OrderStatus =
   | 'PLACED'
@@ -1079,84 +1080,193 @@ function AdminOrdersPage() {
                             </button>
                           )}
 
-                          {/* Suggest another time */}
+                          {/* Reschedule Order */}
                           {proposingOrder === order._id ? (
-                            <div className="flex flex-col gap-3 rounded-2xl border border-caramel/40 bg-caramel/5 p-4">
-                              <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
-                                New date & time
-                              </label>
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <input
-                                  type="date"
-                                  value={proposeDate}
-                                  onChange={(e) => setProposeDate(e.target.value)}
-                                  className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
-                                />
-                                <input
-                                  type="time"
-                                  value={proposeTime}
-                                  onChange={(e) => setProposeTime(e.target.value)}
-                                  className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
-                                />
+                            <section className="mt-4 rounded-2xl border border-caramel/40 bg-caramel/5 p-6 sm:p-8 shadow-sm">
+                              <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-lg font-bold text-primary">
+                                  Reschedule Order
+                                </h3>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setProposingOrder(null)
+                                    setProposeDate('')
+                                    setProposeTime('')
+                                    setProposeNote('')
+                                    setProposeResponseWindow(3)
+                                  }}
+                                  className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-caramel hover:bg-cream/50 transition-colors"
+                                >
+                                  Cancel
+                                </button>
                               </div>
 
-                              <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
-                                Customer response window
-                              </label>
-                              <select
-                                value={proposeResponseWindow}
-                                onChange={(e) => setProposeResponseWindow(Number(e.target.value))}
-                                className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
-                              >
-                                {RESPONSE_WINDOW_OPTIONS.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </option>
-                                ))}
-                              </select>
+                              {/* Current Schedule */}
+                              <div className="grid gap-4 sm:grid-cols-2 mb-6">
+                                <div className="rounded-xl border border-border bg-card p-4">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                                    Current Schedule
+                                  </p>
+                                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                    <ClockIcon className="size-4" aria-hidden="true" />
+                                    <span>
+                                      {new Date(
+                                        order.scheduledDate +
+                                          ' ' +
+                                          order.scheduledTime,
+                                      ).toLocaleString('en-IN')}
+                                    </span>
+                                  </p>
+                                  {order.proposedSlot?.status === 'PENDING' && (
+                                    <p className="mt-2 text-xs text-amber-700 flex items-center gap-1">
+                                      <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden="true" />
+                                      Pending proposal exists
+                                    </p>
+                                  )}
+                                </div>
+                                {proposeDate && proposeTime && (
+                                  <div className="rounded-xl border border-emerald/30 bg-emerald/5 p-4">
+                                    <p className="text-xs font-semibold text-emerald uppercase tracking-wider mb-2">
+                                      Proposed Schedule
+                                    </p>
+                                    <p className="text-sm font-semibold text-emerald flex items-center gap-2">
+                                      <ClockIcon className="size-4" aria-hidden="true" />
+                                      <span>
+                                        {new Date(
+                                          `${proposeDate}T${proposeTime}:00`,
+                                        ).toLocaleString('en-IN')}
+                                      </span>
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
 
-                              <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
-                                Reason for rescheduling (required)
-                              </label>
-                              <textarea
-                                value={proposeNote}
-                                onChange={(e) => setProposeNote(e.target.value)}
-                                required
-                                maxLength={500}
-                                rows={2}
-                                className="text-xs rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:ring-2 focus:ring-caramel"
-                                placeholder="Explain why the delivery time needs to change"
-                              />
-                              <button
-                                type="button"
-                                disabled={proposing || !proposeDate || !proposeTime || !proposeNote.trim()}
-                                onClick={() =>
-                                  proposeSlot(
-                                    order.orderNumber,
-                                    proposeDate,
-                                    proposeTime,
-                                    proposeNote,
-                                    proposeResponseWindow,
-                                  )
-                                }
-                                className="w-full rounded-xl bg-caramel px-3 py-2.5 text-xs font-semibold text-caramel-foreground disabled:opacity-60 transition-colors shadow-sm hover:bg-caramel/90"
-                              >
-                                {proposing ? 'Proposing…' : 'Suggest Time'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setProposingOrder(null)
-                                  setProposeDate('')
-                                  setProposeTime('')
-                                  setProposeNote('')
-                                  setProposeResponseWindow(3)
-                                }}
-                                className="w-full rounded-xl border border-border px-3 py-2.5 text-xs text-caramel hover:bg-cream/50 transition-colors"
-                              >
-                                Cancel
-                              </button>
-                            </div>
+                              <div className="space-y-4">
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-xs font-semibold text-caramel uppercase tracking-wider block mb-1">
+                                    New Date &amp; Time
+                                  </label>
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="flex flex-col gap-2">
+                                      <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
+                                        Date
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={proposeDate}
+                                        onChange={(e) =>
+                                          setProposeDate(e.target.value)
+                                        }
+                                        min={new Date()
+                                          .toISOString()
+                                          .split('T')[0]}
+                                        className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-caramel"
+                                      />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                      <label className="text-xs font-semibold text-caramel uppercase tracking-wider">
+                                        Time
+                                      </label>
+                                      <input
+                                        type="time"
+                                        value={proposeTime}
+                                        onChange={(e) =>
+                                          setProposeTime(e.target.value)
+                                        }
+                                        className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-caramel"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-xs font-semibold text-caramel uppercase tracking-wider block mb-1">
+                                    Customer Response Window
+                                  </label>
+                                  <select
+                                    value={proposeResponseWindow}
+                                    onChange={(e) =>
+                                      setProposeResponseWindow(
+                                        Number(e.target.value),
+                                      )
+                                    }
+                                    className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-caramel"
+                                  >
+                                    {RESPONSE_WINDOW_OPTIONS.map((opt) => (
+                                      <option
+                                        key={opt.value}
+                                        value={opt.value}
+                                      >
+                                        {opt.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-xs font-semibold text-caramel uppercase tracking-wider block mb-1">
+                                    Reason for Rescheduling (required)
+                                  </label>
+                                  <textarea
+                                    value={proposeNote}
+                                    onChange={(e) =>
+                                      setProposeNote(e.target.value)
+                                    }
+                                    required
+                                    maxLength={500}
+                                    rows={3}
+                                    className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-caramel"
+                                    placeholder="Explain why the delivery time needs to change"
+                                  />
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      proposing ||
+                                      !proposeDate ||
+                                      !proposeTime ||
+                                      !proposeNote.trim()
+                                    }
+                                    onClick={() =>
+                                      proposeSlot(
+                                        order.orderNumber,
+                                        proposeDate,
+                                        proposeTime,
+                                        proposeNote,
+                                        proposeResponseWindow,
+                                      )
+                                    }
+                                    className="flex-1 sm:flex-none w-full sm:w-48 rounded-xl bg-caramel px-5 py-3 text-sm font-semibold text-caramel-foreground disabled:opacity-60 disabled:cursor-not-allowed hover:bg-caramel/90 transition-colors shadow-sm"
+                                  >
+                                    {proposing
+                                      ? 'Proposing…'
+                                      : 'Confirm Reschedule'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setProposingOrder(null)
+                                      setProposeDate('')
+                                      setProposeTime('')
+                                      setProposeNote('')
+                                      setProposeResponseWindow(3)
+                                    }}
+                                    className="flex-1 sm:flex-none w-full sm:w-48 rounded-xl border border-border px-5 py-3 text-sm font-semibold text-caramel hover:bg-cream/50 transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+
+                                {error && (
+                                  <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                                    {error}
+                                  </div>
+                                )}
+                              </div>
+                            </section>
                           ) : (
                             <button
                               type="button"

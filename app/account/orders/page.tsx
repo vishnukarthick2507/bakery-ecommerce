@@ -159,6 +159,21 @@ export default function CustomerOrdersPage() {
               <p className="mt-4 text-sm text-foreground">
                 {order.items.map((item) => `${item.productName} × ${item.quantity}`).join(', ')}
               </p>
+              {order.proposedSlot?.status === 'ACCEPTED' && order.confirmedSlot ? (
+                <div className="mt-3 flex items-center gap-2 text-sm text-emerald">
+                  <ClockIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    Updated: {new Date(order.confirmedSlot).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                  <ClockIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    {order.scheduledDate} · {order.scheduledTime}
+                  </span>
+                </div>
+              )}
             </Link>
           ))}
         </div>

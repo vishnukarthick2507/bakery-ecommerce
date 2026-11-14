@@ -868,4 +868,153 @@ describe("Reschedule Proposal", () => {
       expect(response.status).toBe(201);
     });
   });
+
+  describe("Schedule persistence and visibility", () => {
+    it("scheduledDate and scheduledTime are updated in DB after accept", async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const adminToken = makeAdminToken(admin!._id.toString());
+      const user = await createTestUser();
+      const customerToken = makeCustomerToken(user._id.toString());
+      const result = await createTestOrderInDB({}, user._id);
+      const order = result.order;
+
+      const futureTime = futureBusinessHourTime();
+      await request(app)
+        .post(`/api/admin/orders/${order._id}/propose-slot`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ time: futureTime.toISOString(), note: "New suggested time" });
+
+      await request(app)
+        .post(`/api/orders/${order._id}/proposal/accept`)
+        .set("Authorization", `Bearer ${customerToken}`);
+
+      const final = await Order.findById(order._id).lean();
+      expect(final?.confirmedSlot?.getTime()).toBe(futureTime.getTime());
+      expect(final?.scheduledDate).toBe(futureTime.toISOString().split("T")[0]);
+      expect(final?.scheduledTime).toBe(
+        futureTime.toISOString().split("T")[1]?.split(".")[0] ?? "10:00:00",
+      );
+    });
+
+    it("failed proposal does not modify database (no false success)", async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const adminToken = makeAdminToken(admin!._id.toString());
+      const user = await createTestUser();
+      const customerToken = makeCustomerToken(user._id.toString());
+      const result = await createTestOrderInDB({}, user._id);
+      const order = result.order;
+
+      const originalConfirmedSlot = order.confirmedSlot?.getTime();
+      const originalScheduledDate = order.scheduledDate;
+      const originalScheduledTime = order.scheduledTime;
+      const originalProposalsLength = order.rescheduleProposals.length;
+
+      // Attempt with past time - should fail
+      const pastTime = new Date(Date.now() - 60 * 60 * 1000);
+      const response = await request(app)
+        .post(`/api/admin/orders/${order._id}/propose-slot`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ time: pastTime.toISOString(), note: "Past time" });
+
+      expect(response.status).toBe(400);
+
+      // Verify nothing changed in DB
+      const final = await Order.findById(order._id).lean();
+      expect(final?.confirmedSlot?.getTime()).toBe(originalConfirmedSlot);
+      expect(final?.scheduledDate).toBe(originalScheduledDate);
+      expect(final?.scheduledTime).toBe(originalScheduledTime);
+      expect(final?.rescheduleProposals).toHaveLength(originalProposalsLength);
+      expect(final?.orderStatus).toBe(order.orderStatus);
+    });
+
+    it("slotHistory retains previous schedule after accept", async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const adminToken = makeAdminToken(admin!._id.toString());
+      const user = await createTestUser();
+      const customerToken = makeCustomerToken(user._id.toString());
+      const result = await createTestOrderInDB({}, user._id);
+      const order = result.order;
+
+      const futureTime = futureBusinessHourTime();
+      await request(app)
+        .post(`/api/admin/orders/${order._id}/propose-slot`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ time: futureTime.toISOString(), note: "New suggested time" });
+
+      await request(app)
+        .post(`/api/orders/${order._id}/proposal/accept`)
+        .set("Authorization", `Bearer ${customerToken}`);
+
+      const final = await Order.findById(order._id).lean();
+      expect(final?.slotHistory).toBeDefined();
+      expect(final?.slotHistory!.length).toBeGreaterThan(0);
+      const lastEntry = final?.slotHistory![final?.slotHistory!.length - 1];
+      expect(lastEntry?.from).toBeDefined();
+      expect(lastEntry?.to?.getTime()).toBe(futureTime.getTime());
+      expect(lastEntry?.reason).toBe("Customer accepted reschedule proposal");
+    });
+
+    it("customer API response includes updated schedule fields", async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const adminToken = makeAdminToken(admin!._id.toString());
+      const user = await createTestUser();
+      const customerToken = makeCustomerToken(user._id.toString());
+      const result = await createTestOrderInDB({}, user._id);
+      const order = result.order;
+
+      const futureTime = futureBusinessHourTime();
+      await request(app)
+        .post(`/api/admin/orders/${order._id}/propose-slot`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ time: futureTime.toISOString(), note: "New suggested time" });
+
+      const acceptResponse = await request(app)
+        .post(`/api/orders/${order._id}/proposal/accept`)
+        .set("Authorization", `Bearer ${customerToken}`);
+
+      expect(acceptResponse.status).toBe(200);
+      expect(acceptResponse.body.order.confirmedSlot).toBeDefined();
+      expect(acceptResponse.body.order.scheduledDate).toBeDefined();
+      expect(acceptResponse.body.order.scheduledTime).toBeDefined();
+      expect(acceptResponse.body.order.proposedSlot.status).toBe("ACCEPTED");
+    });
+  });
+
+  describe("Authorization and CSRF enforcement", () => {
+    it("non-admin cannot propose a slot", async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const user = await createTestUser();
+      const customerToken = makeCustomerToken(user._id.toString());
+      const result = await createTestOrderInDB({}, user._id);
+      const order = result.order;
+
+      const futureTime = futureBusinessHourTime();
+
+      const response = await request(app)
+        .post(`/api/admin/orders/${order._id}/propose-slot`)
+        .set("Authorization", `Bearer ${customerToken}`)
+        .send({ time: futureTime.toISOString(), note: "Should fail" });
+
+      expect(response.status).toBe(401);
+    });
+
+    it("unauthenticated customer cannot accept proposal", async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const adminToken = makeAdminToken(admin!._id.toString());
+      const result = await createTestOrderInDB();
+      const order = result.order;
+
+      const futureTime = futureBusinessHourTime();
+      await request(app)
+        .post(`/api/admin/orders/${order._id}/propose-slot`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ time: futureTime.toISOString(), note: "Test" });
+
+      const response = await request(app)
+        .post(`/api/orders/${order._id}/proposal/accept`)
+        .send({});
+
+      expect(response.status).toBe(401);
+    });
+  });
 });
