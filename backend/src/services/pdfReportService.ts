@@ -260,7 +260,8 @@ function buildPdfDocument(contentBuffer: Buffer): Buffer {
 
   const trailer = `trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${currentOffset}\n%%EOF\n`;
 
-  const parts = [obj1Str, obj2Str, obj3Str, obj4Str, obj5Str, obj6Str, xref, trailer];
+  const pdfHeader = "%PDF-1.7\n";
+  const parts = [pdfHeader, obj1Str, obj2Str, obj3Str, obj4Str, obj5Str, obj6Str, xref, trailer];
   return Buffer.from(parts.join(""));
 }
 

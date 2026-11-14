@@ -677,8 +677,20 @@ function TrackPageContent() {
                           <p className="font-medium text-foreground">
                             {order.customerName}
                           </p>
-                          <p className="text-foreground">
+                          <p className="flex items-start gap-2 text-foreground">
                             {order.phone}
+                            {order.phone && (
+                              <a
+                                href={`https://wa.me/${order.phone}?text=${encodeURIComponent(
+                                  `Bluebell Bakehouse - Order ${order.orderNumber}: Hi, I'd like to check on my order status.`,
+                                )}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-caramel underline underline-offset-4 hover:text-caramel/80"
+                              >
+                                WhatsApp
+                              </a>
+                            )}
                           </p>
                         </div>
                       </div>

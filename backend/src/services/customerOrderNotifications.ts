@@ -36,5 +36,6 @@ export async function notifyCustomerOrder(
 
 export function orderEmailDetails(order: IOrder): string {
   const items = order.items.map((item) => `${item.productName} × ${item.quantity}`).join(", ");
-  return `${items}; total ${order.totalAmount}; ${order.fulfillmentType.toLowerCase()} scheduled ${order.scheduledDate} at ${order.scheduledTime}`;
+  const trackingLink = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://bakery-ecommerce-topaz.vercel.app"}/track?order=${encodeURIComponent(order.orderNumber)}`;
+  return `Order #${order.orderNumber} — ${items}; total ${order.totalAmount}; ${order.fulfillmentType.toLowerCase()} scheduled ${order.scheduledDate} at ${order.scheduledTime}. Track your order: ${trackingLink}`;
 }

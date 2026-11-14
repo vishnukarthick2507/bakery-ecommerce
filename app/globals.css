@@ -132,9 +132,70 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading text-balance text-foreground;
   }
+  h1 {
+    @apply text-3xl font-semibold tracking-tight sm:text-4xl;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  h2 {
+    @apply text-2xl font-semibold tracking-tight sm:text-3xl;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  h3 {
+    @apply text-xl font-semibold tracking-tight sm:text-2xl;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+  h4 {
+    @apply text-lg font-medium tracking-tight;
+    line-height: 1.3;
+  }
+  h5, h6 {
+    @apply text-base font-medium tracking-tight;
+    line-height: 1.4;
+  }
+  p {
+    line-height: 1.6;
+  }
+  .lead {
+    @apply text-lg text-foreground;
+    line-height: 1.7;
+  }
+  .text-small {
+    @apply text-sm text-muted-foreground;
+    line-height: 1.5;
+  }
   a {
     color: inherit;
     text-decoration: none;
+  }
+  /* Native select dropdown visibility — ensure readable options */
+  select {
+    @appearance none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23202938'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M19 9l-7 7-7-7'%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+  }
+  select option {
+    background: var(--card);
+    color: var(--foreground);
+    padding: 0.5rem 0.75rem;
+  }
+  select option:checked {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-weight: 500;
+  }
+  select option:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+  select option:focus {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
   }
 }
 

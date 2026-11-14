@@ -865,6 +865,19 @@ function formatCountdown(seconds: number | null): string {
             </p>
           )}
           <p className="mt-1 text-sm text-muted-foreground">{order.paymentMethod}</p>
+          {order.phone && (
+            <a
+              href={`https://wa.me/${order.phone}?text=${encodeURIComponent(
+                `Bluebell Bakehouse - Order ${order.orderNumber}: Hi, I'd like to check on my order status.`,
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-2 rounded-xl border border-caramel px-4 py-2.5 text-sm font-semibold text-caramel hover:bg-caramel/5 transition-colors"
+            >
+              <span className="shrink-0">💬</span>
+              Chat on WhatsApp
+            </a>
+          )}
         </div>
       </section>
     </main>
