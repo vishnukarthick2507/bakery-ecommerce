@@ -1,0 +1,30 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next-build-plugin"
+    }
+  ],
+  "framework": "nextjs",
+  "regions": ["bom1"],
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@backend-internal-url",
+    "NEXT_PUBLIC_SITE_URL": "@next-public-site-url",
+    "NEXT_PUBLIC_GOOGLE_CLIENT_ID": "@next-public-google-client-id",
+    "BACKEND_INTERNAL_URL": "@backend-internal-url",
+    "JWT_SECRET": "@jwt-secret"
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PATCH,DELETE,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, Idempotency-Key, X-Requested-With" }
+      ]
+    }
+  ],
+  "crons": []
+}

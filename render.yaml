@@ -1,0 +1,50 @@
+# Render infrastructure-as-code for S.V. Sweets & Bakers backend.
+#
+# This file defines the backend service. All sensitive values (MONGODB_URI,
+# JWT_SECRET, Razorpay keys, Brevo keys, Cloudinary keys) must be configured
+# in the Render dashboard environment variables — they are NOT stored here.
+#
+# To activate: import this file in the Render dashboard, or connect the
+# GitHub repository and let Render detect this render.yaml.
+
+services:
+  - type: web
+    name: bakery-ecommerce-backend
+    env: node
+    region: oregon
+    branch: main
+    buildCommand: cd backend && pnpm install --frozen-lockfile
+    startCommand: cd backend && npx tsx src/server.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: CORS_ORIGIN
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OTP_SECRET
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_FROM_EMAIL
+        sync: false
+      - key: BREVO_FROM_NAME
+        value: S.V. Sweets & Bakers
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: ADMIN_NOTIFICATION_EMAIL
+        sync: false
