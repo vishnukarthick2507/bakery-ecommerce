@@ -220,11 +220,9 @@ export function priceCart(items: CartItem[], products: Product[]) {
 /* ---------- Custom cake requests ---------- */
 
 export async function submitCustomCakeRequest(input: CustomCakeRequest) {
-  const baseUrl = apiBaseUrl()
-
   let response: Response
   try {
-    response = await fetch(`${baseUrl}/api/custom-cake-requests`, {
+    response = await fetch('/api/custom-cake-requests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),

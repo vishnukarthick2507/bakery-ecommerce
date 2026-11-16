@@ -60,7 +60,11 @@ export interface ISlotHistoryEntry {
 }
 
 export interface IOrderItem {
-  productId: mongoose.Types.ObjectId;
+  // Optional for custom cake orders which are created from a custom cake
+  // request rather than a product catalogue item. When present, references a
+  // Product document; when absent, the order is a custom cake order and the
+  // productName field carries the custom cake flavour/description.
+  productId?: mongoose.Types.ObjectId;
   productName: string;
   variantId: string;
   quantity: number;
@@ -75,6 +79,7 @@ export interface IOrderItem {
 export interface IOrder extends Document {
   orderNumber: string;
   userId?: mongoose.Types.ObjectId;
+  customCakeRequestId?: mongoose.Types.ObjectId;
   idempotencyKey: string;
   idempotencyHash: string;
   inventoryStatus?: InventoryStatus;
@@ -134,7 +139,10 @@ const orderItemSchema = new Schema<IOrderItem>(
     productId: {
       type: Schema.Types.ObjectId,
       ref: "Product",
-      required: true,
+      // Optional for custom cake orders created from a CustomCakeRequest.
+      // When absent, the order is a custom cake order and productName carries
+      // the flavour/description instead.
+      required: false,
     },
     productName: {
       type: String,
@@ -188,6 +196,23 @@ const orderSchema = new Schema<IOrder>(
       type: Schema.Types.ObjectId,
       ref: "User",
       index: true,
+    },
+    // Links an Order created from a custom cake request back to the original
+    // CustomCakeRequest document. Populated only for orders converted from a
+    // customer-accepted custom cake proposal; absent for regular orders.
+    // Unique+sparse enforces at most one converted order per request while
+    // allowing regular orders (field absent) to coexist.
+    // PRODUCTION PREFLIGHT (do not auto-sync/apply in prod): before creating
+    // this unique index in production, verify (1) no duplicate non-null
+    // customCakeRequestId values exist, (2) existing docs omit the field rather
+    // than storing explicit nulls in incompatible ways, and (3) any existing
+    // index on this key is reconciled; apply via a controlled migration only.
+    customCakeRequestId: {
+      type: Schema.Types.ObjectId,
+      ref: "CustomCakeRequest",
+      index: true,
+      unique: true,
+      sparse: true,
     },
     idempotencyKey: {
       type: String,

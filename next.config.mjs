@@ -14,6 +14,7 @@ if (!backendUrl) {
 }
 
 const nextConfig = {
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   images: {
     remotePatterns: [
       {
@@ -31,18 +32,6 @@ const nextConfig = {
         destination: `${backendUrl.replace(/\/+$/, '')}/api/:path*`,
       },
     ]
-  },
-  async sitemap() {
-    return []
-  },
-  async robots() {
-    return {
-      rules: {
-        userAgent: '*',
-        allow: '/',
-      },
-      sitemap: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/sitemap.xml`,
-    }
   },
 }
 

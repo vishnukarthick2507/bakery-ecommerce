@@ -193,7 +193,7 @@ export async function markOrderPaymentFailed(
       if (order.razorpayOrderId !== razorpayOrderId) return null;
 
       if (order.inventoryStatus === "RESERVED") {
-        await restoreInventory(session, order.items);
+        await restoreInventory(session, order.items.filter((i) => i.productId) as any);
         order.inventoryStatus = "RELEASED";
       }
       order.reservationExpiresAt = undefined;
@@ -250,7 +250,7 @@ async function createRazorpayAttempt(
           throw new Error("Order payment state changed; refresh and try again");
         }
         if (retryOrder.inventoryStatus === "RELEASED") {
-          await reserveInventory(session, retryOrder.items);
+          await reserveInventory(session, retryOrder.items.filter((i: any) => i.productId) as any);
           retryOrder.inventoryStatus = "RESERVED";
           retryOrder.reconciliationStatus = "NONE";
           retryOrder.reconciliationReason = undefined;

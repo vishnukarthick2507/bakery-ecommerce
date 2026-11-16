@@ -192,7 +192,7 @@ const allowedStatusTransitions: Record<
 |--------------------------------------------------------------------------
 */
 
-function generateOrderNumber(): string {
+export function generateOrderNumber(): string {
   const timestamp = Date.now()
     .toString()
     .slice(-8);
@@ -467,10 +467,7 @@ export const createOrder = async (
         );
       }
 
-      await reserveInventory(
-        session,
-        orderItems,
-        undefined,
+      await reserveInventory(session, orderItems as any, undefined,
         req.customer ? new mongoose.Types.ObjectId(req.customer.id) : undefined,
       );
 
@@ -935,10 +932,15 @@ export const getAllOrders = async (
 };
 
 export const updateOrderStatus = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
 ): Promise<void> => {
   try {
+    if (!req.admin) {
+      res.status(401).json({ message: "Admin authentication required" });
+      return;
+    }
+
     const orderNumber = String(req.params.orderNumber ?? "")
       .trim()
       .toUpperCase();
@@ -1021,7 +1023,7 @@ export const updateOrderStatus = async (
         ) {
           await restoreInventory(
             session,
-            currentOrder.items,
+            currentOrder.items.filter((i: any) => i.productId) as any,
             new mongoose.Types.ObjectId(currentOrder._id),
           );
           currentOrder.inventoryStatus = "RELEASED";

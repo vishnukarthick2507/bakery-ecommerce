@@ -36,11 +36,7 @@ export async function expireOnlineReservations(now = new Date()): Promise<number
 
         if (!order) return;
 
-        await restoreInventory(
-          session,
-          order.items,
-          new mongoose.Types.ObjectId(order._id),
-        );
+        await restoreInventory(session, order.items.filter((i: any) => i.productId) as any, new mongoose.Types.ObjectId(order._id));
         order.inventoryStatus = "RELEASED";
         order.paymentStatus = "FAILED";
         order.orderStatus = "CANCELLED";

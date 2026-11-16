@@ -59,8 +59,64 @@ const customCakeRequestSchema = new Schema(
 
     status: {
       type: String,
-      enum: ["PENDING", "CONTACTED", "CLOSED"],
+      enum: ["PENDING", "CONTACTED", "CONFIRMED", "CLOSED"],
       default: "PENDING",
+    },
+
+    // Admin proposal fields — set when the admin responds to a request
+    proposedPrice: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+
+    proposedDeliveryDate: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
+    proposedDeliveryTime: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
+    adminNotes: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: null,
+    },
+
+    // Customer response fields — set when the customer responds to a proposal
+    customerConfirmed: {
+      type: String,
+      enum: ["PENDING", "CONFIRMED", "DECLINED"],
+      default: "PENDING",
+    },
+
+    customerConfirmedAt: {
+      type: Date,
+      default: null,
+    },
+
+    adminContactedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Conversion linkage — set atomically when an admin converts an accepted
+    // proposal into an Order. Used with convertedAt for idempotent/concurrent safety.
+    convertedOrderId: {
+      type: Schema.Types.ObjectId,
+      ref: "Order",
+      default: null,
+    },
+
+    convertedAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }

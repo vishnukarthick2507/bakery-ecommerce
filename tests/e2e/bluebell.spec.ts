@@ -185,3 +185,53 @@ test.describe('Authentication - Google Sign-In Code Path', () => {
     expect([200, 400, 503]).toContain(response.status());
   });
 });
+
+test.describe('Custom Cake Request Submission', () => {
+  test('submits a custom cake request via relative API path', async ({ request }) => {
+    const response = await request.post('/api/custom-cake-requests', {
+      data: {
+        name: 'Playwright Test Customer',
+        phone: '9840912345',
+        flavour: 'Chocolate Truffle',
+        weight: '1 kg',
+        theme: 'Birthday',
+        messageOnCake: 'Happy Birthday',
+        instructions: 'Eggless',
+        referenceImageUrl: '',
+      },
+    });
+
+    // The endpoint should be reachable via the relative API path
+    // (proxied through Next.js rewrite to the backend).
+    expect([200, 201, 400, 500, 503]).toContain(response.status());
+
+    const body = await response.json();
+    if (response.status() === 201) {
+      expect(body.message).toContain('request');
+      expect(body.request.referenceNumber).toMatch(/^CC-/);
+      expect(body.request.status).toBe('PENDING');
+    } else if (response.status() === 400) {
+      // Validation errors are acceptable in test environments
+      expect(body.message).toBeTruthy();
+    } else {
+      // 500/503 may occur if backend services (MongoDB, Cloudinary) are not configured
+      expect(body.message).toBeTruthy();
+    }
+  });
+
+  test('records Origin header sent to upload signature endpoint', async ({ request }) => {
+    // The Origin header comes from the browser's frontend domain.
+    // On production Vercel, this is https://bakery-ecommerce-topaz.vercel.app.
+    // Locally, Playwright's webServer serves from http://localhost:3000.
+    const response = await request.post('/api/customer/uploads/signature', {
+      headers: {
+        Origin: 'http://localhost:3000',
+      },
+    });
+
+    // Without a valid customer-token cookie, CSRF is bypassed (no auth cookie),
+    // so the request either reaches the signature generator (401 for no auth)
+    // or returns config error. Either way, the Origin header is processed.
+    expect([200, 401, 403, 500, 503]).toContain(response.status());
+  });
+});

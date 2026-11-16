@@ -1017,4 +1017,47 @@ describe("Reschedule Proposal", () => {
       expect(response.status).toBe(401);
     });
   });
+
+  describe("Admin order status update authorization", () => {
+    let adminToken: string;
+    let customerToken: string;
+    let user: any;
+    let order: any;
+
+    beforeEach(async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      adminToken = makeAdminToken(admin!._id.toString());
+      user = await createTestUser();
+      customerToken = makeCustomerToken(user._id.toString());
+      const result = await createTestOrderInDB({}, user._id);
+      order = result.order;
+    });
+
+    it("authenticated admin can update order status", async () => {
+      const response = await request(app)
+        .patch(`/api/orders/${order.orderNumber}/status`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ status: "CONFIRMED" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.order.orderStatus).toBe("CONFIRMED");
+    });
+
+    it("unauthenticated request is rejected", async () => {
+      const response = await request(app)
+        .patch(`/api/orders/${order.orderNumber}/status`)
+        .send({ status: "CONFIRMED" });
+
+      expect(response.status).toBe(401);
+    });
+
+    it("customer token is rejected for admin status update", async () => {
+      const response = await request(app)
+        .patch(`/api/orders/${order.orderNumber}/status`)
+        .set("Authorization", `Bearer ${customerToken}`)
+        .send({ status: "CONFIRMED" });
+
+      expect(response.status).toBe(401);
+    });
+  });
 });

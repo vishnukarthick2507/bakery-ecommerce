@@ -1,6 +1,6 @@
-'use client'
+﻿'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowLeftIcon, CheckCircle2, MessageCircleIcon } from 'lucide-react'
 
 import { ApiError, submitCustomCakeRequest } from '@/lib/api'
@@ -76,6 +76,13 @@ export function CustomCakeForm() {
   const [referenceUploadProgress, setReferenceUploadProgress] = useState(0)
   const [referenceUploadError, setReferenceUploadError] = useState('')
   const referenceUrlsRef = useRef<string[]>([])
+
+  useEffect(() => {
+    return () => {
+      referenceUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+      referenceUrlsRef.current = []
+    }
+  }, [])
 
   const clearFieldError = (field: keyof FormState) => {
     setFieldErrors((prev) => {
@@ -156,17 +163,26 @@ export function CustomCakeForm() {
       )
 
       setReferenceUploadProgress(100)
-      revokeReferencePreview()
-      setReferenceFile(null)
-      setReferencePreview(null)
       return secureUrl
     } catch (err) {
-      setReferenceUploadError(
-        err instanceof Error ? err.message : 'Unable to upload reference photo',
-      )
+      const message = err instanceof Error ? err.message : 'Unable to upload reference photo'
+      if (/auth|sign|login|unauthor/i.test(message)) {
+        setReferenceUploadError('Reference photo upload requires sign-in. You can continue without a photo or add an image URL.')
+      } else {
+        setReferenceUploadError(message)
+      }
       return null
     } finally {
       setReferenceUploading(false)
+    }
+  }
+
+  async function handleReferenceUploadClick() {
+    const secureUrl = await uploadReferenceFile()
+    if (secureUrl) {
+      setForm((current) => ({ ...current, referenceImageUrl: secureUrl }))
+      clearReferenceSelection()
+      clearFieldError('referenceImageUrl')
     }
   }
 
@@ -175,7 +191,74 @@ export function CustomCakeForm() {
     clearFieldError(field)
   }
 
+  function validateStep(current: Step): boolean {
+    const nextFieldErrors: Partial<Record<keyof FormState, string>> = {}
+
+    if (current === 'contact') {
+      if (!form.name.trim() || form.name.trim().length < 2) {
+        nextFieldErrors.name = 'Please enter your full name (at least 2 characters).'
+      }
+      if (!/^[6-9]\d{9}$/.test(form.phone.trim())) {
+        nextFieldErrors.phone = 'Enter a valid 10-digit Indian mobile number.'
+      }
+    }
+
+    if (current === 'cake-details') {
+      if (!form.flavour.trim() || form.flavour.trim().length < 2) {
+        nextFieldErrors.flavour = 'Please tell us the cake flavour.'
+      }
+      const kilograms = Number(form.weight)
+      if (!Number.isFinite(kilograms) || kilograms < 0.1 || kilograms > 5) {
+        nextFieldErrors.weight = 'Cake weight must be between 0.1 kg and 5 kg.'
+      }
+    }
+
+    if (current === 'design') {
+      if (!form.theme.trim() || form.theme.trim().length < 2) {
+        nextFieldErrors.theme = 'Please describe the theme or occasion.'
+      }
+    }
+
+    if (current === 'reference') {
+      const url = form.referenceImageUrl.trim()
+      if (url && !/^https?:\/\/.+/i.test(url)) {
+        nextFieldErrors.referenceImageUrl = 'Please enter a valid image URL starting with http:// or https://.'
+      }
+    }
+
+    const stepFields: Record<Step, Array<keyof FormState>> = {
+      contact: ['name', 'phone'],
+      'cake-details': ['flavour', 'weight'],
+      design: ['theme'],
+      reference: ['referenceImageUrl'],
+      review: [],
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors((prev) => {
+        const next = { ...prev }
+        for (const f of stepFields[current]) delete next[f]
+        return { ...next, ...nextFieldErrors }
+      })
+      setError('Please correct the highlighted fields to continue.')
+      return false
+    }
+
+    setFieldErrors((prev) => {
+      const next = { ...prev }
+      for (const f of stepFields[current]) delete next[f]
+      return next
+    })
+    setError('')
+    return true
+  }
+
   function goTo(next: Step) {
+    const current = stepIndex(step)
+    const target = stepIndex(next)
+    if (target > current && !validateStep(step)) {
+      return
+    }
     setError('')
     setStep(next)
   }
@@ -190,73 +273,30 @@ export function CustomCakeForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitting || referenceUploading) return
 
-    setFieldErrors({})
     setError('')
 
-    const nextFieldErrors: Partial<Record<keyof FormState, string>> = {}
-    let hasError = false
-
-    if (!form.name.trim() || form.name.trim().length < 2) {
-      nextFieldErrors.name = 'Please enter your full name.'
-      hasError = true
-    } else {
-      clearFieldError('name')
-    }
-
-    if (!/^[6-9]\d{9}$/.test(form.phone.trim())) {
-      nextFieldErrors.phone = 'Enter a valid 10-digit Indian mobile number.'
-      hasError = true
-    } else {
-      clearFieldError('phone')
-    }
-
-    if (!form.flavour.trim() || form.flavour.trim().length < 2) {
-      nextFieldErrors.flavour = 'Please tell us the flavour.'
-      hasError = true
-    } else {
-      clearFieldError('flavour')
+    const ordered: Step[] = ['contact', 'cake-details', 'design', 'reference']
+    for (const s of ordered) {
+      if (!validateStep(s)) {
+        setStep(s)
+        return
+      }
     }
 
     const kilograms = Number(form.weight)
-    if (!Number.isFinite(kilograms) || kilograms < 0.1 || kilograms > 5) {
-      nextFieldErrors.weight = 'Cake weight must be between 0.1 kg and 5 kg.'
-      hasError = true
-    } else {
-      clearFieldError('weight')
-    }
 
-    if (!form.theme.trim() || form.theme.trim().length < 2) {
-      nextFieldErrors.theme = 'Please describe the theme or occasion.'
-      hasError = true
-    } else {
-      clearFieldError('theme')
-    }
-
-    if (
-      form.referenceImageUrl.trim() &&
-      !/^https?:\/\/.+/.test(form.referenceImageUrl.trim())
-    ) {
-      nextFieldErrors.referenceImageUrl = 'Please enter a valid image URL.'
-      hasError = true
-    } else {
-      clearFieldError('referenceImageUrl')
-    }
-
-    if (hasError) {
-      setFieldErrors(nextFieldErrors)
-      return
-    }
-
-    // Upload a selected reference photo that has not been uploaded yet, so
-    // the photo travels with the request even if the customer never clicked
-    // the standalone upload button. A failed upload is non-fatal: the photo
-    // is optional and the request can still be submitted without it.
-    if (referenceFile && !form.referenceImageUrl.trim()) {
+    // Upload a selected reference photo that has not been uploaded yet. A failed
+    // upload is non-fatal: the photo is optional and the request can still be
+    // submitted without it (e.g. public visitors cannot sign uploads).
+    let referenceImageUrlToSubmit = form.referenceImageUrl.trim()
+    if (referenceFile && !referenceImageUrlToSubmit) {
       const secureUrl = await uploadReferenceFile()
       if (secureUrl) {
+        referenceImageUrlToSubmit = secureUrl
         setForm((current) => ({ ...current, referenceImageUrl: secureUrl }))
-        clearFieldError('referenceImageUrl')
+        clearReferenceSelection()
       }
     }
 
@@ -272,7 +312,7 @@ export function CustomCakeForm() {
         theme: form.theme.trim(),
         messageOnCake: form.messageOnCake.trim() || undefined,
         instructions: form.instructions.trim() || undefined,
-        referenceImageUrl: form.referenceImageUrl.trim() || undefined,
+        referenceImageUrl: referenceImageUrlToSubmit || undefined,
       })
 
       setReferenceNumber(result.request.referenceNumber)
@@ -605,7 +645,7 @@ export function CustomCakeForm() {
                 id="cc-instructions"
                 value={form.instructions}
                 onChange={(e) => update('instructions', e.target.value)}
-                placeholder="Eggless, less sugar, delivery before 5 PM…"
+                placeholder="Eggless, less sugar, delivery before 5 PMâ€¦"
                 rows={4}
                 className={`${fieldErrorClass(false)} resize-none`}
               />
@@ -679,11 +719,11 @@ export function CustomCakeForm() {
                   </p>
                   <button
                     type="button"
-                    onClick={uploadReferenceFile}
+                    onClick={handleReferenceUploadClick}
                     disabled={referenceUploading}
                     className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                   >
-                    {referenceUploading ? 'Uploading…' : 'Upload to Cloudinary'}
+                    {referenceUploading ? 'Uploadingâ€¦' : 'Upload to Cloudinary'}
                   </button>
                 </div>
               )}
@@ -713,7 +753,7 @@ export function CustomCakeForm() {
                 type="url"
                 value={form.referenceImageUrl}
                 onChange={(e) => update('referenceImageUrl', e.target.value)}
-                placeholder="https://…"
+                placeholder="https://â€¦"
                 className={fieldErrorClass(Boolean(fieldErrors.referenceImageUrl))}
               />
               <p className="mt-1 text-xs text-muted-foreground">
@@ -809,7 +849,7 @@ export function CustomCakeForm() {
                 disabled={submitting}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
               >
-                {submitting ? 'Submitting…' : 'Submit Request'}
+                {submitting ? 'Submittingâ€¦' : 'Submit Request'}
               </button>
             </div>
           </section>

@@ -392,8 +392,9 @@ export async function getProductAnalytics(dateRange: DateRange) {
   }>();
 
   for (const o of orders) {
-    for (const item of o.items) {
-      const pid = item.productId.toString();
+      for (const item of o.items) {
+        if (!item.productId) continue;
+        const pid = item.productId.toString();
       if (!productSales.has(pid)) {
         const product = await Product.findById(item.productId).lean();
         productSales.set(pid, {
