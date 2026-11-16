@@ -2,9 +2,10 @@ name: CI — S.V. Sweets & Bakers
 
 on:
   push:
-    branches: [main]
+    branches: [main, temp-ci-diag-cf7b779]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -30,8 +31,44 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
+      - name: Diagnostics (temporary)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "---EVENT---"
+          echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "---CONTEXT---"
+          pwd
+          git rev-parse HEAD
+          git branch --show-current || true
+          echo "---VERSIONS---"
+          node --version
+          pnpm --version
+          echo "---PACKAGE_MANAGER---"
+          node -e "const p=require('./package.json'); console.log(p.packageManager || '')"
+          echo "---LOCKFILE_META---"
+          ls -la pnpm-lock.yaml
+          (grep -n '^lockfileVersion:' pnpm-lock.yaml || true) | head -n 5
+          (grep -n 'packageManagerDependencies' pnpm-lock.yaml || true) | head -n 20
+          awk 'NR<=120 {print NR ":" $0}' pnpm-lock.yaml
+          echo "---LOCKFILE_COUNTS---"
+          node -e "const fs=require('fs'); const s=fs.readFileSync('pnpm-lock.yaml','utf8'); console.log('lockfileVersion_count=', (s.match(/^lockfileVersion:/gm)||[]).length); console.log('importers_count=', (s.match(/^importers:/gm)||[]).length); console.log('starts_with_doc=', s.startsWith('---'));"
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee install.log
+          code=${PIPESTATUS[0]}
+          echo "---INSTALL_EXIT:$code---"
+          if [ $code -ne 0 ]; then
+            echo "---POST_FAIL_DIFF---"
+            git diff --name-only || true
+            git diff --stat || true
+          fi
+          exit $code
 
       - name: Frontend typecheck
         run: npx tsc --noEmit
@@ -58,8 +95,29 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
+      - name: Diagnostics (temporary)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          pwd
+          git rev-parse HEAD
+          node --version
+          pnpm --version
+          node -e "const p=require('./package.json'); console.log(p.packageManager || '')"
+          (grep -n '^lockfileVersion:' pnpm-lock.yaml || true) | head -n 2
+          (grep -n 'packageManagerDependencies' pnpm-lock.yaml || true) | head -n 10
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee install.log
+          code=${PIPESTATUS[0]}
+          echo "---INSTALL_EXIT:$code---"
+          exit $code
 
       - name: Run backend tests
         run: npx vitest run
@@ -85,8 +143,29 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
+      - name: Diagnostics (temporary)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          pwd
+          git rev-parse HEAD
+          node --version
+          pnpm --version
+          node -e "const p=require('./package.json'); console.log(p.packageManager || '')"
+          (grep -n '^lockfileVersion:' pnpm-lock.yaml || true) | head -n 2
+          (grep -n 'packageManagerDependencies' pnpm-lock.yaml || true) | head -n 10
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee install.log
+          code=${PIPESTATUS[0]}
+          echo "---INSTALL_EXIT:$code---"
+          exit $code
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
