@@ -1,0 +1,158 @@
+name: CI cache diagnostic — cf7b779 (temporary)
+
+on:
+  push:
+    branches: [temp-ci-cache-diag-cf7b779]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-cache-diag-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 22
+
+jobs:
+  typecheck-backend-e2e-no-cache:
+    name: No pnpm cache (Node 22, frozen install + existing checks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: cf7b779e22c0842d1ecc9e4a5430312c32188d18
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js (cache disabled)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # pnpm cache intentionally disabled for this diagnostic job
+
+      - name: Diagnostics (temporary)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "---EVENT---"
+          echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "---CHECKOUT---"
+          git rev-parse HEAD
+          git log -1 --format='%H %s'
+          git status --porcelain=v1 || true
+          echo "---VERSIONS---"
+          node --version
+          pnpm --version
+          echo "---PACKAGE_MANAGER---"
+          node -e "const p=require('./package.json'); console.log(p.packageManager || '')"
+          echo "---LOCKFILE_META---"
+          node -e "const fs=require('fs'); const s=fs.readFileSync('pnpm-lock.yaml','utf8'); const lv=(s.match(/^lockfileVersion:\s*['\"]?([^'\"\n]+)['\"]?/m)||[])[1]||''; console.log('lockfileVersion='+lv); console.log('hasPackageManagerDependencies=' + /^packageManagerDependencies:/m.test(s)); console.log('hasOverrides=' + /^overrides:/m.test(s)); console.log('hasPatchedDependencies=' + /^patchedDependencies:/m.test(s));"
+          echo "---CACHE---"
+          echo "cache=disabled (no actions/setup-node cache configured)"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee install.log
+          code=${PIPESTATUS[0]}
+          echo "---INSTALL_EXIT:$code---"
+          exit $code
+
+      - name: Frontend typecheck
+        run: npx tsc --noEmit
+        working-directory: .
+
+      - name: Backend typecheck
+        run: npx tsc --noEmit
+        working-directory: ./backend
+
+      - name: Run backend tests
+        run: npx vitest run
+        working-directory: ./backend
+        env:
+          JWT_SECRET: ci-test-secret-that-is-at-least-32-chars-long
+          NODE_ENV: test
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test --config=playwright.ci.config.ts
+        env:
+          NODE_ENV: test
+
+  typecheck-backend-e2e-with-cache:
+    name: With pnpm cache (Node 22, frozen install + existing checks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: cf7b779e22c0842d1ecc9e4a5430312c32188d18
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js (cache enabled)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Diagnostics (temporary)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "---EVENT---"
+          echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "---CHECKOUT---"
+          git rev-parse HEAD
+          git log -1 --format='%H %s'
+          git status --porcelain=v1 || true
+          echo "---VERSIONS---"
+          node --version
+          pnpm --version
+          echo "---PACKAGE_MANAGER---"
+          node -e "const p=require('./package.json'); console.log(p.packageManager || '')"
+          echo "---LOCKFILE_META---"
+          node -e "const fs=require('fs'); const s=fs.readFileSync('pnpm-lock.yaml','utf8'); const lv=(s.match(/^lockfileVersion:\s*['\"]?([^'\"\n]+)['\"]?/m)||[])[1]||''; console.log('lockfileVersion='+lv); console.log('hasPackageManagerDependencies=' + /^packageManagerDependencies:/m.test(s)); console.log('hasOverrides=' + /^overrides:/m.test(s)); console.log('hasPatchedDependencies=' + /^patchedDependencies:/m.test(s));"
+          echo "---CACHE---"
+          echo "cache=pnpm (actions/setup-node cache enabled)"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee install.log
+          code=${PIPESTATUS[0]}
+          echo "---INSTALL_EXIT:$code---"
+          exit $code
+
+      - name: Frontend typecheck
+        run: npx tsc --noEmit
+        working-directory: .
+
+      - name: Backend typecheck
+        run: npx tsc --noEmit
+        working-directory: ./backend
+
+      - name: Run backend tests
+        run: npx vitest run
+        working-directory: ./backend
+        env:
+          JWT_SECRET: ci-test-secret-that-is-at-least-32-chars-long
+          NODE_ENV: test
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test --config=playwright.ci.config.ts
+        env:
+          NODE_ENV: test
