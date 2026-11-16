@@ -123,10 +123,35 @@ export const createCustomCakeRequest = async (
       return;
     }
 
-    const request = await CustomCakeRequest.create({
-      ...parsed.data,
-      referenceNumber: generateReferenceNumber(),
-    });
+    let request: InstanceType<typeof CustomCakeRequest> | null = null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        request = await CustomCakeRequest.create({
+          ...parsed.data,
+          referenceNumber: generateReferenceNumber(),
+        });
+        break;
+      } catch (createError) {
+        const isDuplicateReferenceNumber =
+          typeof createError === "object" &&
+          createError !== null &&
+          "code" in createError &&
+          (createError as { code?: number }).code === 11000 &&
+          "keyPattern" in createError &&
+          typeof (createError as { keyPattern?: unknown }).keyPattern === "object" &&
+          (createError as { keyPattern?: Record<string, unknown> }).keyPattern !== null &&
+          "referenceNumber" in ((createError as { keyPattern?: Record<string, unknown> }).keyPattern ?? {});
+
+        if (!isDuplicateReferenceNumber || attempt === 4) {
+          throw createError;
+        }
+      }
+    }
+
+    if (!request) {
+      throw new Error("Failed to generate a unique reference number");
+    }
 
     res.status(201).json({
       message: "Custom cake request received",
