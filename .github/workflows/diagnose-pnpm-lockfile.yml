@@ -1,0 +1,85 @@
+name: Diagnose pnpm frozen-lockfile (fbd0627)
+
+on:
+  push:
+    branches: [diag/pnpm-lockfile-fbd0627]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: with-pnpm-cache
+            use_cache: true
+          - name: without-pnpm-cache
+            use_cache: false
+    steps:
+      - name: Checkout exact commit fbd0627
+        uses: actions/checkout@v4
+        with:
+          ref: fbd06273d10bfb3d802f7e2641b50070edc9c8d8
+
+      - name: Install pnpm (packageManager)
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: ${{ matrix.use_cache && 'pnpm' || '' }}
+
+      - name: Environment and lockfile metadata
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "---VERSIONS---"
+          node --version
+          pnpm --version
+          corepack --version || true
+          echo "---PACKAGE_MANAGER---"
+          node -e "const p=require('./package.json'); console.log(p.packageManager || '')"
+          echo "---GIT---"
+          git rev-parse HEAD
+          git status --short || true
+          echo "---LOCKFILE_META---"
+          echo "lockfileVersion:"
+          (grep -n '^lockfileVersion:' pnpm-lock.yaml || true) | head -n 5
+          echo "packageManagerDependencies occurrences:"
+          (grep -n 'packageManagerDependencies' pnpm-lock.yaml || true) | head -n 20
+          echo "pnpm specifier/version near packageManagerDependencies:"
+          awk 'NR<=80 {print NR ":" $0}' pnpm-lock.yaml
+          echo "---LOCKFILE_COUNTS---"
+          node -e "const fs=require('fs'); const s=fs.readFileSync('pnpm-lock.yaml','utf8'); console.log('lockfileVersion_count=', (s.match(/^lockfileVersion:/gm)||[]).length); console.log('importers_count=', (s.match(/^importers:/gm)||[]).length); console.log('starts_with_doc=', s.startsWith('---'));"
+
+      - name: pnpm install --frozen-lockfile
+        id: install
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee install.log
+          code=${PIPESTATUS[0]}
+          echo "---INSTALL_EXIT_CODE:${code}---"
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          echo "---INSTALL_LOG_TAIL---"
+          tail -n 200 install.log || true
+          exit 0
+
+      - name: Post-install diagnostics
+        if: always()
+        shell: bash
+        run: |
+          echo "---RESULT---"
+          echo "exit_code=${{ steps.install.outputs.exit_code }}"
+          echo "---DIFF_AFTER---"
+          git diff --name-only || true
+          git diff --stat || true
+          echo "---PNPM_STORE_DIR---"
+          pnpm store path || true
