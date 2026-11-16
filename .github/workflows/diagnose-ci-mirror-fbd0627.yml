@@ -1,4 +1,4 @@
-name: Diagnose CI mirror (fbd0627)
+name: Diagnose CI mirror (cf7b779)
 
 on:
   push:
@@ -20,16 +20,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: fbd06273d10bfb3d802f7e2641b50070edc9c8d8
+          ref: cf7b779e22c0842d1ecc9e4a5430312c32188d18
 
       - name: Diagnostic context
         shell: bash
         run: |
           set -euxo pipefail
-          echo "---REF---"; git rev-parse HEAD
+          echo "---PWD---"; pwd
+          echo "---CHECKOUT_SHA---"; git rev-parse HEAD
+          echo "---NODE---"; node --version || true
           echo "---PACKAGE_MANAGER---"; node -e "const p=require('./package.json'); console.log(p.packageManager||'')"
-          echo "---LOCK_META---"; awk 'NR<=60 {print NR ":" $0}' pnpm-lock.yaml
-          echo "---LOCK_COUNTS---"; node -e "const fs=require('fs');const s=fs.readFileSync('pnpm-lock.yaml','utf8');console.log((s.match(/^lockfileVersion:/gm)||[]).length,(s.match(/^importers:/gm)||[]).length,s.startsWith('---'));"
+          echo "---LOCKFILE_VERSION---"; (grep -n '^lockfileVersion:' pnpm-lock.yaml || true) | head -n 5
+          echo "---PACKAGE_MANAGER_DEPS---"; (grep -n 'packageManagerDependencies' -n pnpm-lock.yaml || true) | head -n 20
+          echo "---LOCK_META_HEAD---"; awk 'NR<=120 {print NR ":" $0}' pnpm-lock.yaml
+          echo "---LOCK_COUNTS---"; node -e "const fs=require('fs');const s=fs.readFileSync('pnpm-lock.yaml','utf8');console.log('lockfileVersion_count=',(s.match(/^lockfileVersion:/gm)||[]).length,'importers_count=',(s.match(/^importers:/gm)||[]).length,'starts_with_doc=',s.startsWith('---'));"
+          echo "---GIT_STATUS---"; git status --short || true
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -45,13 +50,14 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          pnpm --version
-          node --version
+          echo "---INSTALL_CONTEXT---"; pwd; git rev-parse HEAD; node --version; pnpm --version
+          node -e "const p=require('./package.json'); console.log('packageManager=' + (p.packageManager||''))"
+          echo "---INSTALL_OUTPUT---"
           pnpm install --frozen-lockfile 2>&1 | tee install.log
           code=${PIPESTATUS[0]}
           echo "---INSTALL_EXIT:$code---"
           if [ $code -ne 0 ]; then
-            echo "---LOCKFILE_HEAD---"; awk 'NR<=120 {print NR ":" $0}' pnpm-lock.yaml
+            echo "---LOCKFILE_HEAD---"; awk 'NR<=160 {print NR ":" $0}' pnpm-lock.yaml
             echo "---GIT_DIFF---"; git diff --name-only || true; git diff --stat || true
           fi
           exit $code
@@ -72,7 +78,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: fbd06273d10bfb3d802f7e2641b50070edc9c8d8
+          ref: cf7b779e22c0842d1ecc9e4a5430312c32188d18
+
+      - name: Diagnostic context
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "---PWD---"; pwd
+          echo "---CHECKOUT_SHA---"; git rev-parse HEAD
+          echo "---PACKAGE_MANAGER---"; node -e "const p=require('./package.json'); console.log(p.packageManager||'')"
+          echo "---LOCKFILE_VERSION---"; (grep -n '^lockfileVersion:' pnpm-lock.yaml || true) | head -n 5
+          echo "---PACKAGE_MANAGER_DEPS---"; (grep -n 'packageManagerDependencies' pnpm-lock.yaml || true) | head -n 20
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -88,11 +104,13 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          pnpm --version; node --version
+          echo "---INSTALL_CONTEXT---"; pwd; git rev-parse HEAD; node --version; pnpm --version
+          node -e "const p=require('./package.json'); console.log('packageManager=' + (p.packageManager||''))"
+          echo "---INSTALL_OUTPUT---"
           pnpm install --frozen-lockfile 2>&1 | tee install.log
           code=${PIPESTATUS[0]}
           echo "---INSTALL_EXIT:$code---"
-          if [ $code -ne 0 ]; then awk 'NR<=120 {print NR ":" $0}' pnpm-lock.yaml; git diff --stat || true; fi
+          if [ $code -ne 0 ]; then awk 'NR<=160 {print NR ":" $0}' pnpm-lock.yaml; git diff --stat || true; fi
           exit $code
 
       - name: Run backend tests
@@ -110,7 +128,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: fbd06273d10bfb3d802f7e2641b50070edc9c8d8
+          ref: cf7b779e22c0842d1ecc9e4a5430312c32188d18
+
+      - name: Diagnostic context
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "---PWD---"; pwd
+          echo "---CHECKOUT_SHA---"; git rev-parse HEAD
+          echo "---PACKAGE_MANAGER---"; node -e "const p=require('./package.json'); console.log(p.packageManager||'')"
+          echo "---LOCKFILE_VERSION---"; (grep -n '^lockfileVersion:' pnpm-lock.yaml || true) | head -n 5
+          echo "---PACKAGE_MANAGER_DEPS---"; (grep -n 'packageManagerDependencies' pnpm-lock.yaml || true) | head -n 20
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -126,11 +154,13 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          pnpm --version; node --version
+          echo "---INSTALL_CONTEXT---"; pwd; git rev-parse HEAD; node --version; pnpm --version
+          node -e "const p=require('./package.json'); console.log('packageManager=' + (p.packageManager||''))"
+          echo "---INSTALL_OUTPUT---"
           pnpm install --frozen-lockfile 2>&1 | tee install.log
           code=${PIPESTATUS[0]}
           echo "---INSTALL_EXIT:$code---"
-          if [ $code -ne 0 ]; then awk 'NR<=120 {print NR ":" $0}' pnpm-lock.yaml; git diff --stat || true; fi
+          if [ $code -ne 0 ]; then awk 'NR<=160 {print NR ":" $0}' pnpm-lock.yaml; git diff --stat || true; fi
           exit $code
 
       - name: Install Playwright browsers

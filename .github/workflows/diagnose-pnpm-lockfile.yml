@@ -1,4 +1,4 @@
-name: Diagnose pnpm frozen-lockfile (fbd0627)
+name: Diagnose pnpm frozen-lockfile (cf7b779)
 
 on:
   push:
@@ -21,10 +21,10 @@ jobs:
           - name: without-pnpm-cache
             use_cache: false
     steps:
-      - name: Checkout exact commit fbd0627
+      - name: Checkout exact commit cf7b779
         uses: actions/checkout@v4
         with:
-          ref: fbd06273d10bfb3d802f7e2641b50070edc9c8d8
+          ref: cf7b779e22c0842d1ecc9e4a5430312c32188d18
 
       - name: Install pnpm (packageManager)
         uses: pnpm/action-setup@v4
@@ -39,22 +39,25 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          echo "---PWD---"
+          pwd
+          echo "---CHECKOUT_SHA---"
+          git rev-parse HEAD
           echo "---VERSIONS---"
           node --version
           pnpm --version
           corepack --version || true
           echo "---PACKAGE_MANAGER---"
           node -e "const p=require('./package.json'); console.log(p.packageManager || '')"
-          echo "---GIT---"
-          git rev-parse HEAD
+          echo "---GIT_STATUS---"
           git status --short || true
           echo "---LOCKFILE_META---"
           echo "lockfileVersion:"
           (grep -n '^lockfileVersion:' pnpm-lock.yaml || true) | head -n 5
           echo "packageManagerDependencies occurrences:"
           (grep -n 'packageManagerDependencies' pnpm-lock.yaml || true) | head -n 20
-          echo "pnpm specifier/version near packageManagerDependencies:"
-          awk 'NR<=80 {print NR ":" $0}' pnpm-lock.yaml
+          echo "lockfile head (metadata/importers):"
+          awk 'NR<=120 {print NR ":" $0}' pnpm-lock.yaml
           echo "---LOCKFILE_COUNTS---"
           node -e "const fs=require('fs'); const s=fs.readFileSync('pnpm-lock.yaml','utf8'); console.log('lockfileVersion_count=', (s.match(/^lockfileVersion:/gm)||[]).length); console.log('importers_count=', (s.match(/^importers:/gm)||[]).length); console.log('starts_with_doc=', s.startsWith('---'));"
 
@@ -64,6 +67,13 @@ jobs:
         run: |
           set +e
           set -o pipefail
+          echo "---INSTALL_CONTEXT---"
+          pwd
+          git rev-parse HEAD
+          node --version
+          pnpm --version
+          node -e "const p=require('./package.json'); console.log('packageManager=' + (p.packageManager||''))"
+          echo "---INSTALL_OUTPUT---"
           pnpm install --frozen-lockfile 2>&1 | tee install.log
           code=${PIPESTATUS[0]}
           echo "---INSTALL_EXIT_CODE:${code}---"
