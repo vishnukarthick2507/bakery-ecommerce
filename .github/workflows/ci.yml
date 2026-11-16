@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: cf7b779e22c0842d1ecc9e4a5430312c32188d18
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -85,6 +87,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: cf7b779e22c0842d1ecc9e4a5430312c32188d18
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -133,6 +137,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: cf7b779e22c0842d1ecc9e4a5430312c32188d18
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
