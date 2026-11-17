@@ -9,11 +9,7 @@
   ],
   "framework": "nextjs",
   "regions": ["bom1"],
-  "env": {
-    "NEXT_PUBLIC_SITE_URL": "@next-public-site-url",
-    "NEXT_PUBLIC_GOOGLE_CLIENT_ID": "@next-public-google-client-id",
-    "JWT_SECRET": "@jwt-secret"
-  },
+  "env": {},
   "headers": [
     {
       "source": "/api/(.*)",
