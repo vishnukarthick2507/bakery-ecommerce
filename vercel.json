@@ -10,10 +10,8 @@
   "framework": "nextjs",
   "regions": ["bom1"],
   "env": {
-    "NEXT_PUBLIC_API_URL": "@backend-internal-url",
     "NEXT_PUBLIC_SITE_URL": "@next-public-site-url",
     "NEXT_PUBLIC_GOOGLE_CLIENT_ID": "@next-public-google-client-id",
-    "BACKEND_INTERNAL_URL": "@backend-internal-url",
     "JWT_SECRET": "@jwt-secret"
   },
   "headers": [
