@@ -831,7 +831,12 @@ export default function CheckoutPage() {
                   <button
                     type="button"
                     disabled={!settings?.onlineOrdersEnabled}
-                    onClick={() => setFulfilment('delivery')}
+                    onClick={() => {
+                      setFulfilment('delivery')
+                      clearFieldError('addressLine')
+                      clearFieldError('city')
+                      clearFieldError('pincode')
+                    }}
                     className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${
                       fulfilment === 'delivery' && settings?.deliveryEnabled
                         ? 'border-caramel bg-caramel/5'
@@ -857,7 +862,12 @@ export default function CheckoutPage() {
                   <button
                     type="button"
                     disabled={!settings?.onlineOrdersEnabled}
-                    onClick={() => setFulfilment('pickup')}
+                    onClick={() => {
+                      setFulfilment('pickup')
+                      clearFieldError('addressLine')
+                      clearFieldError('city')
+                      clearFieldError('pincode')
+                    }}
                     className={`flex flex-col gap-3 rounded-[2rem] border p-5 text-left transition-colors ${
                       fulfilment === 'pickup' && settings?.pickupEnabled
                         ? 'border-caramel bg-caramel/5'
@@ -976,7 +986,32 @@ export default function CheckoutPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveStep('schedule')}
+                  onClick={() => {
+                    if (fulfilment === 'delivery') {
+                      const nextFieldErrors: Record<string, string> = {}
+                      if (!addressLine.trim()) {
+                        nextFieldErrors.addressLine = 'Please enter your delivery address.'
+                      }
+                      if (!city.trim()) {
+                        nextFieldErrors.city = 'Please enter your city.'
+                      }
+                      if (!pincode.trim()) {
+                        nextFieldErrors.pincode = 'Please enter your pincode.'
+                      }
+                      if (Object.keys(nextFieldErrors).length > 0) {
+                        setFieldErrors((prev) => ({ ...prev, ...nextFieldErrors }))
+                        return
+                      }
+                      setFieldErrors((prev) => {
+                        const next = { ...prev }
+                        delete next.addressLine
+                        delete next.city
+                        delete next.pincode
+                        return next
+                      })
+                    }
+                    setActiveStep('schedule')
+                  }}
                   disabled={isSubmitting}
                   className="ml-auto inline-flex items-center gap-2 rounded-xl bg-caramel px-6 py-3.5 font-medium text-caramel-foreground shadow-sm hover:bg-caramel/90 disabled:opacity-60 transition-colors"
                 >
