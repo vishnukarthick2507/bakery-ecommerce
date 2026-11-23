@@ -76,6 +76,7 @@ describe("Customer password-based authentication", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.message).toContain("verification code");
+      expect(Object.keys(res.body).sort()).toEqual(["message"]);
     });
 
     it("rejects duplicate email registration via password", async () => {
@@ -87,6 +88,7 @@ describe("Customer password-based authentication", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.message).toContain("does not already exist");
+      expect(Object.keys(res.body).sort()).toEqual(["message"]);
     });
 
     it("rejects duplicate phone registration via password", async () => {
@@ -101,6 +103,7 @@ describe("Customer password-based authentication", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.message).toContain("does not already exist");
+      expect(Object.keys(res.body).sort()).toEqual(["message"]);
     });
 
     it("returns indistinguishable responses for duplicate email and phone", async () => {
@@ -119,7 +122,42 @@ describe("Customer password-based authentication", () => {
 
       expect(emailRes.status).toBe(200);
       expect(phoneRes.status).toBe(200);
-      expect(emailRes.body.message).toBe(phoneRes.body.message);
+      expect(emailRes.body).toEqual(phoneRes.body);
+    });
+
+    it("returns the same generic public response for an existing pending email registration", async () => {
+      const { PendingRegistration } = await import("../src/models/PendingRegistration.js");
+      await PendingRegistration.create({
+        email: registerPayload.email,
+        name: "Pending Name",
+        phone: "9000000001",
+        passwordHash: await bcrypt.hash("Pending1password", 12),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      });
+
+      const res = await request(app)
+        .post("/api/auth/register")
+        .send({
+          ...registerPayload,
+          name: "Different Name",
+          phone: "9000000002",
+          password: "Different1password",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        message:
+          "If an account does not already exist for this email, a verification code has been sent. Please check your email.",
+      });
+
+      const pending = await PendingRegistration.findOne({ email: registerPayload.email }).lean();
+      expect(pending).toBeTruthy();
+      expect(pending?.name).toBe("Pending Name");
+      expect(pending?.phone).toBe("9000000001");
+      await expect(bcrypt.compare("Pending1password", pending!.passwordHash)).resolves.toBe(true);
+      await expect(
+        PendingRegistration.countDocuments({ email: registerPayload.email }),
+      ).resolves.toBe(1);
     });
 
     it("does not create duplicate accounts for duplicate email or phone", async () => {
@@ -448,6 +486,32 @@ describe("Customer password-based authentication", () => {
       expect(res.body).toEqual({ isAdmin: false });
     });
 
+    it("returns { isAdmin: false } for a stale admin token on /api/auth/me", async () => {
+      const admin = await Admin.create({
+        username: "stalemeadmin",
+        password: await bcrypt.hash("CorrectPassword123", 10),
+        role: "ADMIN",
+        tokenVersion: 1,
+      });
+      const staleAdminToken = jwt.sign(
+        {
+          adminId: admin._id.toString(),
+          username: "stalemeadmin",
+          role: "ADMIN",
+          tokenVersion: 0,
+        },
+        process.env.JWT_SECRET!,
+        { expiresIn: "7d" },
+      );
+
+      const res = await request(app)
+        .get("/api/auth/me")
+        .set("Cookie", `admin-token=${staleAdminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ isAdmin: false });
+    });
+
     it("logs out a customer using the customer cookie and invalidates the session", async () => {
       const { User } = await import("../src/models/User.js");
       await User.create({
@@ -476,6 +540,84 @@ describe("Customer password-based authentication", () => {
         .get("/api/orders/me")
         .set("Cookie", sessionCookie!);
       expect(expiredSession.status).toBe(401);
+    });
+  });
+
+  describe("PATCH /api/auth/profile (S04-C2)", () => {
+    it("rejects unauthenticated profile updates", async () => {
+      const res = await request(app)
+        .patch("/api/auth/profile")
+        .send({ name: "No Session" });
+
+      expect(res.status).toBe(401);
+    });
+
+    it("returns a generic 409 for duplicate phone without disclosing ownership", async () => {
+      const { User } = await import("../src/models/User.js");
+      await User.create({
+        name: "Existing Owner",
+        email: "owner@example.com",
+        phone: "9000000001",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
+      await User.create({
+        name: "Current Customer",
+        email: "current@example.com",
+        phone: "9000000002",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
+
+      const login = await request(app)
+        .post("/api/auth/customer/login")
+        .send({ email: "current@example.com", password: "Secure1password" });
+      const sessionCookie = customerCookie(login.headers["set-cookie"]);
+
+      const res = await request(app)
+        .patch("/api/auth/profile")
+        .set("Cookie", sessionCookie!)
+        .send({ name: "Current Customer", phone: "9000000001" });
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({
+        message: "Unable to update profile. Please check your details and try again.",
+      });
+      expect(JSON.stringify(res.body)).not.toContain("another customer");
+      expect(JSON.stringify(res.body)).not.toContain("A customer with this phone number already exists");
+    });
+
+    it("allows an authenticated customer to update their own profile", async () => {
+      const { User } = await import("../src/models/User.js");
+      const user = await User.create({
+        name: "Current Customer",
+        email: "current-success@example.com",
+        phone: "9000000003",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
+
+      const login = await request(app)
+        .post("/api/auth/customer/login")
+        .send({ email: "current-success@example.com", password: "Secure1password" });
+      const sessionCookie = customerCookie(login.headers["set-cookie"]);
+
+      const res = await request(app)
+        .patch("/api/auth/profile")
+        .set("Cookie", sessionCookie!)
+        .send({ name: "Updated Name", phone: "9000000004" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.user).toMatchObject({
+        id: user._id.toString(),
+        name: "Updated Name",
+        email: "current-success@example.com",
+        phone: "9000000004",
+      });
+
+      const updated = await User.findById(user._id).lean();
+      expect(updated?.name).toBe("Updated Name");
+      expect(updated?.phone).toBe("9000000004");
     });
   });
 });

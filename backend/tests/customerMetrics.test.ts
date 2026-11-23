@@ -87,7 +87,7 @@ async function createOrder(
 
 describe("Customer metrics derived collection", () => {
   beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServer.getUri());
   });
 

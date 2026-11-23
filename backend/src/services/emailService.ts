@@ -1,5 +1,7 @@
 import { OTP_EXPIRY_MINUTES } from "./otpService.js";
 import { z } from "zod";
+import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
+import { logUatSuppressed } from "./uatSafetyLog.js";
 
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
@@ -155,6 +157,13 @@ export async function sendOtpEmail(
   otp: string,
   purpose: "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET" = "LOGIN",
 ): Promise<boolean> {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("email.otp", { purpose });
+    // Suppressed (not delivered to provider). Return non-success so callers do not
+    // treat as successful external delivery; UAT-aware callers may proceed safely.
+    return false;
+  }
+
   if (!isBrevoConfigured()) {
     console.error(
       "OTP email delivery failed: Brevo API is not configured. Set BREVO_API_KEY env var.",
@@ -212,34 +221,220 @@ export async function sendOtpEmail(
     clearTimeout(timeoutId);
   }
 }
-/**
- * Sends a secret-free alert after a successful administrator login.
- * The recipient must be explicitly configured; the verified sender is never
- * treated as the notification destination.
- */
-export async function sendAdminLoginAlert(input: {
+type AdminLoginAlertInput = {
   username: string;
   occurredAt: Date;
   ipAddress?: string;
   userAgent?: string;
-}): Promise<boolean> {
-  const recipient = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
-  if (!recipient) return false;
+};
 
-  const parsedRecipient = z.string().email().safeParse(recipient);
-  if (!parsedRecipient.success || !isBrevoConfigured()) return false;
+type AdminLoginAlertOutcome =
+  | "attempted"
+  | "sent"
+  | "suppressed"
+  | "failed"
+  | "configuration_missing"
+  | "uat_suppressed";
 
-  const { apiKey, from, fromName } = getBrevoConfig();
-  const safeText = (value: string) => value.replace(/[&<>"']/g, (char) => ({
+const ADMIN_LOGIN_ALERT_EVENT_PREFIX = "admin_login_alert";
+const ADMIN_ALERT_DEDUPE_WINDOW_MS = 15 * 60 * 1000;
+const ADMIN_ALERT_DEDUPE_MAX_ENTRIES = 1_000;
+
+const adminLoginAlertClaims = new Map<string, { claimedAt: number; expiresAt: number }>();
+
+function emitAdminLoginAlertDiagnostic(
+  outcome: AdminLoginAlertOutcome,
+  reason?: string,
+): void {
+  try {
+    const payload: Record<string, string> = {
+      event: `${ADMIN_LOGIN_ALERT_EVENT_PREFIX}.${outcome}`,
+      outcome,
+      channel: "email",
+    };
+    if (reason) payload.reason = reason;
+    // Structured, privacy-safe diagnostic only (no usernames/IPs/recipients/UA/tokens/secrets).
+    console.info(JSON.stringify(payload));
+  } catch {
+    // Diagnostics must never affect login or alert best-effort behavior.
+  }
+}
+
+function escapeAlertHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#39;",
-  })[char]!);
+  }[char]!));
+}
+
+function maskAdminUsername(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) return "***";
+  const chars = Array.from(normalized);
+  if (chars.length <= 2) return "***";
+  return `${chars[0]}***${chars[chars.length - 1]}`;
+}
+
+function isValidIpv4(value: string): boolean {
+  const parts = value.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255);
+}
+
+function maskIpv4(value: string): string | null {
+  if (!isValidIpv4(value)) return null;
+  const parts = value.split(".");
+  parts[3] = "xxx";
+  return parts.join(".");
+}
+
+function maskIpv6(value: string): string | null {
+  const raw = value.trim().toLowerCase();
+  if (!raw || !raw.includes(":")) return null;
+  // Reject obviously invalid characters to avoid emitting raw/unparsed addresses.
+  if (!/^[0-9a-f:.]+$/.test(raw)) return null;
+
+  const hasIpv4Tail = raw.includes(".");
+  const [head, tail = ""] = raw.split("::");
+  const headParts = head ? head.split(":").filter((p) => p.length > 0) : [];
+  const tailParts = !hasIpv4Tail && tail ? tail.split(":").filter((p) => p.length > 0) : [];
+
+  const expand = (parts: string[]): string[] | null => {
+    const out: string[] = [];
+    for (const part of parts) {
+      if (part.length === 0 || part.length > 4 || !/^[0-9a-f]+$/.test(part)) return null;
+      out.push(part);
+    }
+    return out;
+  };
+
+  const left = expand(headParts);
+  if (!left) return null;
+  let right: string[] = [];
+  if (hasIpv4Tail) {
+    // Treat IPv4-mapped/embedded tail conservatively as masked groups.
+    right = [];
+  } else {
+    const expandedRight = expand(tailParts);
+    if (!expandedRight) return null;
+    right = expandedRight;
+  }
+
+  let groups: string[];
+  if (raw.includes("::")) {
+    const missing = 8 - (left.length + right.length);
+    if (missing < 0) return null;
+    groups = [...left, ...Array(Math.max(missing, 0)).fill("0"), ...right];
+  } else {
+    groups = left;
+  }
+
+  if (groups.length !== 8) return null;
+  if (!groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return null;
+
+  const masked = groups.map((g, index) => (index < 3 ? g : "xxxx"));
+  return masked.join(":");
+}
+
+function coarsenIpAddress(value: string | undefined): string {
+  const normalized = value?.trim();
+  if (!normalized) return "Unavailable";
+  // Strip common IPv4-mapped IPv6 prefix for masking purposes.
+  const v4Mapped = normalized.toLowerCase().startsWith("::ffff:")
+    ? normalized.slice(7)
+    : normalized;
+  return maskIpv4(v4Mapped) ?? maskIpv6(normalized) ?? "Unavailable";
+}
+
+function coarseUserAgent(value: string | undefined): string | null {
+  const ua = value?.trim();
+  if (!ua) return null;
+
+  const lower = ua.toLowerCase();
+  const has = (token: string) => lower.includes(token);
+
+  // Very lightweight, conservative heuristics. If not reliably classifiable, omit.
+  const isBot = has("bot") || has("spider") || has("crawl");
+  if (isBot) return null;
+
+  const isMobile =
+    has("iphone") ||
+    has("ipad") ||
+    has("ipod") ||
+    has("android") ||
+    has("mobile");
+
+  let browser: string | null = null;
+  if (has("edg/") || has("edge/") || has("edga/") || has("edgios/")) browser = "Edge";
+  else if (has("opr/") || has("opera")) browser = "Opera";
+  else if (has("chrome/") && !has("chromium") && !has("edg/") && !has("opr/")) browser = "Chrome";
+  else if (has("firefox/") || has("fxios/")) browser = "Firefox";
+  else if ((has("safari/") || has("version/")) && !has("chrome/") && !has("chromium") && !has("crios/") && !has("fxios/") && !has("edgios/")) browser = "Safari";
+
+  let device: string | null = null;
+  if (has("iphone") || has("ipad") || has("ipod") || has("ios")) device = "iOS";
+  else if (has("android")) device = "Android";
+  else if (has("windows")) device = "Windows";
+  else if (has("mac os x") || has("macintosh")) device = "macOS";
+  else if (has("linux")) device = "Linux";
+
+  if (browser && device) return `${browser} on ${device}`;
+  if (browser) return `${browser} on ${isMobile ? "mobile device" : "desktop device"}`;
+  if (device) return `Unknown browser on ${device}`;
+  return null;
+}
+
+function purgeAdminLoginAlertClaims(now: number): void {
+  // Expired-first cleanup.
+  for (const [id, claim] of adminLoginAlertClaims.entries()) {
+    if (claim.expiresAt <= now) adminLoginAlertClaims.delete(id);
+  }
+  // Enforce hard cap with oldest-entry eviction.
+  if (adminLoginAlertClaims.size <= ADMIN_ALERT_DEDUPE_MAX_ENTRIES) return;
+  const entries = [...adminLoginAlertClaims.entries()].sort((a, b) => a[1].claimedAt - b[1].claimedAt);
+  const overflow = adminLoginAlertClaims.size - ADMIN_ALERT_DEDUPE_MAX_ENTRIES;
+  for (let i = 0; i < overflow; i++) {
+    const key = entries[i]?.[0];
+    if (key) adminLoginAlertClaims.delete(key);
+  }
+}
+
+function getAdminAlertConfigState(): { ok: true; recipient: string } | { ok: false; reason: "recipient_unavailable" | "recipient_invalid" | "brevo_unconfigured" } {
+  const recipient = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
+  if (!recipient) return { ok: false, reason: "recipient_unavailable" };
+  const parsedRecipient = z.string().email().safeParse(recipient);
+  if (!parsedRecipient.success) return { ok: false, reason: "recipient_invalid" };
+  if (!isBrevoConfigured()) return { ok: false, reason: "brevo_unconfigured" };
+  return { ok: true, recipient: parsedRecipient.data };
+}
+
+async function sendTransformedAdminLoginAlert(
+  input: AdminLoginAlertInput,
+  recipient: string,
+): Promise<boolean> {
+  const { apiKey, from, fromName } = getBrevoConfig();
   const dateTime = input.occurredAt.toISOString();
-  const ipAddress = input.ipAddress?.trim() || "Unavailable";
-  const userAgent = input.userAgent?.trim() || "Unavailable";
+  const username = maskAdminUsername(input.username);
+  const ipAddress = coarsenIpAddress(input.ipAddress);
+  const userAgent = coarseUserAgent(input.userAgent);
+
+  const rows = [
+    { label: "Username", value: username },
+    { label: "Date and time (UTC)", value: dateTime },
+    { label: "IP address", value: ipAddress },
+    ...(userAgent ? [{ label: "Browser/device", value: userAgent }] : []),
+  ];
+
+  const rowsHtml = rows
+    .map((row, index) => {
+      const border = index < rows.length - 1 ? "border-bottom:1px solid #eee" : "";
+      return `<tr><td style="font-weight:bold;${border}">${escapeAlertHtml(row.label)}</td><td style="${border}">${escapeAlertHtml(row.value)}</td></tr>`;
+    })
+    .join("");
+
   const subject = "Admin sign-in alert — Bluebell Bakehouse";
   const htmlContent = `
 <!doctype html>
@@ -250,12 +445,7 @@ export async function sendAdminLoginAlert(input: {
       <tr><td style="padding:24px;background:#70451f;color:#fff;text-align:center"><h1 style="margin:0;font-size:24px">Bluebell Bakehouse</h1><p style="margin:8px 0 0">Admin security alert</p></td></tr>
       <tr><td style="padding:24px"><h2 style="margin-top:0;font-size:20px">Successful administrator sign-in</h2>
         <p>A successful admin login was recorded. If this was not you, secure the administrator account immediately.</p>
-        <table role="presentation" width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;overflow-wrap:anywhere">
-          <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Username</td><td style="border-bottom:1px solid #eee">${safeText(input.username)}</td></tr>
-          <tr><td style="font-weight:bold;border-bottom:1px solid #eee">Date and time (UTC)</td><td style="border-bottom:1px solid #eee">${safeText(dateTime)}</td></tr>
-          <tr><td style="font-weight:bold;border-bottom:1px solid #eee">IP address</td><td style="border-bottom:1px solid #eee">${safeText(ipAddress)}</td></tr>
-          <tr><td style="font-weight:bold">Browser/device</td><td>${safeText(userAgent)}</td></tr>
-        </table>
+        <table role="presentation" width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;overflow-wrap:anywhere">${rowsHtml}</table>
         <p style="margin:24px 0 0;color:#786c5e;font-size:12px">Automated security notification from Bluebell Bakehouse. This email does not contain credentials or session information.</p>
       </td></tr>
     </table>
@@ -274,46 +464,101 @@ export async function sendAdminLoginAlert(input: {
       },
       body: JSON.stringify({
         sender: { email: from, name: fromName },
-        to: [{ email: parsedRecipient.data }],
+        to: [{ email: recipient }],
         subject,
         htmlContent,
       }),
       signal: controller.signal,
     });
     return response.ok;
-  } catch {
-    // Security alerts are best-effort and must not change login success.
-    return false;
   } finally {
     clearTimeout(timeoutId);
   }
 }
-const sentAdminLoginAlertEvents = new Set<string>();
-const ADMIN_ALERT_DEDUPE_WINDOW_MS = 15 * 60 * 1000;
 
 /**
- * Suppresses repeated dispatch of the same request event within this process.
- * This is intentionally best-effort; durable cross-process delivery guarantees
- * require a persisted notification ledger/outbox.
+ * Sends a privacy-minimized, best-effort alert after a successful administrator login.
+ * Recipient must be explicitly configured; no secrets/credentials/tokens are included.
+ */
+export async function sendAdminLoginAlert(input: AdminLoginAlertInput): Promise<boolean> {
+  try {
+    if (isUatExternalSideEffectsBlocked()) {
+      // Gating/diagnostics are orchestrated by sendAdminLoginAlertOnce for event-scoped flows.
+      return false;
+    }
+    const config = getAdminAlertConfigState();
+    if (!config.ok) return false;
+    return await sendTransformedAdminLoginAlert(input, config.recipient);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Event-scoped, bounded, concurrency-safe, process-local in-memory deduplication
+ * for admin login alerts. Claims the event before asynchronous delivery work and
+ * retains the claim through TTL on success, failure, missing configuration, or
+ * UAT suppression to prevent duplicate processing of the same event ID.
+ * Distinct successful login events use distinct event IDs and are not suppressed.
+ * No cross-process/instance guarantees; state resets on restart.
  */
 export async function sendAdminLoginAlertOnce(
   eventId: string,
-  input: Parameters<typeof sendAdminLoginAlert>[0],
+  input: AdminLoginAlertInput,
 ): Promise<boolean> {
-  const normalizedEventId = eventId.trim();
-  if (!normalizedEventId || sentAdminLoginAlertEvents.has(normalizedEventId)) {
-    return false;
-  }
-
   try {
-    const sent = await sendAdminLoginAlert(input);
-    if (sent) {
-      sentAdminLoginAlertEvents.add(normalizedEventId);
-      setTimeout(() => sentAdminLoginAlertEvents.delete(normalizedEventId), ADMIN_ALERT_DEDUPE_WINDOW_MS).unref?.();
+    const normalizedEventId = typeof eventId === "string" ? eventId.trim() : "";
+    if (!normalizedEventId) {
+      emitAdminLoginAlertDiagnostic("suppressed", "event_id_unavailable");
+      return false;
     }
-    return sent;
+
+    const now = Date.now();
+    purgeAdminLoginAlertClaims(now);
+    const existing = adminLoginAlertClaims.get(normalizedEventId);
+    if (existing && existing.expiresAt > now) {
+      emitAdminLoginAlertDiagnostic("suppressed", "duplicate_event");
+      return false;
+    }
+
+    // Synchronous check-and-claim before any asynchronous delivery work.
+    adminLoginAlertClaims.set(normalizedEventId, {
+      claimedAt: now,
+      expiresAt: now + ADMIN_ALERT_DEDUPE_WINDOW_MS,
+    });
+    purgeAdminLoginAlertClaims(now);
+
+    if (isUatExternalSideEffectsBlocked()) {
+      emitAdminLoginAlertDiagnostic("uat_suppressed", "uat_safe_mode");
+      return false;
+    }
+
+    const config = getAdminAlertConfigState();
+    if (!config.ok) {
+      emitAdminLoginAlertDiagnostic("configuration_missing", config.reason);
+      return false;
+    }
+
+    emitAdminLoginAlertDiagnostic("attempted", "delivery_started");
+    try {
+      const sent = await sendTransformedAdminLoginAlert(input, config.recipient);
+      if (sent) {
+        emitAdminLoginAlertDiagnostic("sent", "delivery_accepted");
+        return true;
+      }
+      emitAdminLoginAlertDiagnostic("failed", "delivery_not_accepted");
+      return false;
+    } catch {
+      emitAdminLoginAlertDiagnostic("failed", "delivery_exception");
+      return false;
+    }
   } catch {
-    // Defensive boundary: notification delivery cannot affect authentication.
+    // Defensive boundary: notification delivery/deduplication cannot affect authentication.
+    try {
+      emitAdminLoginAlertDiagnostic("failed", "internal_error");
+    } catch {
+      // ignore
+    }
     return false;
   }
 }
@@ -345,6 +590,11 @@ const CUSTOMER_ORDER_EMAIL_DEDUPE_MS = 15 * 60 * 1000;
 export async function sendCustomerOrderEmailOnce(
   input: CustomerOrderEmailInput,
 ): Promise<boolean> {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("email.customer_order", { event: input.event });
+    return false;
+  }
+
   const eventId = input.eventId.trim();
   if (!eventId || customerOrderEmailEvents.has(eventId)) return false;
 
@@ -409,6 +659,11 @@ export async function sendRescheduleExpiryAlert(input: {
   proposedSlot: Date;
   expiresAt: Date;
 }): Promise<boolean> {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("email.reschedule_expiry_alert", { orderNumber: input.orderNumber });
+    return false;
+  }
+
   const recipient = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
   if (!recipient) {
     console.warn(

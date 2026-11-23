@@ -86,8 +86,9 @@ router.post("/login", adminLoginLimiter, adminLogin);
 // Verify token
 router.get("/verify", verifyToken);
 
-// Admin session status (reads httpOnly admin-token cookie)
-router.get("/me", adminMe);
+// Session introspection (single registration): admin status on /api/admin/me,
+// or admin/customer session resolution on /api/auth/me via explicit handler chain.
+router.get("/me", adminMe, authenticateCustomer, getCurrentCustomer);
 
 router.post(
   "/logout",
@@ -140,8 +141,7 @@ router.post("/verify-reset-otp", otpVerifyLimiter, verifyResetOtp);
 // Reset password
 router.post("/reset-password", resetPasswordLimiter, resetPassword);
 
-// Customer session
-router.get("/me", authenticateCustomer, getCurrentCustomer);
+// (customer session handled by unified /me chain above)
 
 // Customer profile update
 router.patch("/profile", authenticateCustomer, updateProfile);

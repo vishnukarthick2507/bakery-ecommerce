@@ -22,7 +22,8 @@ export function CustomCakeSection() {
             src="/images/custom-cake.png"
             alt="A two-tier custom celebration cake with blue and white frosting"
             fill
-            sizes="(min-width: 768px) 50vw, 100vw"
+            priority
+            sizes="(min-width: 1280px) 584px, (min-width: 1024px) 456px, (min-width: 768px) 340px, 358px"
             className="object-cover object-center"
           />
         </div>
@@ -47,7 +48,7 @@ export function CustomCakeSection() {
               </li>
             ))}
           </ol>
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:gap-3">
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:gap-3">
             <Link href="/custom-cake" className={cn(buttonVariants({ variant: 'caramel', size: 'xl' }), 'w-full sm:w-auto')}>
               <CheckIcon data-icon="inline-start" />
               Start your design

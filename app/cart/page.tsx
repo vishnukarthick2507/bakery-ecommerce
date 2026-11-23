@@ -2,19 +2,20 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useCart } from '@/components/cart/cart-provider'
+import { useCart, CART_MAX_QTY } from '@/components/cart/cart-provider'
 import { formatPrice } from '@/lib/format'
 
 export default function CartPage() {
   const {
-    items,
     hydrated,
+    catalogStatus,
+    count,
     pricing,
     updateQuantity,
     removeItem,
   } = useCart()
 
-  if (!hydrated) {
+  if (!hydrated || catalogStatus === 'loading') {
     return (
       <main className="mx-auto max-w-5xl px-4 py-20 sm:px-6">
         <div className="rounded-2xl border border-gold-border bg-card p-12 text-center shadow-sm">
@@ -24,7 +25,40 @@ export default function CartPage() {
     )
   }
 
-  if (items.length === 0) {
+  if (catalogStatus === 'failed') {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-24 sm:px-6">
+        <div className="rounded-2xl border border-dashed border-gold-border bg-card p-12 text-center shadow-sm">
+          <h1 className="text-3xl font-bold text-primary tracking-tight">
+            Unable to load your cart
+          </h1>
+
+          <p className="mt-4 text-foreground leading-relaxed">
+            We couldn&apos;t confirm product availability right now. Your saved
+            cart items are kept in this browser. Please try again shortly.
+          </p>
+
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center justify-center rounded-xl bg-champagne-gold px-8 py-4 font-semibold text-midnight-navy shadow-sm hover:bg-champagne-gold/90 transition-colors"
+            >
+              Try again
+            </button>
+            <Link
+              href="/products"
+              className="inline-flex items-center justify-center rounded-xl border border-gold-border px-8 py-3.5 font-semibold text-foreground hover:bg-gold-border/50 transition-colors"
+            >
+              Browse Products
+            </Link>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (pricing.lines.length === 0) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-24 sm:px-6">
         <div className="rounded-2xl border border-dashed border-gold-border bg-card p-12 text-center shadow-sm">
@@ -67,8 +101,7 @@ export default function CartPage() {
         </h1>
 
         <p className="mt-3 text-foreground">
-          {items.length}{' '}
-          {items.length === 1 ? 'item' : 'items'} in your cart.
+          {count} {count === 1 ? 'item' : 'items'} in your cart.
         </p>
       </div>
 
@@ -76,9 +109,7 @@ export default function CartPage() {
         {/* Cart items */}
         <section className="rounded-2xl border border-gold-border bg-card shadow-sm">
           <div className="border-b border-gold-border px-6 py-6">
-            <h2 className="text-xl font-bold text-primary">
-              Cart Items
-            </h2>
+            <h2 className="text-xl font-bold text-primary">Cart Items</h2>
           </div>
 
           <div className="divide-y divide-gold-border">
@@ -94,12 +125,13 @@ export default function CartPage() {
                 >
                   <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
                     {/* Product image */}
-                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted border border-gold-border">
+                    <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted border border-gold-border">
                       {product.image ? (
                         <Image
                           src={product.image}
                           alt={product.name}
                           fill
+                          sizes="96px"
                           className="object-cover object-center"
                         />
                       ) : (
@@ -156,7 +188,7 @@ export default function CartPage() {
                             quantity + 1,
                           )
                         }
-                        disabled={quantity >= 20}
+                        disabled={quantity >= Math.min(CART_MAX_QTY, product.stock)}
                         className="flex h-10 w-10 items-center justify-center rounded-lg border border-gold-border bg-background text-lg hover:bg-gold-border/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         aria-label={`Increase ${product.name} quantity`}
                       >
@@ -173,11 +205,9 @@ export default function CartPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          removeItem(
-                            line.item.productId,
-                            line.item.variantId,
-                          )
+                          removeItem(line.item.productId, line.item.variantId)
                         }
+                        aria-label={`Remove ${product.name} from cart`}
                         className="text-sm font-medium text-destructive hover:text-destructive/80 transition-colors"
                       >
                         Remove
@@ -192,15 +222,11 @@ export default function CartPage() {
 
         {/* Order summary */}
         <aside className="h-fit rounded-2xl border border-gold-border p-8 shadow-sm bg-card lg:sticky lg:top-24">
-          <h2 className="text-xl font-bold text-primary">
-            Order Summary
-          </h2>
+          <h2 className="text-xl font-bold text-primary">Order Summary</h2>
 
           <div className="mt-10 space-y-6">
             <div className="flex justify-between gap-4 text-sm">
-              <span className="text-foreground">
-                Subtotal
-              </span>
+              <span className="text-foreground">Subtotal</span>
 
               <span className="font-medium text-foreground">
                 {formatPrice(pricing.subtotal)}
@@ -209,9 +235,7 @@ export default function CartPage() {
 
             {pricing.savings > 0 && (
               <div className="flex justify-between gap-4 text-sm">
-                <span className="text-foreground">
-                  Savings
-                </span>
+                <span className="text-foreground">Savings</span>
 
                 <span className="font-medium text-primary">
                   −{formatPrice(pricing.savings)}
@@ -221,9 +245,7 @@ export default function CartPage() {
 
             <div className="pt-6 border-t border-gold-border">
               <div className="flex justify-between gap-4">
-                <span className="font-semibold text-foreground">
-                  Total
-                </span>
+                <span className="font-semibold text-foreground">Total</span>
 
                 <span className="text-xl font-bold text-primary">
                   {formatPrice(pricing.subtotal)}

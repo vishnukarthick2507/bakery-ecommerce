@@ -308,7 +308,7 @@ describe("Standalone dev/test stock adjustment (no replica set)", () => {
   let mongoServerStandalone: MongoMemoryServer;
 
   beforeAll(async () => {
-    mongoServerStandalone = await MongoMemoryServer.create();
+    mongoServerStandalone = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServerStandalone.getUri());
   });
 

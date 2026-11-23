@@ -125,6 +125,7 @@ export default function CheckoutPage() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [whatsappConsent, setWhatsappConsent] = useState(false)
 
   // True only after settings have loaded and online ordering is disabled.
   // While settings are loading (settings === null) we do not treat the store
@@ -443,8 +444,12 @@ export default function CheckoutPage() {
         clearFieldError('city')
       }
 
-      if (!pincode.trim()) {
+      const trimmedPincode = pincode.trim()
+      if (!trimmedPincode) {
         nextFieldErrors.pincode = 'Please enter your pincode.'
+        hasError = true
+      } else if (!/^\d{6}$/.test(trimmedPincode)) {
+        nextFieldErrors.pincode = 'Please enter a valid 6-digit pincode.'
         hasError = true
       } else {
         clearFieldError('pincode')
@@ -533,6 +538,8 @@ export default function CheckoutPage() {
                   : payment === 'pay_at_store'
                     ? 'PAY_AT_STORE'
                     : 'COD',
+
+              whatsappConsent,
 
               items: items.map((item) => {
                 const line = pricing.lines.find(
@@ -995,8 +1002,11 @@ export default function CheckoutPage() {
                       if (!city.trim()) {
                         nextFieldErrors.city = 'Please enter your city.'
                       }
-                      if (!pincode.trim()) {
+                      const trimmedPincode = pincode.trim()
+                      if (!trimmedPincode) {
                         nextFieldErrors.pincode = 'Please enter your pincode.'
+                      } else if (!/^\d{6}$/.test(trimmedPincode)) {
+                        nextFieldErrors.pincode = 'Please enter a valid 6-digit pincode.'
                       }
                       if (Object.keys(nextFieldErrors).length > 0) {
                         setFieldErrors((prev) => ({ ...prev, ...nextFieldErrors }))
@@ -1393,6 +1403,30 @@ export default function CheckoutPage() {
           <p className="mt-5 text-xs text-foreground text-center">
             Delivery is currently free on all orders.
           </p>
+
+          <div className="mt-6 rounded-xl border border-border bg-cream/10 p-4">
+            <label
+              htmlFor="checkout-whatsapp-consent"
+              className="flex items-start gap-3 cursor-pointer"
+            >
+              <input
+                id="checkout-whatsapp-consent"
+                type="checkbox"
+                checked={whatsappConsent}
+                onChange={(e) => setWhatsappConsent(e.target.checked)}
+                className="mt-1 h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-primary"
+              />
+              <span className="text-sm text-foreground">
+                I agree to receive transactional WhatsApp messages from Bluebell Bakehouse / S.V. Sweets &amp; Bakers about this order at the phone number I provided.
+              </span>
+            </label>
+            <p className="mt-2 pl-7 text-xs text-muted-foreground">
+              These messages may include order confirmation, payment/status updates, delivery/reschedule updates and other updates about this order.
+            </p>
+            <p className="mt-1 pl-7 text-xs text-muted-foreground">
+              Consent is optional. You can place your order without opting in. Message and data rates may apply. You can withdraw consent by replying STOP on WhatsApp or contacting customer support.
+            </p>
+          </div>
 
           {pendingOnlineOrder && (
             <div className="mt-6 rounded-xl border border-caramel/20 bg-caramel/5 p-4 text-sm text-primary">

@@ -164,14 +164,32 @@ export const verifyToken = async (
     }
 
     const decoded = jwt.verify(token, getJwtSecret()) as {
-      adminId: string;
-      username: string;
-      role: string;
+      adminId?: string;
+      username?: string;
+      role?: string;
+      accountType?: string;
+      tokenVersion?: number;
     };
+
+    if (!decoded.adminId || decoded.accountType === "CUSTOMER") {
+      res.status(401).json({
+        message: "Invalid token",
+      });
+      return;
+    }
 
     const admin = await Admin.findById(decoded.adminId).lean();
 
     if (!admin) {
+      res.status(401).json({
+        message: "Invalid token",
+      });
+      return;
+    }
+
+    const tokenVersion = decoded.tokenVersion ?? 0;
+    const storedVersion = (admin as { tokenVersion?: number }).tokenVersion ?? 0;
+    if (tokenVersion !== storedVersion) {
       res.status(401).json({
         message: "Invalid token",
       });
@@ -196,11 +214,15 @@ export const verifyToken = async (
 
 /*
 ||--------------------------------------------------------------------------
-|| ADMIN ME
-|| GET /api/admin/me
+|| SESSION INTROSPECTION (GET /api/auth/me, GET /api/admin/me)
 ||--------------------------------------------------------------------------
-|| Returns whether the current httpOnly cookie holds a valid admin session.
-|| Never exposes the JWT or sensitive admin data.
+|| Explicit, deterministic session introspection used by a single /me route
+|| registration. Admin and customer contexts are handled separately:
+|| - /api/admin/me: admin session status only ({ isAdmin: boolean }).
+|| - /api/auth/me: preserves backward-compatible behavior for customer session
+||   introspection and legacy admin-status checks without cross-account data
+||   disclosure. Customer-profile resolution, when applicable, is delegated to
+||   the customer auth chain in the same route registration.
 */
 export const adminMe = async (
   req: Request,
@@ -208,17 +230,25 @@ export const adminMe = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const hasBearerToken = req.headers.authorization?.startsWith("Bearer ") ?? false;
-    if (
-      req.baseUrl === "/api/auth" &&
-      !hasBearerToken &&
-      req.cookies?.["customer-token"]
-    ) {
+    const isAuthMount = req.baseUrl === "/api/auth";
+    const isAdminMount = req.baseUrl === "/api/admin";
+    const hasBearerToken =
+      typeof req.headers.authorization === "string" &&
+      req.headers.authorization.startsWith("Bearer ");
+
+    // On /api/auth, a browser customer session may be present only as an
+    // httpOnly customer cookie (no Authorization header). Delegate to the
+    // customer auth chain so the response remains the customer profile shape.
+    if (isAuthMount && !hasBearerToken && req.cookies?.["customer-token"]) {
       return next();
     }
 
     const token = getTokenFromRequest(req);
 
+    // No usable token: preserve existing session-status behavior.
+    // /api/auth/me returns { isAdmin: false } for unauthenticated requests;
+    // customer-only unauthenticated requests with a customer cookie were handled
+    // above and delegated to customer auth (which returns 401 if invalid/missing).
     if (!token) {
       res.status(200).json({ isAdmin: false });
       return;
@@ -226,31 +256,45 @@ export const adminMe = async (
 
     const decoded = jwt.verify(token, getJwtSecret()) as {
       adminId?: string;
-      username?: string;
-      role?: string;
       customerId?: string;
       accountType?: string;
       tokenVersion?: number;
     };
 
-    // A customer JWT carries customerId (not adminId) and accountType
-    // "CUSTOMER". It is not an admin session, so delegate to the customer
-    // /me handler (getCurrentCustomer) which returns { user }. Without this
-    // the customer profile request wrongly returns { isAdmin: false } and the
-    // frontend clears a valid customer session, causing a login redirect loop.
-    if (!decoded.adminId || decoded.accountType === "CUSTOMER") {
-      if (req.baseUrl === "/api/auth") {
+    const isCustomerToken =
+      decoded.accountType === "CUSTOMER" || typeof decoded.customerId === "string";
+
+    // Customer tokens must never be treated as admin sessions.
+    // On /api/auth, delegate to the customer auth chain for profile resolution.
+    // On /api/admin (or other mounts), report no admin session only.
+    if (isCustomerToken || !decoded.adminId) {
+      if (isAuthMount) {
         return next();
       }
       res.status(200).json({ isAdmin: false });
       return;
     }
 
+    // Admin-token path (isolated from customer profile resolution).
     const admin = await Admin.findById(decoded.adminId).lean();
+    if (!admin) {
+      res.status(200).json({ isAdmin: false });
+      return;
+    }
 
-    res.status(200).json({ isAdmin: !!admin });
+    const tokenVersion = decoded.tokenVersion ?? 0;
+    const storedVersion = (admin as { tokenVersion?: number }).tokenVersion ?? 0;
+    if (tokenVersion !== storedVersion) {
+      res.status(200).json({ isAdmin: false });
+      return;
+    }
+
+    // Valid admin session status. This never returns customer profile data.
+    res.status(200).json({ isAdmin: true });
   } catch {
-    // Invalid / expired / tampered cookie: not an authenticated admin.
+    // Invalid/expired/tampered token: preserve non-admin session status shape.
+    // Customer auth failures on delegated /api/auth requests are handled by the
+    // customer auth chain when delegation occurs.
     res.status(200).json({ isAdmin: false });
   }
 };

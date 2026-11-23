@@ -219,12 +219,19 @@ export function priceCart(items: CartItem[], products: Product[]) {
 
 /* ---------- Custom cake requests ---------- */
 
-export async function submitCustomCakeRequest(input: CustomCakeRequest) {
+export async function submitCustomCakeRequest(
+  input: CustomCakeRequest,
+  options?: { idempotencyKey?: string },
+) {
   let response: Response
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (options?.idempotencyKey) {
+      headers['Idempotency-Key'] = options.idempotencyKey
+    }
     response = await fetch('/api/custom-cake-requests', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(input),
     })
   } catch {

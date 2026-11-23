@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeftIcon, CheckCircle2, MessageCircleIcon } from 'lucide-react'
@@ -21,6 +21,9 @@ type FormState = {
   messageOnCake: string
   instructions: string
   referenceImageUrl: string
+  // S07 honeypot: must remain empty for legitimate submissions.
+  companyWebsite: string
+  whatsappConsent: boolean
 }
 
 const emptyForm: FormState = {
@@ -32,6 +35,8 @@ const emptyForm: FormState = {
   messageOnCake: '',
   instructions: '',
   referenceImageUrl: '',
+  companyWebsite: '',
+  whatsappConsent: false,
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
@@ -76,6 +81,19 @@ export function CustomCakeForm() {
   const [referenceUploadProgress, setReferenceUploadProgress] = useState(0)
   const [referenceUploadError, setReferenceUploadError] = useState('')
   const referenceUrlsRef = useRef<string[]>([])
+  const submissionKeyRef = useRef<string | null>(null)
+  const submissionPayloadSignatureRef = useRef<string | null>(null)
+
+  function createSubmissionKey() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+    return `cck_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`
+  }
+
+  function getSubmissionPayloadSignature(payload: Record<string, unknown>) {
+    return JSON.stringify(payload)
+  }
 
   useEffect(() => {
     return () => {
@@ -186,7 +204,7 @@ export function CustomCakeForm() {
     }
   }
 
-  function update(field: keyof FormState, value: string) {
+  function update<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [field]: value }))
     clearFieldError(field)
   }
@@ -304,7 +322,7 @@ export function CustomCakeForm() {
       setSubmitting(true)
       setError('')
 
-      const result = await submitCustomCakeRequest({
+      const payload = {
         name: form.name.trim(),
         phone: form.phone.trim(),
         flavour: form.flavour.trim(),
@@ -313,6 +331,17 @@ export function CustomCakeForm() {
         messageOnCake: form.messageOnCake.trim() || undefined,
         instructions: form.instructions.trim() || undefined,
         referenceImageUrl: referenceImageUrlToSubmit || undefined,
+        companyWebsite: form.companyWebsite || '',
+        whatsappConsent: form.whatsappConsent,
+      }
+      const payloadSignature = getSubmissionPayloadSignature(payload)
+      if (!submissionKeyRef.current || submissionPayloadSignatureRef.current !== payloadSignature) {
+        submissionKeyRef.current = createSubmissionKey()
+        submissionPayloadSignatureRef.current = payloadSignature
+      }
+
+      const result = await submitCustomCakeRequest(payload, {
+        idempotencyKey: submissionKeyRef.current ?? undefined,
       })
 
       setReferenceNumber(result.request.referenceNumber)
@@ -375,6 +404,8 @@ export function CustomCakeForm() {
               setReferenceNumber(null)
               setForm(emptyForm)
               setStep('contact')
+              submissionKeyRef.current = null
+              submissionPayloadSignatureRef.current = null
             }}
             className="inline-flex rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:opacity-90"
           >
@@ -436,6 +467,18 @@ export function CustomCakeForm() {
       </ol>
 
       <form onSubmit={handleSubmit} noValidate>
+        <div aria-hidden="true" style={{position:"absolute",left:"-10000px",top:"auto",width:"1px",height:"1px",overflow:"hidden"}}>
+          <label htmlFor="cc-company-website">Company website</label>
+          <input
+            id="cc-company-website"
+            name="companyWebsite"
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            value={form.companyWebsite}
+            onChange={(e) => update("companyWebsite", e.target.value)}
+          />
+        </div>
         {error && (
           <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
             {error}
@@ -836,6 +879,29 @@ export function CustomCakeForm() {
               )}
             </div>
 
+            <div className="rounded-xl border border-border bg-cream/10 p-4">
+              <label
+                htmlFor="cc-whatsapp-consent"
+                className="flex items-start gap-3 cursor-pointer"
+              >
+                <input
+                  id="cc-whatsapp-consent"
+                  type="checkbox"
+                  checked={form.whatsappConsent}
+                  onChange={(e) => update('whatsappConsent', e.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-primary"
+                />
+                <span className="text-sm text-foreground">
+                  I agree to receive transactional WhatsApp messages from Bluebell Bakehouse / S.V. Sweets &amp; Bakers about this custom cake request at the phone number I provided.
+                </span>
+              </label>
+              <p className="mt-2 pl-7 text-xs text-muted-foreground">
+                These messages may include request confirmation, quote/status updates, delivery/reschedule updates and other updates about this custom cake request.
+              </p>
+              <p className="mt-1 pl-7 text-xs text-muted-foreground">
+                Consent is optional. You can submit your request without opting in. Message and data rates may apply. You can withdraw consent by replying STOP on WhatsApp or contacting customer support.
+              </p>
+            </div>
             <div className="flex items-center justify-between">
               <button
                 type="button"

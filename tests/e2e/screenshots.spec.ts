@@ -2,27 +2,28 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Visual Screenshots', () => {
   test('capture cinematic intro scenes', async ({ page }) => {
+    test.setTimeout(60_000); // Full-page screenshot capture can be slow on mobile-chrome under load.
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    // Scene 1 - Bakery atmosphere
-    await expect(page.locator('[aria-label="Brevo diagnostic settings"]')).toBeVisible();
-    await page.screenshot({ path: 'screenshot-scene1-bakery.png', fullPage: true });
+    // Scene 1 - Bakery atmosphere / intro visible
+    await expect(page.getByRole('dialog', { name: 'Bluebell Bakehouse introduction' })).toBeVisible();
+    await page.screenshot({ path: 'screenshot-scene1-bakery.png', fullPage: true, animations: 'disabled' });
 
     // Wait for scene 2
     await page.waitForTimeout(1200);
-    await page.screenshot({ path: 'screenshot-scene2-croissant.png', fullPage: true });
+    await page.screenshot({ path: 'screenshot-scene2-croissant.png', fullPage: true, animations: 'disabled' });
 
     // Wait for scene 3 (brand reveal)
     await page.waitForTimeout(1000);
-    await page.screenshot({ path: 'screenshot-scene3-brand.png', fullPage: true });
+    await page.screenshot({ path: 'screenshot-scene3-brand.png', fullPage: true, animations: 'disabled' });
 
     // Wait for scene 4 (tagline)
     await page.waitForTimeout(1000);
-    await page.screenshot({ path: 'screenshot-scene4-tagline.png', fullPage: true });
+    await page.screenshot({ path: 'screenshot-scene4-tagline.png', fullPage: true, animations: 'disabled' });
 
     // Wait for intro to complete
     await page.waitForTimeout(1000);
-    await page.screenshot({ path: 'screenshot-homepage-after-intro.png', fullPage: true });
+    await page.screenshot({ path: 'screenshot-homepage-after-intro.png', fullPage: true, animations: 'disabled' });
   });
 
   test('capture admin login page', async ({ page }) => {

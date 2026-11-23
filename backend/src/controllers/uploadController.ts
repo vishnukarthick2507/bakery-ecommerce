@@ -5,6 +5,8 @@ import {
   isCloudinaryConfigured,
 } from "../services/cloudinary.js";
 import type { AuthRequest } from "../middleware/auth.js";
+import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
+import { logUatSuppressed } from "../services/uatSafetyLog.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +27,15 @@ export const getUploadSignatureController = async (
   try {
     if (!req.admin) {
       res.status(401).json({ message: "Admin authentication required" });
+      return;
+    }
+
+    if (isUatExternalSideEffectsBlocked()) {
+      logUatSuppressed("cloudinary.admin_upload_signature");
+      res.status(403).json({
+        message: "External upload operations are blocked in UAT_SAFE_MODE.",
+        code: "UAT_SAFE_MODE_EXTERNAL_BLOCKED",
+      });
       return;
     }
 
@@ -74,6 +85,15 @@ export const getCustomerUploadSignatureController = async (
   try {
     if (!req.customer) {
       res.status(401).json({ message: "Customer authentication required" });
+      return;
+    }
+
+    if (isUatExternalSideEffectsBlocked()) {
+      logUatSuppressed("cloudinary.customer_upload_signature");
+      res.status(403).json({
+        message: "External upload operations are blocked in UAT_SAFE_MODE.",
+        code: "UAT_SAFE_MODE_EXTERNAL_BLOCKED",
+      });
       return;
     }
 

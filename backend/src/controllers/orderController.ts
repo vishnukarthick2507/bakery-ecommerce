@@ -20,7 +20,10 @@ import { notifyCustomerOrder, orderEmailDetails } from "../services/customerOrde
 import {
   validateSlot,
   parseCheckoutSlot,
+  formatSlotDate,
+  formatSlotTime,
 } from "../services/slotValidation.js";
+import { grantConsent } from "../services/whatsappConsentService.js";
 
 type ProductRecord = {
   _id: mongoose.Types.ObjectId;
@@ -58,7 +61,7 @@ const createOrderSchema = z.object({
     .object({
       addressLine: z.string().trim().min(3),
       city: z.string().trim().min(2),
-      pincode: z.string().trim().min(4),
+      pincode: z.string().trim().regex(/^\d{6}$/),
     })
     .optional(),
 
@@ -76,6 +79,10 @@ const createOrderSchema = z.object({
 
   // Optional customer acquisition source attribution (marketing analytics).
   acquisitionSource: z.string().trim().max(100).optional(),
+
+  // Explicit WhatsApp notification opt-in. When true, the customer consents
+  // to receive automated WhatsApp order updates on the checkout phone number.
+  whatsappConsent: z.boolean().optional(),
 });
 
 const guestTrackingSchema = z.object({
@@ -533,7 +540,30 @@ export const createOrder = async (
     const { order, replayed } = result;
 
     if (!replayed) {
-      void notifyCustomerOrder(order, "ORDER_PLACED", "placed", orderEmailDetails(order), "PLACED");
+      // Capture explicit transactional WhatsApp consent before ORDER_PLACED enqueue
+      // so same-checkout opt-in can satisfy consent checks. Best-effort only:
+      // consent persistence failure must not fail order creation and must not
+      // authorize WhatsApp without valid persisted consent.
+      if (data.whatsappConsent && data.phone) {
+        try {
+          await grantConsent({
+            phone: data.phone,
+            source: "CHECKOUT",
+            consentText:
+              "I agree to receive WhatsApp order notifications from Bluebell Bakehouse.",
+          });
+        } catch {
+          // Non-fatal: consent capture failure must not block order creation.
+        }
+      }
+
+      void notifyCustomerOrder(
+        order,
+        "ORDER_PLACED",
+        "placed",
+        orderEmailDetails(order),
+        "PLACED",
+      );
     }
 
     // Recalculate customer metrics for authenticated customers.
@@ -1525,12 +1555,10 @@ export const acceptProposal = async (
           order.orderStatus = "CONFIRMED";
         }
 
-        order.scheduledDate =
-          confirmedSlotTime.toISOString().split("T")[0] ?? "";
-
-        order.scheduledTime =
-          confirmedSlotTime.toISOString().split("T")[1]?.split(".")[0] ??
-          "10:00:00";
+        // D20-06-F: store schedule in IST-safe representation, not UTC ISO parts.
+        // Confirmed slot is a Date (UTC instant); format for Asia/Kolkata business display/storage.
+        order.scheduledDate = formatSlotDate(confirmedSlotTime);
+        order.scheduledTime = formatSlotTime(confirmedSlotTime);
 
         order.reschedulePreviousStatus = undefined;
 

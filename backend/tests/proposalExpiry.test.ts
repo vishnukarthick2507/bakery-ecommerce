@@ -30,6 +30,7 @@ let mongoServer: MongoMemoryServer;
 async function connectTestDB(): Promise<void> {
   mongoServer = await MongoMemoryServer.create({
     instance: {
+      launchTimeout: 60000,
       args: ["--replSet", "proposal-expiry-rs"],
     },
   });
@@ -275,65 +276,83 @@ describe("Order reschedule expiry", () => {
 
   describe("Response window (admin-selectable)", () => {
     it("defaults to 3 hours when responseWindowHours is omitted", async () => {
-      const order = await createOrderInDB({ orderStatus: "CONFIRMED" });
-      const futureTime = new Date(Date.UTC(2026, 10, 20, 12, 0, 0)); // Fri Nov 20, 2026 12:00 UTC = 5:30 PM Kolkata (within business hours)
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-11-20T09:00:00.000Z")); // Deterministic "now" before proposed slot
+      try {
+        const order = await createOrderInDB({ orderStatus: "CONFIRMED" });
+        const futureTime = new Date(Date.UTC(2026, 10, 20, 12, 0, 0)); // Fri Nov 20, 2026 12:00 UTC = 5:30 PM Kolkata (within business hours)
 
-      const res = await request(app)
-        .post(`/propose/${order._id}`)
-        .set("Authorization", `Bearer ${adminToken}`)
-        .send({
-          time: futureTime.toISOString(),
-          note: "Test proposal",
-        });
+        const res = await request(app)
+          .post(`/propose/${order._id}`)
+          .set("Authorization", `Bearer ${adminToken}`)
+          .send({
+            time: futureTime.toISOString(),
+            note: "Test proposal",
+          });
 
-      expect(res.status).toBe(200);
-      const expiry = new Date(res.body.order.proposedSlot.expiresAt);
-      const now = new Date();
-      const diffFromNow = (expiry.getTime() - now.getTime()) / (60 * 60 * 1000);
-      expect(diffFromNow).toBeGreaterThan(2.5);
-      expect(diffFromNow).toBeLessThan(3.5);
+        expect(res.status).toBe(200);
+        const expiry = new Date(res.body.order.proposedSlot.expiresAt);
+        const now = new Date();
+        const diffFromNow = (expiry.getTime() - now.getTime()) / (60 * 60 * 1000);
+        expect(diffFromNow).toBeGreaterThan(2.5);
+        expect(diffFromNow).toBeLessThan(3.5);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("uses 1 hour when responseWindowHours is 1", async () => {
-      const order = await createOrderInDB({ orderStatus: "CONFIRMED" });
-      const futureTime = new Date(Date.UTC(2026, 10, 20, 12, 0, 0));
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-11-20T09:00:00.000Z")); // Deterministic "now" before proposed slot
+      try {
+        const order = await createOrderInDB({ orderStatus: "CONFIRMED" });
+        const futureTime = new Date(Date.UTC(2026, 10, 20, 12, 0, 0));
 
-      const res = await request(app)
-        .post(`/propose/${order._id}`)
-        .set("Authorization", `Bearer ${adminToken}`)
-        .send({
-          time: futureTime.toISOString(),
-          note: "Test proposal",
-          responseWindowHours: 1,
-        });
+        const res = await request(app)
+          .post(`/propose/${order._id}`)
+          .set("Authorization", `Bearer ${adminToken}`)
+          .send({
+            time: futureTime.toISOString(),
+            note: "Test proposal",
+            responseWindowHours: 1,
+          });
 
-      expect(res.status).toBe(200);
-      const expiry = new Date(res.body.order.proposedSlot.expiresAt);
-      const now = new Date();
-      const diffFromNow = (expiry.getTime() - now.getTime()) / (60 * 60 * 1000);
-      expect(diffFromNow).toBeGreaterThan(0.5);
-      expect(diffFromNow).toBeLessThan(1.5);
+        expect(res.status).toBe(200);
+        const expiry = new Date(res.body.order.proposedSlot.expiresAt);
+        const now = new Date();
+        const diffFromNow = (expiry.getTime() - now.getTime()) / (60 * 60 * 1000);
+        expect(diffFromNow).toBeGreaterThan(0.5);
+        expect(diffFromNow).toBeLessThan(1.5);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("uses 72 hours when responseWindowHours is 72", async () => {
-      const order = await createOrderInDB({ orderStatus: "CONFIRMED" });
-      const futureTime = new Date(Date.UTC(2026, 10, 20, 12, 0, 0));
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-11-20T09:00:00.000Z")); // Deterministic "now" before proposed slot
+      try {
+        const order = await createOrderInDB({ orderStatus: "CONFIRMED" });
+        const futureTime = new Date(Date.UTC(2026, 10, 20, 12, 0, 0));
 
-      const res = await request(app)
-        .post(`/propose/${order._id}`)
-        .set("Authorization", `Bearer ${adminToken}`)
-        .send({
-          time: futureTime.toISOString(),
-          note: "Test proposal",
-          responseWindowHours: 72,
-        });
+        const res = await request(app)
+          .post(`/propose/${order._id}`)
+          .set("Authorization", `Bearer ${adminToken}`)
+          .send({
+            time: futureTime.toISOString(),
+            note: "Test proposal",
+            responseWindowHours: 72,
+          });
 
-      expect(res.status).toBe(200);
-      const expiry = new Date(res.body.order.proposedSlot.expiresAt);
-      const now = new Date();
-      const diffFromNow = (expiry.getTime() - now.getTime()) / (60 * 60 * 1000);
-      expect(diffFromNow).toBeGreaterThan(71);
-      expect(diffFromNow).toBeLessThan(73);
+        expect(res.status).toBe(200);
+        const expiry = new Date(res.body.order.proposedSlot.expiresAt);
+        const now = new Date();
+        const diffFromNow = (expiry.getTime() - now.getTime()) / (60 * 60 * 1000);
+        expect(diffFromNow).toBeGreaterThan(71);
+        expect(diffFromNow).toBeLessThan(73);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("rejects responseWindowHours below 1", async () => {

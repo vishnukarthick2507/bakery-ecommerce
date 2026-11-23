@@ -123,6 +123,7 @@ describe("Settings API", () => {
     async () => {
       mongoServer = await MongoMemoryServer.create({
         instance: {
+          launchTimeout: 60000,
           args: ["--replSet", "settings-rs"],
         },
       });

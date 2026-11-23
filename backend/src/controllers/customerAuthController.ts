@@ -23,6 +23,8 @@ import {
 } from "../services/googleAuth.js";
 import { OtpSession } from "../models/OtpSession.js";
 import { CustomerOtpProof } from "../models/CustomerOtpProof.js";
+import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
+import { logUatSuppressed } from "../services/uatSafetyLog.js";
 
 const PHONE_PATTERN = /^[6-9]\d{9}$/;
 
@@ -258,35 +260,38 @@ export const registerCustomer = async (
   const { name, email, phone, password } = parsed.data;
 
   try {
+    const genericRegisterResponse = {
+      message:
+        "If an account does not already exist for this email, a verification code has been sent. Please check your email.",
+    };
+
     // Check if email already exists as an active customer - generic response
     // to avoid email enumeration.
     const existingUser = await User.findOne({ email }).lean();
     if (existingUser) {
-      res.status(200).json({
-        message: "If an account does not already exist for this email, a verification code has been sent. Please check your email.",
-      });
+      res.status(200).json(genericRegisterResponse);
       return;
     }
 
     // Check if phone already exists as an active customer or pending registration.
-    // Return the same generic response as email-exists to avoid phone-number
+    // Return the same generic response to avoid phone-number/account-state
     // enumeration via status code or message differences.
-    const existingPhoneUser = await User.findOne({ phone: normalizePhone(phone) }).lean();
-    const existingPendingPhone = await PendingRegistration.findOne({ phone: normalizePhone(phone) }).lean();
+    const normalizedPhone = normalizePhone(phone);
+    const existingPhoneUser = await User.findOne({ phone: normalizedPhone }).lean();
+    const existingPendingPhone = await PendingRegistration.findOne({
+      phone: normalizedPhone,
+    }).lean();
     if (existingPhoneUser || existingPendingPhone) {
-      res.status(200).json({
-        message:
-          "If an account does not already exist for this email, a verification code has been sent. Please check your email.",
-      });
+      res.status(200).json(genericRegisterResponse);
       return;
     }
 
-    // Check if there is already a pending registration for this email.
+    // Pending registration for the same email: keep the existing pending record
+    // and OTP/session state intact (no resend/state mutation/takeover path) while
+    // returning the same generic public response.
     const existingPending = await PendingRegistration.findOne({ email }).lean();
     if (existingPending) {
-      res.status(200).json({
-        message: "An account with this email already exists. Please check your email for the verification code.",
-      });
+      res.status(200).json(genericRegisterResponse);
       return;
     }
 
@@ -300,12 +305,23 @@ export const registerCustomer = async (
     await PendingRegistration.create({
       email,
       name: name.trim(),
-      phone: normalizePhone(phone),
+      phone: normalizedPhone,
       passwordHash,
       expiresAt: new Date(Date.now() + REGISTRATION_TOKEN_EXPIRY_MS),
     });
 
-    // Send OTP via Brevo.
+    // Send OTP (real provider in normal mode; suppressed in UAT_SAFE_MODE).
+    const otp = generateOtp();
+    if (isUatExternalSideEffectsBlocked()) {
+      logUatSuppressed("auth.otp.register", { purpose: "REGISTER" });
+      await createOtpSession(email, "REGISTER", otp);
+      res.status(200).json({
+        ...genericRegisterResponse,
+        uatSuppressed: true,
+      });
+      return;
+    }
+
     if (!isBrevoConfigured()) {
       // Clean up pending registration if email is not configured.
       await PendingRegistration.deleteOne({ email });
@@ -316,7 +332,6 @@ export const registerCustomer = async (
       return;
     }
 
-    const otp = generateOtp();
     const emailSent = await sendOtpEmail(email, otp, "REGISTER");
     if (!emailSent) {
       await PendingRegistration.deleteOne({ email });
@@ -330,9 +345,7 @@ export const registerCustomer = async (
     // Create OTP session for verification.
     await createOtpSession(email, "REGISTER", otp);
 
-    res.status(200).json({
-      message: "verification code sent to your email. Please check your inbox.",
-    });
+    res.status(200).json(genericRegisterResponse);
   } catch (error) {
     console.error("Customer registration failed:", error);
     res.status(500).json({ message: "Unable to register" });
@@ -377,6 +390,15 @@ export const googleAuth = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("google_oauth.controller");
+    res.status(403).json({
+      message: "Google OAuth is blocked in UAT_SAFE_MODE.",
+      code: "UAT_SAFE_MODE_EXTERNAL_BLOCKED",
+    });
+    return;
+  }
+
   if (!isGoogleConfigured()) {
     res.status(503).json({
       message: "Google sign-in is not configured. Please contact support.",
@@ -514,7 +536,7 @@ export const updateProfile = async (
       }).lean();
       if (existingUser) {
         res.status(409).json({
-          message: "A customer with this phone number already exists.",
+          message: "Unable to update profile. Please check your details and try again.",
         });
         return;
       }
@@ -710,8 +732,30 @@ export const sendOtp = async (
   const otp = generateOtp();
   let providerAccepted = false;
   try {
-    if (process.env.NODE_ENV === "production") {
+    const nodeEnv = process.env.NODE_ENV;
+
+    // Never disclose OTP values in UAT Safe Mode or through unsafe configuration.
+    if (isUatExternalSideEffectsBlocked()) {
+      logUatSuppressed("auth.otp.send", { purpose });
+      await commitOtpSendCooldown(cooldownClaim.claim);
+      await createOtpSession(
+        email,
+        purpose as "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET",
+        otp,
+      );
+      res.status(200).json({
+        message: "OTP prepared for UAT (external email delivery suppressed).",
+        uatSuppressed: true,
+      });
+      return;
+    }
+
+    // Production and any other non-explicitly-safe environment must not return
+    // OTP values in API responses. Non-production environments that are not
+    // explicitly test/development require configured delivery (fail closed).
+    if (nodeEnv !== "test" && nodeEnv !== "development") {
       if (!isBrevoConfigured()) {
+        await releaseOtpSendCooldown(cooldownClaim.claim);
         res.status(503).json({
           message: "Email service is not configured. Please contact support.",
           code: "EMAIL_CONFIG_MISSING",
@@ -731,15 +775,24 @@ export const sendOtp = async (
 
       providerAccepted = true;
       await commitOtpSendCooldown(cooldownClaim.claim);
-      await createOtpSession(email, purpose as "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET", otp);
+      await createOtpSession(
+        email,
+        purpose as "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET",
+        otp,
+      );
       res.status(200).json({ message: "OTP sent successfully" });
       return;
     }
 
-    // Development/test: create the session and return the OTP so it can be
-    // used without configuring a real email provider.
+    // Explicit local/test or development convenience path: create the session
+    // without external email delivery and return the OTP only in these
+    // explicitly recognized non-production environments.
     await commitOtpSendCooldown(cooldownClaim.claim);
-    await createOtpSession(email, purpose as "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET", otp);
+    await createOtpSession(
+      email,
+      purpose as "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET",
+      otp,
+    );
     res.status(200).json({ message: "OTP sent successfully", otp });
   } catch (error) {
     if (!providerAccepted) {
@@ -913,23 +966,31 @@ export const forgotPassword = async (
 
   const otp = generateOtp();
   try {
+    if (isUatExternalSideEffectsBlocked()) {
+      logUatSuppressed("auth.otp.forgot_password", { purpose: "PASSWORD_RESET" });
+      await commitOtpSendCooldown(cooldownClaim.claim);
+      await createOtpSession(email, "PASSWORD_RESET" as "LOGIN" | "REGISTER" | "AUTH" | "GUEST_CHECKOUT" | "PASSWORD_RESET", otp);
+      res.status(200).json(GENERIC_FORGOT_RESPONSE);
+      return;
+    }
+
     if (process.env.NODE_ENV === "production") {
       if (!isBrevoConfigured()) {
         await releaseOtpSendCooldown(cooldownClaim.claim);
-        res.status(503).json({
-          message: "Email service is not configured. Please contact support.",
-          code: "EMAIL_CONFIG_MISSING",
-        });
+        console.error(
+          "Forgot password email delivery unavailable: email service is not configured.",
+        );
+        res.status(200).json(GENERIC_FORGOT_RESPONSE);
         return;
       }
 
       const emailSent = await sendOtpEmail(email, otp, "PASSWORD_RESET");
       if (!emailSent) {
         await releaseOtpSendCooldown(cooldownClaim.claim);
-        res.status(502).json({
-          message: "Unable to send reset email. Please try again later.",
-          code: "EMAIL_DELIVERY_FAILED",
-        });
+        console.error(
+          "Forgot password email delivery failed: unable to send reset email.",
+        );
+        res.status(200).json(GENERIC_FORGOT_RESPONSE);
         return;
       }
     }
@@ -1072,7 +1133,9 @@ export const resetPassword = async (
     );
 
     if (!updated) {
-      res.status(404).json({ message: "Account not found" });
+      res.status(401).json({
+        message: "Invalid or expired reset session. Please request password reset again.",
+      });
       return;
     }
 

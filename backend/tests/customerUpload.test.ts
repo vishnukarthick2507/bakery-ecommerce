@@ -57,7 +57,7 @@ function makeAdminToken(adminId: string): string {
 
 describe("Customer Cloudinary Upload Signature", () => {
   beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServer.getUri());
   });
 

@@ -19,6 +19,8 @@ import {
   getRazorpayKeyId,
   getRazorpayKeySecret,
 } from "../services/razorpay.js";
+import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
+import { logUatSuppressed } from "../services/uatSafetyLog.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -182,8 +184,10 @@ export async function markOrderPaymentFailed(
   razorpayOrderId: string,
 ): Promise<void> {
   const session = await mongoose.startSession();
+  let transitionedOrder: IOrder | null = null;
+
   try {
-    await session.withTransaction(async () => {
+    transitionedOrder = await session.withTransaction(async () => {
       const order = await Order.findOne({
         paymentMethod: "ONLINE",
         $or: [{ razorpayOrderId }, { razorpayOrderIds: razorpayOrderId }],
@@ -210,9 +214,23 @@ export async function markOrderPaymentFailed(
           );
         }
       }
+
+      return order;
     });
   } finally {
     await session.endSession();
+  }
+
+  if (transitionedOrder) {
+    // Distinct transactional WhatsApp event: genuine current-attempt PENDING -> FAILED only.
+    // Idempotent by stable payment-attempt identifier; best-effort and non-blocking.
+    void notifyCustomerOrder(
+      transitionedOrder,
+      "PAYMENT_FAILED",
+      `payment-failed:${razorpayOrderId}`,
+      orderEmailDetails(transitionedOrder),
+      transitionedOrder.paymentStatus,
+    );
   }
 }
 
@@ -357,6 +375,14 @@ export const createPaymentOrder = async (
   res: Response,
 ): Promise<void> => {
   try {
+    if (isUatExternalSideEffectsBlocked()) {
+      logUatSuppressed("razorpay.create_payment_order");
+      res.status(403).json({
+        message: "Live Razorpay payment operations are blocked in UAT_SAFE_MODE.",
+        code: "UAT_SAFE_MODE_EXTERNAL_BLOCKED",
+      });
+      return;
+    }
     const parsed =
       createPaymentOrderSchema.safeParse(req.body);
 
@@ -486,6 +512,14 @@ export const retryPayment = async (
   res: Response,
 ): Promise<void> => {
   try {
+    if (isUatExternalSideEffectsBlocked()) {
+      logUatSuppressed("razorpay.retry_payment");
+      res.status(403).json({
+        message: "Live Razorpay payment operations are blocked in UAT_SAFE_MODE.",
+        code: "UAT_SAFE_MODE_EXTERNAL_BLOCKED",
+      });
+      return;
+    }
     const parsed =
       createPaymentOrderSchema.safeParse(req.body);
 
@@ -593,6 +627,14 @@ export const verifyPayment = async (
   res: Response,
 ): Promise<void> => {
   try {
+    if (isUatExternalSideEffectsBlocked()) {
+      logUatSuppressed("razorpay.verify_payment");
+      res.status(403).json({
+        message: "Live Razorpay payment verification is blocked in UAT_SAFE_MODE.",
+        code: "UAT_SAFE_MODE_EXTERNAL_BLOCKED",
+      });
+      return;
+    }
     const parsed =
       verifyPaymentSchema.safeParse(req.body);
 
@@ -720,6 +762,15 @@ export const handleWebhook = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("razorpay.webhook");
+    res.status(403).json({
+      message: "Live Razorpay webhook processing is blocked in UAT_SAFE_MODE.",
+      code: "UAT_SAFE_MODE_EXTERNAL_BLOCKED",
+    });
+    return;
+  }
+
   const webhookSecret =
     process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
 

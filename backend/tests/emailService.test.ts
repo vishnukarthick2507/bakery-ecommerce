@@ -214,7 +214,7 @@ describe("admin login email alerts", () => {
 
   afterEach(() => clearBrevoEnv());
 
-  it("sends a branded, escaped alert using only approved security context", async () => {
+  it("sends a branded, escaped, privacy-minimized alert using only approved security context", async () => {
     const result = await sendAdminLoginAlertOnce("event-unique-001", {
       username: "admin<script>",
       occurredAt: new Date("2026-11-10T12:34:56.000Z"),
@@ -228,13 +228,23 @@ describe("admin login email alerts", () => {
     const body = JSON.parse(init.body as string);
     expect(body.to).toEqual([{ email: "security@example.com" }]);
     expect(body.subject).toContain("Admin sign-in alert");
-    expect(body.htmlContent).toContain("&lt;script&gt;");
-    expect(body.htmlContent).toContain("192.0.2.10");
-    expect(body.htmlContent).toContain("TestBrowser/1.0");
-    expect(body.htmlContent).not.toMatch(/password|otp|jwt|cookie|token|secret/i);
+    // Username is masked (first/last with middle masked) before HTML escaping; raw username must not appear.
+    expect(body.htmlContent).toContain("a***&gt;");
+    expect(body.htmlContent).not.toContain("admin&lt;script&gt;");
+    expect(body.htmlContent).not.toContain("admin<script>");
+    // IPv4 final octet is coarsened/masked.
+    expect(body.htmlContent).toContain("192.0.2.xxx");
+    expect(body.htmlContent).not.toContain("192.0.2.10");
+    // Unreliable/unclassifiable UA is omitted entirely (no raw UA).
+    expect(body.htmlContent).not.toContain("Browser/device");
+    expect(body.htmlContent).not.toContain("TestBrowser/1.0");
+    // UTC timestamp retained.
+    expect(body.htmlContent).toContain("2026-11-10T12:34:56.000Z");
+    // Footer disclaimer may mention "credentials"; ensure no actual secret/token values/types are present.
+    expect(body.htmlContent).not.toMatch(/password|otp|jwt|cookie|secret|reset token/i);
   });
 
-  it("suppresses a duplicate request event", async () => {
+  it("suppresses a duplicate request event (same event ID)", async () => {
     await sendAdminLoginAlertOnce("event-unique-duplicate", {
       username: "admin",
       occurredAt: new Date(),
@@ -248,7 +258,7 @@ describe("admin login email alerts", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns false without sending when notification destination is missing", async () => {
+  it("returns false without sending when notification destination is missing (retains claim for same event)", async () => {
     delete process.env.ADMIN_NOTIFICATION_EMAIL;
     const sent = await sendAdminLoginAlertOnce("event-no-recipient", {
       username: "admin",
@@ -257,14 +267,31 @@ describe("admin login email alerts", () => {
 
     expect(sent).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+
+    // Same event ID remains claimed within the dedupe window.
+    const retrySameEvent = await sendAdminLoginAlertOnce("event-no-recipient", {
+      username: "admin",
+      occurredAt: new Date(),
+    });
+    expect(retrySameEvent).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("returns false and does not throw when Brevo delivery fails", async () => {
+  it("returns false and does not throw when Brevo delivery fails (retains claim for same event)", async () => {
     fetchMock.mockRejectedValueOnce(new Error("network failure"));
     await expect(sendAdminLoginAlertOnce("event-network-failure", {
       username: "admin",
       occurredAt: new Date(),
     })).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Failed delivery retains the claim to prevent duplicate processing of the same event.
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 201 });
+    await expect(sendAdminLoginAlertOnce("event-network-failure", {
+      username: "admin",
+      occurredAt: new Date(),
+    })).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

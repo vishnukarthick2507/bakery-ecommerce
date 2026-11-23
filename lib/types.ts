@@ -85,4 +85,7 @@ export interface CustomCakeRequest {
   messageOnCake?: string
   instructions?: string
   referenceImageUrl?: string
+  // S07 honeypot field. Legitimate clients must leave empty/undefined.
+  companyWebsite?: string
+  whatsappConsent?: boolean
 }

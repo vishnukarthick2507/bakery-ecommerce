@@ -155,6 +155,7 @@ describe("Fulfillment & PAY_AT_STORE", () => {
     async () => {
       mongoServer = await MongoMemoryServer.create({
         instance: {
+          launchTimeout: 60000,
           args: ["--replSet", "ft-rs"],
         },
       });

@@ -16,6 +16,7 @@ import {
   X,
   FileText,
   LogOutIcon,
+  MessageSquare,
 } from 'lucide-react'
 import { withAdminAuth } from '@/components/admin/admin-auth'
 import { cn } from '@/lib/utils'
@@ -33,6 +34,7 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/orders', label: 'Orders', icon: ShoppingCart },
   { href: '/admin/customers', label: 'Customers', icon: Users },
   { href: '/admin/custom-cakes', label: 'Custom Cakes', icon: Cake },
+  { href: '/admin/whatsapp', label: 'WhatsApp Centre', icon: MessageSquare },
   { href: '/admin/inventory', label: 'Inventory', icon: Package },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
   { href: '/admin/analytics/reports', label: 'Reports', icon: FileText },

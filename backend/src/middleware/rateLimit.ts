@@ -173,3 +173,77 @@ export const changePasswordLimiter = rateLimit({
     res.status(options.statusCode).json(options.message);
   },
 });
+
+export const createOrderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 20,
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? "127.0.0.1"),
+  message: {
+    message: "Too many order requests from this IP. Please try again later.",
+  },
+  handler: (_req, res, _next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
+export const createPaymentOrderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 30,
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? "127.0.0.1"),
+  message: {
+    message:
+      "Too many payment initiation requests from this IP. Please try again later.",
+  },
+  handler: (_req, res, _next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
+export const retryPaymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 20,
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? "127.0.0.1"),
+  message: {
+    message:
+      "Too many payment retry requests from this IP. Please try again later.",
+  },
+  handler: (_req, res, _next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
+export const verifyPaymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 30,
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? "127.0.0.1"),
+  message: {
+    message:
+      "Too many payment verification requests from this IP. Please try again later.",
+  },
+  handler: (_req, res, _next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
+export const createCustomCakeRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 10,
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? "127.0.0.1"),
+  message: {
+    message:
+      "Too many custom cake requests from this IP. Please try again later.",
+  },
+  handler: (_req, res, _next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+});

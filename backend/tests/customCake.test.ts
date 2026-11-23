@@ -17,7 +17,7 @@ import { clearTestDB, disconnectTestDB } from "./testDatabase.js";
 process.env.JWT_SECRET = "test-jwt-secret-that-is-at-least-32-chars-long";
 process.env.CORS_ORIGIN = "http://localhost:3000";
 
-let mongoServer: MongoMemoryServer;
+let mongoServer: MongoMemoryServer | undefined;
 
 function createTestApp() {
   const app = express();
@@ -87,6 +87,7 @@ describe("Custom Cake Proposal Workflow", () => {
       mongoServer = await MongoMemoryServer.create({
         instance: {
           args: ["--replSet", "cake-rs"],
+          launchTimeout: 60000,
         },
       });
       const uri = mongoServer.getUri();
@@ -116,7 +117,11 @@ describe("Custom Cake Proposal Workflow", () => {
   });
 
   afterAll(async () => {
-    await disconnectTestDB();
+    await mongoose.disconnect();
+    if (mongoServer) {
+      await mongoServer.stop();
+      mongoServer = undefined;
+    }
   });
 
   describe("Admin propose proposal", () => {

@@ -1,4 +1,6 @@
 import { OAuth2Client } from "google-auth-library";
+import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
+import { logUatSuppressed } from "./uatSafetyLog.js";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -6,6 +8,10 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 let client: OAuth2Client | null = null;
 
 function getGoogleClient(): OAuth2Client {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("google_oauth.client_access");
+    throw new Error("Google OAuth is blocked in UAT_SAFE_MODE.");
+  }
   if (!client) {
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_ID.trim()) {
       throw new Error(
@@ -31,6 +37,11 @@ export async function verifyGoogleIdToken(
   name: string;
   picture?: string;
 }> {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("google_oauth.verify_id_token");
+    throw new Error("Google OAuth is blocked in UAT_SAFE_MODE.");
+  }
+
   const oauth2Client = getGoogleClient();
 
   const ticket = await oauth2Client.verifyIdToken({
@@ -79,9 +90,10 @@ export async function verifyGoogleIdToken(
 }
 
 export function isGoogleConfigured(): boolean {
+  if (isUatExternalSideEffectsBlocked()) return false;
   return Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID.trim());
 }
 
-if (!isGoogleConfigured()) {
+if (!isUatExternalSideEffectsBlocked() && !isGoogleConfigured()) {
   console.warn("Google OAuth is not configured. Set GOOGLE_CLIENT_ID env var.");
 }

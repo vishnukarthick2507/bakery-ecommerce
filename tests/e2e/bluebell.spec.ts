@@ -7,6 +7,7 @@ test.describe('Cinematic Intro', () => {
     await page.goto('/');
     await page.evaluate(() => sessionStorage.removeItem('bb_cinematic_intro_shown'));
     await page.reload();
+    await expect(page.getByRole('dialog', { name: 'Bluebell Bakehouse introduction' })).toBeVisible({ timeout: 15000 });
   });
 
   test('plays the four stages in sequence and reveals the homepage', async ({ page }) => {
@@ -36,8 +37,10 @@ test.describe('Cinematic Intro', () => {
   });
 
   test('skip dismisses intro and reveals homepage', async ({ page }) => {
+    const dialog = intro(page);
+    await expect(dialog).toBeVisible();
     await page.getByRole('button', { name: 'Skip intro' }).click();
-    await expect(intro(page)).toBeHidden();
+    await expect(dialog).toBeHidden();
     await expect(page.locator('.homepage-under-intro--ready')).toBeVisible();
   });
 
@@ -58,7 +61,10 @@ test.describe('Cinematic Intro', () => {
   });
 
   test('intro is session-based - does not reappear on reload', async ({ page }) => {
+    const dialog = intro(page);
+    await expect(dialog).toBeVisible();
     await page.getByRole('button', { name: 'Skip intro' }).click();
+    await expect(dialog).toBeHidden();
     await page.reload();
     await expect(intro(page)).toHaveCount(0);
     await expect(page.locator('.homepage-under-intro--ready')).toBeVisible();
@@ -95,6 +101,9 @@ test.describe('Customer Pages Text Visibility', () => {
   });
 
   test('cart page text visible', async ({ page }) => {
+    await page.route('**/api/products', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+    );
     await page.goto('/cart');
     await expect(page.locator('h1, h2').first()).toBeVisible();
   });
@@ -146,6 +155,7 @@ test.describe('Responsive Viewports', () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto('/');
       await page.evaluate(() => sessionStorage.setItem('bb_cinematic_intro_shown', 'true'));
+      await page.reload();
 
       const heroHeading = page.getByRole('heading', { name: /Freshly Baked/ });
       await expect(heroHeading).toBeVisible();
@@ -155,6 +165,7 @@ test.describe('Responsive Viewports', () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto('/');
       await page.evaluate(() => sessionStorage.setItem('bb_cinematic_intro_shown', 'true'));
+      await page.reload();
 
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
       const viewportWidth = vp.width;
@@ -171,7 +182,12 @@ test.describe('Authentication - OTP Failure Without BREVO_API_KEY', () => {
     // In development mode without BREVO_API_KEY, the endpoint may return 200
     // (dev fallback) or 503 (configured for production). Verify it's reachable.
     expect([200, 429, 500, 503]).toContain(response.status());
-    const body = await response.json();
+    let body: { message?: unknown } = {};
+    try {
+      body = await response.json();
+    } catch {
+      body = { message: await response.text() };
+    }
     expect(body.message).toBeTruthy();
   });
 });

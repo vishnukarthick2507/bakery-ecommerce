@@ -177,6 +177,7 @@ describe("Payments API", () => {
     async () => {
       mongoServer = await MongoMemoryServer.create({
         instance: {
+          launchTimeout: 60000,
           args: ["--replSet", "testrs"],
         },
       });
@@ -514,9 +515,15 @@ describe("Payments API", () => {
 
       const updated = await Order.findById(order._id).lean();
       expect(updated?.paymentStatus).toBe("FAILED");
-      expect(customerNotificationMock).not.toHaveBeenCalled();
       expect(updated?.inventoryStatus).toBe("RELEASED");
-      expect(customerNotificationMock).not.toHaveBeenCalled();
+      expect(customerNotificationMock).toHaveBeenCalledTimes(1);
+      expect(customerNotificationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ _id: order._id }),
+        "PAYMENT_FAILED",
+        `payment-failed:${razorpayOrderId}`,
+        expect.any(String),
+        "FAILED",
+      );
 
       // Stock should be restored by one unit
       const restoredProduct = await Product.findById(product._id).lean();
@@ -593,6 +600,7 @@ describe("Payments API", () => {
         paymentStatus: "PENDING",
         inventoryStatus: "RESERVED",
       });
+      customerNotificationMock.mockClear();
 
       const payload = JSON.stringify({
         event: "payment.failed",
@@ -619,6 +627,7 @@ describe("Payments API", () => {
       const updated = await Order.findById(order._id).lean();
       expect(updated?.paymentStatus).toBe("PENDING");
       expect(updated?.inventoryStatus).toBe("RESERVED");
+      expect(customerNotificationMock).not.toHaveBeenCalled();
     });
 
     it("is safe when called twice (duplicate webhook events)", async () => {
@@ -895,6 +904,14 @@ describe("Payments API", () => {
       const updated = await Order.findById(order._id).lean();
       expect(updated?.paymentStatus).toBe("FAILED");
       expect(updated?.inventoryStatus).toBe("RELEASED");
+      expect(customerNotificationMock).toHaveBeenCalledTimes(1);
+      expect(customerNotificationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ _id: order._id }),
+        "PAYMENT_FAILED",
+        `payment-failed:${razorpayOrderId}`,
+        expect.any(String),
+        "FAILED",
+      );
 
       const restoredProduct = await Product.findById(product._id).lean();
       expect(restoredProduct?.stock).toBe(stockBefore + 1);

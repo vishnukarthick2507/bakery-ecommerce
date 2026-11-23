@@ -1,4 +1,6 @@
 import Razorpay from "razorpay";
+import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
+import { logUatSuppressed } from "./uatSafetyLog.js";
 
 let client: Razorpay | null = null;
 
@@ -11,6 +13,11 @@ export function getRazorpayKeySecret(): string | null {
 }
 
 export function getRazorpayClient(): Razorpay {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("razorpay.client_access");
+    throw new Error("Razorpay live API access is blocked in UAT_SAFE_MODE.");
+  }
+
   if (client) return client;
 
   const keyId = getRazorpayKeyId();

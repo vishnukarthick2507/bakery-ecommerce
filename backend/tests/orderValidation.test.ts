@@ -6,6 +6,8 @@ import mongoose from "mongoose";
 import { randomUUID } from "crypto";
 import jwt from "jsonwebtoken";
 
+import { ipKeyGenerator } from "express-rate-limit";
+
 import { Order } from "../src/models/Order.js";
 import { Product } from "../src/models/Product.js";
 import { Settings } from "../src/models/Settings.js";
@@ -13,6 +15,7 @@ import { User } from "../src/models/User.js";
 import { InventoryMovement } from "../src/models/InventoryMovement.js";
 import { reserveInventory, restoreInventory } from "../src/services/inventory.js";
 import orderRoutes from "../src/routes/orderRoutes.js";
+import { createOrderLimiter } from "../src/middleware/rateLimit.js";
 
 process.env.JWT_SECRET = "test-jwt-secret-that-is-at-least-32-chars-long";
 
@@ -21,6 +24,7 @@ let mongoServer: MongoMemoryServer;
 async function connectTestDBWithReplSet(): Promise<void> {
   mongoServer = await MongoMemoryServer.create({
     instance: {
+      launchTimeout: 60000,
       args: ["--replSet", "order-validation-rs"],
     },
   });
@@ -59,6 +63,23 @@ function createTestApp() {
 }
 
 const app = createTestApp();
+
+async function resetOrderCreateLimiter() {
+  const limiterAny = createOrderLimiter as any;
+  if (typeof limiterAny.resetAll === "function") {
+    await limiterAny.resetAll();
+    return;
+  }
+  if (limiterAny.store && typeof limiterAny.store.resetAll === "function") {
+    await limiterAny.store.resetAll();
+    return;
+  }
+  const keys = ["127.0.0.1", "::ffff:127.0.0.1", "::1", "unknown"];
+  for (const key of keys) {
+    await createOrderLimiter.resetKey(ipKeyGenerator(key) ?? key);
+    await createOrderLimiter.resetKey(key);
+  }
+}
 
 const baseProduct = {
   name: "Test Product",
@@ -297,10 +318,83 @@ describe("Order validation", () => {
       expect(response.status).toBe(400);
       expect(response.body.message).toBe("Invalid order data");
     });
+
+    it("rejects delivery orders with malformed pincodes (BLB-03I)", async () => {
+      const invalidPincodes = ["123", "12345", "1234567", "ABCDEF", "abcdef", "12 345", "60004a"];
+
+      for (const pincode of invalidPincodes) {
+        const response = await postOrder({
+          ...baseOrderPayload,
+          fulfillmentType: "DELIVERY",
+          address: {
+            addressLine: "123 Test Street",
+            city: "Chennai",
+            pincode,
+          },
+        });
+
+        expect(response.status, `pincode=${JSON.stringify(pincode)}`).toBe(400);
+        expect(response.body.message).toBe("Invalid order data");
+      }
+    });
+
+    it("rejects delivery orders with empty or whitespace-only pincode (BLB-03I)", async () => {
+      await resetOrderCreateLimiter();
+      for (const pincode of ["", "   "]) {
+        const response = await postOrder({
+          ...baseOrderPayload,
+          fulfillmentType: "DELIVERY",
+          address: {
+            addressLine: "123 Test Street",
+            city: "Chennai",
+            pincode,
+          },
+        });
+
+        expect(response.status, `pincode=${JSON.stringify(pincode)}`).toBe(400);
+        expect(response.body.message).toBe("Invalid order data");
+      }
+    });
+
+    it("accepts delivery orders with a valid 6-digit pincode (BLB-03I)", async () => {
+      await resetOrderCreateLimiter();
+      const response = await postOrder({
+        ...baseOrderPayload,
+        fulfillmentType: "DELIVERY",
+        address: {
+          addressLine: "123 Test Street",
+          city: "Chennai",
+          pincode: "600044",
+        },
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.body.order?.orderNumber).toBeDefined();
+
+      const created = await Order.findOne({ orderNumber: response.body.order.orderNumber }).lean();
+      expect(created?.address?.pincode).toBe("600044");
+    });
+
+    it("preserves valid pickup orders without delivery address (BLB-03I)", async () => {
+      await resetOrderCreateLimiter();
+      const { address: _address, ...pickupPayload } = baseOrderPayload;
+      const response = await postOrder({
+        ...pickupPayload,
+        fulfillmentType: "PICKUP",
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.body.order?.orderNumber).toBeDefined();
+
+      const created = await Order.findOne({ orderNumber: response.body.order.orderNumber }).lean();
+      expect(created?.fulfillmentType).toBe("PICKUP");
+      expect(created?.address ?? null).toBeNull();
+    });
   });
 
   describe("POST /api/orders - idempotency", () => {
     it("returns the original order for an identical replay without reserving stock twice", async () => {
+      await resetOrderCreateLimiter();
       const idempotencyKey = randomUUID();
       const firstResponse = await postOrderWithKey(idempotencyKey, baseOrderPayload);
       const replayResponse = await postOrderWithKey(idempotencyKey, baseOrderPayload);
@@ -313,6 +407,7 @@ describe("Order validation", () => {
     });
 
     it("rejects reuse of an idempotency key with a changed payload", async () => {
+      await resetOrderCreateLimiter();
       const idempotencyKey = randomUUID();
       const firstResponse = await postOrderWithKey(idempotencyKey, baseOrderPayload);
       const conflictResponse = await postOrderWithKey(idempotencyKey, {
@@ -330,6 +425,7 @@ describe("Order validation", () => {
 
   describe("atomic inventory reservations and releases", () => {
     it("prevents concurrent checkouts from overselling", async () => {
+      await resetOrderCreateLimiter();
       await Product.updateOne(
         { _id: baseOrderPayload.items[0]!.productId },
         { $set: { stock: 1 } },
@@ -409,6 +505,7 @@ describe("Order validation", () => {
     let customerId: string;
 
     beforeEach(async () => {
+      await resetOrderCreateLimiter();
       // Create a phone-only customer with no email and no passwordHash
       const user = await User.create({
         name: "Phone Customer",
@@ -585,7 +682,7 @@ describe("Order validation", () => {
         address: {
           addressLine: "123 Test Street",
           city: "Test City",
-          pincode: "600001",
+          pincode: "600044",
         },
         paymentMethod: "PAY_AT_STORE",
       });

@@ -18,7 +18,7 @@ process.env.JWT_SECRET = "test-jwt-secret-that-is-at-least-32-chars-long";
 let mongoServer: MongoMemoryServer;
 
 async function connectTestDB(): Promise<void> {
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
   await mongoose.connect(mongoServer.getUri());
 }
 

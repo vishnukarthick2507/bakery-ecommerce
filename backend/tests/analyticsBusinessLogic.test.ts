@@ -107,7 +107,7 @@ function todayRange() {
 describe("Analytics business logic — COD revenue recognition", () => {
   beforeAll(async () => {
     const { MongoMemoryServer } = await import("mongodb-memory-server");
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServer.getUri());
   });
 
@@ -259,7 +259,7 @@ describe("Product analytics — null/missing cost data handling", () => {
 
   beforeAll(async () => {
     const { MongoMemoryServer } = await import("mongodb-memory-server");
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServer.getUri());
   });
 

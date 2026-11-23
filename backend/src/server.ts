@@ -18,14 +18,24 @@ import adminCustomerRoutes from "./routes/adminCustomerRoutes.js";
 import adminInventoryRoutes from "./routes/adminInventoryRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import customerUploadRoutes from "./routes/customerUploadRoutes.js";
+import whatsappRoutes from "./routes/whatsappRoutes.js";
+import whatsappWebhookRoutes from "./routes/whatsappWebhookRoutes.js";
+import adminWhatsAppRoutes from "./routes/adminWhatsAppRoutes.js";
 import { getJwtSecret } from "./config/jwt.js";
 import { Order } from "./models/Order.js";
 import { startInventoryExpiryWorker, stopInventoryExpiryWorker } from "./services/inventoryExpiry.js";
 import { startProposalExpiryWorker, stopProposalExpiryWorker } from "./services/proposalExpiry.js";
+import { startNotificationOutboxWorker, stopNotificationOutboxWorker } from "./services/notificationOutboxWorker.js";
 import { csrfProtection } from "./middleware/csrf.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { logger } from "./lib/logger.js";
 import { getTrustedOrigins, normalizeOrigin } from "./lib/origin.js";
+import {
+  assertUatSafeModeConfig,
+  assertUatSafeModeMongoTarget,
+  getUatSafeModeStartupErrorMessage,
+  isUatSafeModeEnabled,
+} from "./config/uatSafeMode.js";
 
 dotenv.config();
 
@@ -74,6 +84,13 @@ app.use(
   express.raw({ type: "application/json" }),
 );
 
+// WhatsApp webhook signature must be verified against the exact
+// raw bytes Meta sent, so this route is parsed as raw before express.json().
+app.use(
+  "/api/whatsapp/webhook",
+  express.raw({ type: "application/json" }),
+);
+
 app.use(express.json());
 
 // Health check endpoint — lightweight, no secrets, reports database readiness.
@@ -104,17 +121,25 @@ app.use("/api/admin/inventory", adminInventoryRoutes);
 app.use("/api/admin/uploads", uploadRoutes);
 app.use("/api/customer/uploads", customerUploadRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/admin/whatsapp", adminWhatsAppRoutes);
+app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/whatsapp", whatsappWebhookRoutes);
 
 let server: ReturnType<typeof app.listen> | null = null;
 
 /**
- * Connect to MongoDB in the background. Never calls process.exit — a
- * database outage must degrade the service, not kill the HTTP server, so
- * /health can keep responding and the platform can route traffic.
+ * Connect to MongoDB in the background. In normal mode this never calls
+ * process.exit — a database outage must degrade the service, not kill the
+ * HTTP server. In UAT_SAFE_MODE, target validation/connection safety is
+ * enforced and startup must fail safely instead of falling back.
  */
 async function connectDatabase(): Promise<void> {
   try {
     const mongoURI = process.env.MONGODB_URI;
+
+    if (isUatSafeModeEnabled()) {
+      assertUatSafeModeMongoTarget(mongoURI);
+    }
 
     if (!mongoURI) {
       logger.error("Database connection skipped: MONGODB_URI is not configured.");
@@ -130,6 +155,9 @@ async function connectDatabase(): Promise<void> {
     logger.info("MongoDB connected successfully");
   } catch (error) {
     dbReady = false;
+    if (isUatSafeModeEnabled()) {
+      throw new Error(getUatSafeModeStartupErrorMessage(error));
+    }
     logger.error(
       "Database connection failed: " +
         (error instanceof Error ? error.message : String(error)) +
@@ -139,6 +167,20 @@ async function connectDatabase(): Promise<void> {
 }
 
 const startServer = async (): Promise<void> => {
+  // Validate UAT_SAFE_MODE and (when enabled) the verified local UAT MongoDB
+  // target before listening/connecting/starting workers. In UAT_SAFE_MODE this
+  // must fail safely and never fall back to another database.
+  if (isUatSafeModeEnabled()) {
+    try {
+      assertUatSafeModeConfig();
+    } catch (error) {
+      logger.error("UAT_SAFE_MODE startup validation failed", {
+        error: getUatSafeModeStartupErrorMessage(error),
+      });
+      process.exit(1);
+    }
+  }
+
   // Validate JWT secret before listening — this is a required dependency.
   // Failure is logged clearly without exposing the secret value.
   try {
@@ -151,18 +193,32 @@ const startServer = async (): Promise<void> => {
     );
   }
 
-  // Start the HTTP server first so /health responds immediately, even if
-  // the database is not yet reachable. Render needs a listening process.
+  // Start the HTTP server first so /health responds immediately in normal mode.
+  // In UAT_SAFE_MODE we must not continue with an unverified database target.
   server = app.listen(PORT, () => {
     logger.info("API server started", {
       port: PORT,
       env: process.env.NODE_ENV,
       database: dbReady ? "connected" : "connecting",
+      uatSafeMode: isUatSafeModeEnabled(),
     });
   });
 
-  // Connect to the database in the background — do not block startup.
-  await connectDatabase();
+  // Connect to the database. In UAT_SAFE_MODE this is safety-critical and
+  // failures must abort startup instead of continuing in degraded/fallback mode.
+  try {
+    await connectDatabase();
+  } catch (error) {
+    if (isUatSafeModeEnabled()) {
+      logger.error("UAT_SAFE_MODE database validation/connection failed", {
+        error: getUatSafeModeStartupErrorMessage(error),
+      });
+      if (server) {
+        await new Promise<void>((resolve) => server!.close(() => resolve()));
+      }
+      process.exit(1);
+    }
+  }
 
   // Ensure Mongoose indexes exist. Non-fatal: orders still work without
   // index creation, just potentially slower queries.
@@ -177,24 +233,42 @@ const startServer = async (): Promise<void> => {
     }
   }
 
-  // Start the inventory expiry worker. Non-fatal if the DB is unavailable.
-  try {
-    startInventoryExpiryWorker();
-  } catch (error) {
-    logger.error(
-      "Inventory expiry worker failed to start: " +
-        (error instanceof Error ? error.message : String(error)),
-    );
-  }
+  // Start background workers only when DB is ready. Workers depend on MongoDB;
+  // starting them without a connection causes avoidable noisy failures.
+  if (dbReady) {
+    try {
+      startInventoryExpiryWorker();
+    } catch (error) {
+      logger.error(
+        "Inventory expiry worker failed to start: " +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
 
-  // Start the proposal expiry worker. Non-fatal if the DB is unavailable.
-  try {
-    startProposalExpiryWorker();
-  } catch (error) {
-    logger.error(
-      "Proposal expiry worker failed to start: " +
-        (error instanceof Error ? error.message : String(error)),
-    );
+    // Start the proposal expiry worker. External notifications are centrally
+    // blocked in UAT_SAFE_MODE.
+    try {
+      startProposalExpiryWorker();
+    } catch (error) {
+      logger.error(
+        "Proposal expiry worker failed to start: " +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
+
+    // Start the notification outbox worker. It processes durable WhatsApp/email
+    // outbox jobs; external delivery remains fail-closed by UAT_SAFE_MODE and
+    // template/consent validation gates.
+    try {
+      startNotificationOutboxWorker();
+    } catch (error) {
+      logger.error(
+        "Notification outbox worker failed to start: " +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
+  } else {
+    logger.warn("Background workers not started: database not ready");
   }
 };
 
@@ -205,6 +279,9 @@ void startServer().catch((error) => {
     "Server startup failed: " +
       (error instanceof Error ? error.message : String(error)),
   );
+  if (isUatSafeModeEnabled()) {
+    process.exit(1);
+  }
 });
 
 // Graceful shutdown: close HTTP server, MongoDB, and expiry worker.
@@ -214,9 +291,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
   if (srv) {
     await new Promise<void>((resolve) => srv.close(() => resolve()));
   }
-  await mongoose.disconnect();
   stopInventoryExpiryWorker();
   stopProposalExpiryWorker();
+  await stopNotificationOutboxWorker();
+  await mongoose.disconnect();
   logger.info("Graceful shutdown complete");
   process.exit(0);
 }

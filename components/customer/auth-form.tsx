@@ -321,21 +321,9 @@ export function CustomerAuthForm({ mode }: { mode: AuthMode }) {
         throw new Error((data as { message?: string })?.message || 'Unable to authenticate.')
       }
 
-      // If the response indicates an existing account (email or phone already
-      // registered), show the generic message as an error instead of
-      // redirecting. No account was created, so sending the user to /account
-      // would leave them stranded without a session.
-      const message = (data as { message?: string })?.message || ''
-      if (message.includes('does not already exist')) {
-        setError(message)
-        return
-      }
-
-      // Registration via /api/auth/register only sends the OTP and creates a
-      // pending registration; the account is created after OTP verification.
-      // Transition to OTP verification instead of redirecting to /account
-      // (no customer session exists yet). The backend created the OTP session
-      // with purpose "REGISTER", so we must verify with the same purpose.
+      // Registration responses are normalized to avoid account-state enumeration.
+      // A 200 response means continue the generic OTP verification flow; the
+      // server controls whether an OTP was actually issued without exposing state.
       if (mode === 'register') {
         setAuthMethod('email-otp')
         setOtpPurpose('REGISTER')

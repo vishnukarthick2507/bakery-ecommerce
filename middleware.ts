@@ -32,7 +32,49 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
 
-    // 1. Preferred fast cryptographic verification via jose when JWT_SECRET is available
+    const verifyWithBackend = async (): Promise<NextResponse | null> => {
+      try {
+        const rawApiUrl =
+          process.env.BACKEND_INTERNAL_URL ||
+          process.env.NEXT_PUBLIC_API_URL ||
+          'http://127.0.0.1:5000'
+
+        const apiUrl = rawApiUrl.trim().replace(/\/+$/, '')
+
+        const response = await fetch(`${apiUrl}/api/auth/verify`, {
+          cache: 'no-store',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: AbortSignal.timeout(5000),
+        })
+
+        if (!response.ok) {
+          // Explicit 401/403/invalid or stale response from backend
+          return NextResponse.redirect(new URL('/admin/login', request.url))
+        }
+
+        return null
+      } catch {
+        // If Next.js is prefetching in the background and backend had a network hiccup,
+        // do not redirect the user during prefetch.
+        const isPrefetch =
+          request.headers.get('Purpose') === 'prefetch' ||
+          request.headers.get('Sec-Purpose') === 'prefetch' ||
+          request.headers.get('Next-Router-Prefetch') === '1'
+
+        if (!isPrefetch) {
+          return NextResponse.redirect(new URL('/admin/login', request.url))
+        }
+
+        return null
+      }
+    }
+
+    // 1. Fast local cryptographic/shape checks when JWT_SECRET is available.
+    //    This rejects obviously invalid tokens without a backend call, but a
+    //    locally valid admin-shaped token must still be confirmed against the
+    //    backend so stale tokenVersion values cannot access protected routes.
     const jwtSecret = process.env.JWT_SECRET
     if (jwtSecret) {
       try {
@@ -43,46 +85,16 @@ export async function middleware(request: NextRequest) {
         if (!payload.adminId || payload.accountType === 'CUSTOMER') {
           return NextResponse.redirect(new URL('/admin/login', request.url))
         }
-
-        return NextResponse.next()
       } catch {
         // Expired, tampered, or invalid token signature
         return NextResponse.redirect(new URL('/admin/login', request.url))
       }
     }
 
-    // 2. Fallback: verification against backend /api/auth/verify endpoint
-    try {
-      const rawApiUrl =
-        process.env.BACKEND_INTERNAL_URL ||
-        process.env.NEXT_PUBLIC_API_URL ||
-        'http://127.0.0.1:5000'
-
-      const apiUrl = rawApiUrl.trim().replace(/\/+$/, '')
-
-      const response = await fetch(`${apiUrl}/api/auth/verify`, {
-        cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        signal: AbortSignal.timeout(5000),
-      })
-
-      if (!response.ok) {
-        // Explicit 401/403/invalid response from backend
-        return NextResponse.redirect(new URL('/admin/login', request.url))
-      }
-    } catch {
-      // If Next.js is prefetching in the background and backend had a network hiccup,
-      // do not redirect the user during prefetch.
-      const isPrefetch =
-        request.headers.get('Purpose') === 'prefetch' ||
-        request.headers.get('Sec-Purpose') === 'prefetch' ||
-        request.headers.get('Next-Router-Prefetch') === '1'
-
-      if (!isPrefetch) {
-        return NextResponse.redirect(new URL('/admin/login', request.url))
-      }
+    // 2. Authoritative version-aware verification via backend /api/auth/verify.
+    const backendVerificationResult = await verifyWithBackend()
+    if (backendVerificationResult) {
+      return backendVerificationResult
     }
   }
 

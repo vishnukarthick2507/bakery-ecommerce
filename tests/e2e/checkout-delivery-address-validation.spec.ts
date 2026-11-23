@@ -118,9 +118,30 @@ test.describe('Checkout fulfilment delivery address validation (4B+9)', () => {
 
     await page.getByPlaceholder('Enter your complete delivery address').fill('123 Test Street')
     await page.getByPlaceholder('City').fill('Chennai')
-    await page.getByPlaceholder('Pincode').fill('600001')
+    await page.getByPlaceholder('Pincode').fill('600044')
     await clickFulfilmentContinue(page)
 
+    await expect(page.getByRole('heading', { name: 'Schedule your order' })).toBeVisible()
+  })
+
+  test('Scenario 3b: Delivery with invalid pincodes is blocked with format error', async ({ page }) => {
+    await goToFulfilment(page)
+    await selectDelivery(page)
+
+    await page.getByPlaceholder('Enter your complete delivery address').fill('123 Test Street')
+    await page.getByPlaceholder('City').fill('Chennai')
+
+    for (const invalidPincode of ['123', '12345', '1234567', 'ABCDEF']) {
+      await page.getByPlaceholder('Pincode').fill(invalidPincode)
+      await clickFulfilmentContinue(page)
+
+      await expect(page.getByRole('heading', { name: 'Delivery or pickup' })).toBeVisible()
+      await expect(page.getByText('Schedule your order')).toHaveCount(0)
+      await expect(page.getByText('Please enter a valid 6-digit pincode.')).toBeVisible()
+    }
+
+    await page.getByPlaceholder('Pincode').fill('600044')
+    await clickFulfilmentContinue(page)
     await expect(page.getByRole('heading', { name: 'Schedule your order' })).toBeVisible()
   })
 
@@ -154,7 +175,7 @@ test.describe('Checkout fulfilment delivery address validation (4B+9)', () => {
 
     await page.getByPlaceholder('Enter your complete delivery address').fill('123 Test Street')
     await page.getByPlaceholder('City').fill('Chennai')
-    await page.getByPlaceholder('Pincode').fill('600001')
+    await page.getByPlaceholder('Pincode').fill('600044')
 
     await selectPickup(page)
     await expect(page.getByPlaceholder('Enter your complete delivery address')).toHaveCount(0)
@@ -199,7 +220,7 @@ test.describe('Checkout fulfilment delivery address validation (4B+9)', () => {
     await selectDelivery(page)
     await page.getByPlaceholder('Enter your complete delivery address').fill('123 Test Street')
     await page.getByPlaceholder('City').fill('Chennai')
-    await page.getByPlaceholder('Pincode').fill('600001')
+    await page.getByPlaceholder('Pincode').fill('600044')
     await clickFulfilmentContinue(page)
     await expect(page.getByRole('heading', { name: 'Schedule your order' })).toBeVisible()
 

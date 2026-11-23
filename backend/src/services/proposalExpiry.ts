@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 
 import { Order } from "../models/Order.js";
 import { sendRescheduleExpiryAlert, isBrevoConfigured } from "./emailService.js";
+import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
+import { logUatSuppressed } from "./uatSafetyLog.js";
 
 export const PROPOSAL_EXPIRY_SCAN_INTERVAL_MS = 30 * 1000;
 export const MAX_NOTIFICATION_ATTEMPTS = 5;
@@ -77,6 +79,8 @@ export async function processPendingExpiryNotifications(now = new Date()): Promi
     .limit(100)
     .lean();
 
+  const uatExternalBlocked = isUatExternalSideEffectsBlocked();
+
   for (const orderDoc of orders) {
     const orderId = orderDoc._id;
     const proposals = (orderDoc as unknown as {
@@ -113,6 +117,29 @@ export async function processPendingExpiryNotifications(now = new Date()): Promi
         new Date(proposal.expiryNotificationNextRetryAt).getTime() > now.getTime()
       ) {
         // Still within retry delay or lease duration
+        continue;
+      }
+
+      // UAT_SAFE_MODE: block external email notifications without sending, without
+      // consuming retry attempts, and without marking as delivered/sent.
+      if (uatExternalBlocked) {
+        logUatSuppressed("proposal_expiry.admin_notification", {
+          orderNumber: (orderDoc as { orderNumber?: string }).orderNumber,
+        });
+        await Order.updateOne(
+          { _id: orderId },
+          {
+            $set: {
+              "rescheduleProposals.$[p].expiryNotificationStatus":
+                proposal.expiryNotificationStatus === "FAILED" ? "FAILED" : "PENDING",
+              "rescheduleProposals.$[p].expiryNotificationLastError":
+                "Suppressed in UAT_SAFE_MODE: external email blocked (not sent, retry not consumed).",
+              "rescheduleProposals.$[p].expiryNotificationNextRetryAt": new Date(now.getTime() + 60_000),
+            },
+          },
+          { arrayFilters: [{ "p.proposalId": proposal.proposalId }] },
+        );
+        skippedCount += 1;
         continue;
       }
 

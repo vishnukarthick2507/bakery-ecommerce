@@ -369,6 +369,118 @@ describe("Admin authentication API", () => {
     expect(response.status).toBe(401);
   });
 
+  it("accepts a valid current admin token on /api/auth/verify", async () => {
+    const login = await request(app)
+      .post("/api/auth/login")
+      .send({ username: "testadmin", password: "CorrectPassword123" });
+    const adminCookie = login.headers["set-cookie"]?.[0]?.split(";")[0]!;
+
+    const response = await request(app)
+      .get("/api/auth/verify")
+      .set("Cookie", adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      valid: true,
+      admin: {
+        username: "testadmin",
+        role: "ADMIN",
+      },
+    });
+  });
+
+  it("rejects a stale admin token on /api/auth/verify", async () => {
+    const admin = await Admin.findOne({ username: "testadmin" });
+    const adminId = admin!._id.toString();
+
+    const token = jwt.sign(
+      { adminId, username: "testadmin", role: "ADMIN", tokenVersion: 0 },
+      "test-secret-that-is-at-least-32-characters-long",
+    );
+
+    await Admin.findOneAndUpdate(
+      { username: "testadmin" },
+      { $inc: { tokenVersion: 1 } },
+    );
+
+    const response = await request(app)
+      .get("/api/auth/verify")
+      .set("Cookie", `admin-token=${token}`);
+
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects a stale admin token on /api/auth/me", async () => {
+    const admin = await Admin.findOne({ username: "testadmin" });
+    const adminId = admin!._id.toString();
+
+    const token = jwt.sign(
+      { adminId, username: "testadmin", role: "ADMIN", tokenVersion: 0 },
+      "test-secret-that-is-at-least-32-characters-long",
+    );
+
+    await Admin.findOneAndUpdate(
+      { username: "testadmin" },
+      { $inc: { tokenVersion: 1 } },
+    );
+
+    const response = await request(app)
+      .get("/api/auth/me")
+      .set("Cookie", `admin-token=${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ isAdmin: false });
+  });
+
+  it("rejects a stale admin token on /api/admin/me", async () => {
+    const admin = await Admin.findOne({ username: "testadmin" });
+    const adminId = admin!._id.toString();
+
+    const token = jwt.sign(
+      { adminId, username: "testadmin", role: "ADMIN", tokenVersion: 0 },
+      "test-secret-that-is-at-least-32-characters-long",
+    );
+
+    await Admin.findOneAndUpdate(
+      { username: "testadmin" },
+      { $inc: { tokenVersion: 1 } },
+    );
+
+    const response = await request(app)
+      .get("/api/admin/me")
+      .set("Cookie", `admin-token=${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ isAdmin: false });
+  });
+
+  it("rejects a valid customer token on a protected admin API", async () => {
+    const { User } = await import("../src/models/User.js");
+    const customer = await User.create({
+      name: "Customer User",
+      email: "customer@example.com",
+      phone: "9840916058",
+      passwordHash: await bcrypt.hash("Secure1password", 12),
+      active: true,
+    });
+
+    const customerToken = jwt.sign(
+      {
+        customerId: customer._id.toString(),
+        accountType: "CUSTOMER",
+        tokenVersion: 0,
+      },
+      "test-secret-that-is-at-least-32-characters-long",
+      { expiresIn: "7d" },
+    );
+
+    const response = await request(app)
+      .get("/api/admin/diagnostics/brevo-smtp")
+      .set("Authorization", `Bearer ${customerToken}`);
+
+    expect(response.status).toBe(401);
+  });
+
   describe("GET /api/admin/diagnostics/brevo-smtp", () => {
     const configured = {
       apiKeyPresent: true,

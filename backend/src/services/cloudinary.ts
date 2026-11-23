@@ -1,4 +1,6 @@
 import { v2 as cloudinary, type UploadApiResponse } from "cloudinary";
+import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
+import { logUatSuppressed } from "./uatSafetyLog.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -57,6 +59,11 @@ export interface UploadSignature {
 export function getUploadSignature(
   options: UploadSignatureOptions = {},
 ): UploadSignature {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("cloudinary.upload_signature", { folder: options.folder ?? "sv-bakery/products" });
+    throw new Error("External upload operations are blocked in UAT_SAFE_MODE.");
+  }
+
   configureCloudinary();
 
   const timestamp = Math.round(new Date().getTime() / 1000);
@@ -92,6 +99,11 @@ export function getUploadSignature(
 export async function deleteAsset(
   publicId: string,
 ): Promise<{ result: string; deleted: boolean }> {
+  if (isUatExternalSideEffectsBlocked()) {
+    logUatSuppressed("cloudinary.delete_asset");
+    return { result: "suppressed_uat_safe_mode", deleted: false };
+  }
+
   configureCloudinary();
 
   try {

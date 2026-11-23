@@ -21,6 +21,7 @@ import {
   clearTestDB,
   disconnectTestDB,
 } from "./testDatabase.js";
+import { formatSlotDate, formatSlotTime } from "../src/services/slotValidation.js";
 
 const customerNotificationMock = vi.fn().mockResolvedValue(undefined);
 vi.mock("../src/services/customerOrderNotifications.js", () => ({
@@ -165,6 +166,7 @@ describe("Reschedule Proposal", () => {
     async () => {
       mongoServer = await MongoMemoryServer.create({
         instance: {
+          launchTimeout: 60000,
           args: ["--replSet", "rs-rs"],
         },
       });
@@ -890,10 +892,9 @@ describe("Reschedule Proposal", () => {
 
       const final = await Order.findById(order._id).lean();
       expect(final?.confirmedSlot?.getTime()).toBe(futureTime.getTime());
-      expect(final?.scheduledDate).toBe(futureTime.toISOString().split("T")[0]);
-      expect(final?.scheduledTime).toBe(
-        futureTime.toISOString().split("T")[1]?.split(".")[0] ?? "10:00:00",
-      );
+      // D20-06-F: schedule stored as IST-safe formatted values (not UTC ISO parts).
+      expect(final?.scheduledDate).toBe(formatSlotDate(futureTime));
+      expect(final?.scheduledTime).toBe(formatSlotTime(futureTime));
     });
 
     it("failed proposal does not modify database (no false success)", async () => {

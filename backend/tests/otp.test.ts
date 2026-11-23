@@ -60,6 +60,7 @@ function makeRegistrationCookie(
 describe("OTP service", () => {
   beforeAll(async () => {
     process.env.OTP_SECRET = "test-otp-secret-that-is-at-least-16-chars";
+    process.env.JWT_SECRET = "test-jwt-secret-that-is-at-least-32-chars-long";
     await connectTestDB();
   });
 
@@ -845,6 +846,276 @@ describe("OTP service", () => {
         expect(response.status).toBe(401);
       }
       expect(limited).toBe(true);
+    });
+  });
+
+  describe("S04 privacy / anti-enumeration regressions", () => {
+    function resetCookie(value: string | string[] | undefined): string | undefined {
+      return setCookieValues(value)
+        .find((cookie) => cookie.startsWith("otp-reset-token="))
+        ?.split(";")[0];
+    }
+
+    it("preserves password-register OTP workflow with normalized registration response", async () => {
+      const registration = await request(app).post("/api/auth/register").send({
+        name: "S04 Register",
+        email: "s04-register@example.com",
+        phone: "9010000001",
+        password: "Secure1password",
+      });
+
+      expect(registration.status).toBe(200);
+      expect(registration.body).toEqual({
+        message:
+          "If an account does not already exist for this email, a verification code has been sent. Please check your email.",
+      });
+
+      const { PendingRegistration } = await import("../src/models/PendingRegistration.js");
+      const pendingBeforeVerify = await PendingRegistration.findOne({
+        email: "s04-register@example.com",
+      }).lean();
+      expect(pendingBeforeVerify).toBeTruthy();
+
+      const otpSession = await OtpSession.findOne({
+        identifier: "s04-register@example.com",
+        purpose: "REGISTER",
+        consumed: false,
+      }).lean();
+      expect(otpSession).toBeTruthy();
+      expect(otpSession?.attempts).toBe(0);
+
+      const sendCall = (sendOtpEmail as ReturnType<typeof vi.fn>).mock.calls.find(
+        (call) =>
+          call[0] === "s04-register@example.com" &&
+          call[2] === "REGISTER" &&
+          typeof call[1] === "string",
+      );
+      expect(sendCall).toBeTruthy();
+      const otp = sendCall?.[1] as string;
+      expect(otp).toMatch(/^\d{6}$/);
+
+      const verified = await request(app)
+        .post("/api/auth/otp/verify")
+        .send({ email: "s04-register@example.com", otp, purpose: "REGISTER" });
+
+      expect(verified.status).toBe(200);
+      expect(verified.body).toMatchObject({ redirectTo: "/account" });
+      expect(customerCookie(verified.headers["set-cookie"])).toMatch(/^customer-token=/);
+
+      const user = await User.findOne({ email: "s04-register@example.com" }).lean();
+      expect(user).toBeTruthy();
+      expect(user?.name).toBe("S04 Register");
+      expect(user?.phone).toBe("9010000001");
+      expect(user?.active).toBe(true);
+      await expect(User.countDocuments({ email: "s04-register@example.com" })).resolves.toBe(1);
+      await expect(
+        PendingRegistration.countDocuments({ email: "s04-register@example.com" }),
+      ).resolves.toBe(0);
+    });
+
+    it("returns the same generic forgot-password response for unknown emails", async () => {
+      const res = await request(app)
+        .post("/api/auth/forgot-password")
+        .send({ email: "unknown-s04@example.com" });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        message:
+          "If an account exists for this email, a verification code has been sent.",
+      });
+    });
+
+    it("returns the same generic forgot-password response for missing email config in production without leaking details", async () => {
+      await User.create({
+        name: "Reset User",
+        email: "reset-config@example.com",
+        phone: "9010000002",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
+
+      const originalNodeEnv = process.env.NODE_ENV;
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        process.env.NODE_ENV = "production";
+        (isBrevoConfigured as ReturnType<typeof vi.fn>).mockReturnValue(false);
+
+        const res = await request(app)
+          .post("/api/auth/forgot-password")
+          .send({ email: "reset-config@example.com" });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+          message:
+            "If an account exists for this email, a verification code has been sent.",
+        });
+        expect(JSON.stringify(res.body)).not.toContain("EMAIL_CONFIG_MISSING");
+        expect(JSON.stringify(res.body)).not.toContain("not configured");
+        expect(errorSpy).toHaveBeenCalled();
+        const logged = JSON.stringify(errorSpy.mock.calls);
+        expect(logged.toLowerCase()).not.toContain("otp=");
+        expect(logged).not.toContain("reset-config@example.com");
+        expect(logged.toLowerCase()).not.toContain("token=");
+        expect(logged.toLowerCase()).not.toContain("secret");
+        expect(logged.toLowerCase()).not.toContain("bearer ");
+      } finally {
+        if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = originalNodeEnv;
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("returns the same generic forgot-password response for email delivery failure in production without leaking details", async () => {
+      await User.create({
+        name: "Reset User",
+        email: "reset-fail@example.com",
+        phone: "9010000003",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
+
+      const originalNodeEnv = process.env.NODE_ENV;
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        process.env.NODE_ENV = "production";
+        (isBrevoConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        (sendOtpEmail as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+        const res = await request(app)
+          .post("/api/auth/forgot-password")
+          .send({ email: "reset-fail@example.com" });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+          message:
+            "If an account exists for this email, a verification code has been sent.",
+        });
+        expect(JSON.stringify(res.body)).not.toContain("EMAIL_DELIVERY_FAILED");
+        expect(JSON.stringify(res.body).toLowerCase()).not.toContain("unable to send reset email");
+        expect(errorSpy).toHaveBeenCalled();
+        const logged = JSON.stringify(errorSpy.mock.calls);
+        expect(logged.toLowerCase()).not.toContain("otp=");
+        expect(logged).not.toContain("reset-fail@example.com");
+        expect(logged.toLowerCase()).not.toContain("token=");
+        expect(logged.toLowerCase()).not.toContain("secret");
+        expect(logged.toLowerCase()).not.toContain("bearer ");
+      } finally {
+        if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = originalNodeEnv;
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("preserves forgot-password cooldown 429 behavior", async () => {
+      await User.create({
+        name: "Reset User",
+        email: "reset-cooldown@example.com",
+        phone: "9010000004",
+        passwordHash: await bcrypt.hash("Secure1password", 12),
+        active: true,
+      });
+
+      const first = await request(app)
+        .post("/api/auth/forgot-password")
+        .send({ email: "reset-cooldown@example.com" });
+      expect(first.status).toBe(200);
+
+      const second = await request(app)
+        .post("/api/auth/forgot-password")
+        .send({ email: "reset-cooldown@example.com" });
+      expect(second.status).toBe(429);
+      expect(second.body.retryAfter).toBeGreaterThan(0);
+    });
+
+    it("returns a generic 401 when a valid consumed reset proof maps to a missing user", async () => {
+      await User.create({
+        name: "Reset User",
+        email: "reset-missing@example.com",
+        phone: "9010000005",
+        passwordHash: await bcrypt.hash("OldPassword1", 12),
+        active: true,
+      });
+
+      const sent = await request(app)
+        .post("/api/auth/otp/send")
+        .send({ email: "reset-missing@example.com", purpose: "PASSWORD_RESET" });
+      expect(sent.status).toBe(200);
+      expect(sent.body.otp).toMatch(/^\d{6}$/);
+
+      const verified = await request(app)
+        .post("/api/auth/verify-reset-otp")
+        .send({ email: "reset-missing@example.com", otp: sent.body.otp });
+      expect(verified.status).toBe(200);
+      const cookie = resetCookie(verified.headers["set-cookie"]);
+      expect(cookie).toMatch(/^otp-reset-token=/);
+
+      await User.deleteOne({ email: "reset-missing@example.com" });
+
+      const reset = await request(app)
+        .post("/api/auth/reset-password")
+        .set("Cookie", cookie!)
+        .send({ newPassword: "NewPassword1", confirmPassword: "NewPassword1" });
+
+      expect(reset.status).toBe(401);
+      expect(reset.body).toEqual({
+        message:
+          "Invalid or expired reset session. Please request password reset again.",
+      });
+      expect(JSON.stringify(reset.body)).not.toContain("Account not found");
+    });
+
+    it("keeps invalid reset proof generic and preserves normal successful reset behavior", async () => {
+      await User.create({
+        name: "Reset User",
+        email: "reset-success@example.com",
+        phone: "9010000006",
+        passwordHash: await bcrypt.hash("OldPassword1", 12),
+        active: true,
+      });
+
+      const invalid = await request(app)
+        .post("/api/auth/reset-password")
+        .set("Cookie", "otp-reset-token=invalid")
+        .send({ newPassword: "NewPassword1", confirmPassword: "NewPassword1" });
+      expect(invalid.status).toBe(401);
+      expect(invalid.body).toEqual({
+        message:
+          "Invalid or expired reset session. Please request password reset again.",
+      });
+
+      const sent = await request(app)
+        .post("/api/auth/otp/send")
+        .send({ email: "reset-success@example.com", purpose: "PASSWORD_RESET" });
+      expect(sent.status).toBe(200);
+
+      const verified = await request(app)
+        .post("/api/auth/verify-reset-otp")
+        .send({ email: "reset-success@example.com", otp: sent.body.otp });
+      expect(verified.status).toBe(200);
+      const cookie = resetCookie(verified.headers["set-cookie"]);
+      expect(cookie).toBeTruthy();
+
+      const reset = await request(app)
+        .post("/api/auth/reset-password")
+        .set("Cookie", cookie!)
+        .send({ newPassword: "NewPassword1", confirmPassword: "NewPassword1" });
+      expect(reset.status).toBe(200);
+      expect(reset.body.message).toContain("Password reset successfully");
+
+      const login = await request(app)
+        .post("/api/auth/customer/login")
+        .send({ email: "reset-success@example.com", password: "NewPassword1" });
+      expect(login.status).toBe(200);
+
+      const replay = await request(app)
+        .post("/api/auth/reset-password")
+        .set("Cookie", cookie!)
+        .send({ newPassword: "AnotherPassword1", confirmPassword: "AnotherPassword1" });
+      expect(replay.status).toBe(401);
+      expect(replay.body).toEqual({
+        message:
+          "Invalid or expired reset session. Please request password reset again.",
+      });
     });
   });
 });

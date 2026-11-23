@@ -1,13 +1,17 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
+import crypto from "node:crypto";
 import { z } from "zod";
 
 import { CustomCakeRequest } from "../models/CustomCakeRequest.js";
+import { CustomCakeSubmissionIdempotency } from "../models/CustomCakeSubmissionIdempotency.js";
 import { Order } from "../models/Order.js";
 
 import { generateOrderNumber } from "./orderController.js";
 import { validateSlot } from "../services/slotValidation.js";
 import type { AuthRequest } from "../middleware/auth.js";
+import { grantConsent } from "../services/whatsappConsentService.js";
+import { notifyCustomerCustomCake } from "../services/customCakeNotifications.js";
 
 const customCakeRequestSchema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -48,6 +52,18 @@ const customCakeRequestSchema = z.object({
     .union([z.url().max(500), z.literal("")])
     .optional()
     .transform((value) => value ?? ""),
+
+  // Explicit WhatsApp notification opt-in. When true, the customer consents
+  // to receive automated WhatsApp updates on the request phone number.
+  whatsappConsent: z.boolean().optional(),
+
+  // S07 honeypot: optional field for bot detection. Legitimate clients should
+  // leave it empty/absent. A filled value triggers generic controlled rejection.
+  companyWebsite: z.string().max(200).optional(),
+
+  // S07 idempotency: optional client-generated key for safe retries.
+  // Missing key preserves backward-compatible behavior.
+  idempotencyKey: z.string().trim().min(8).max(128).optional(),
 });
 
 const updateStatusSchema = z.object({
@@ -99,6 +115,70 @@ function generateReferenceNumber(): string {
   return `CC-${timestamp}-${random}`;
 }
 
+const CUSTOM_CAKE_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
+
+function getIdempotencyKey(req: Request, parsedKey?: string): string | null {
+  const headerValue = req.header("idempotency-key");
+  const raw = typeof headerValue === "string" && headerValue.trim()
+    ? headerValue.trim()
+    : typeof parsedKey === "string" && parsedKey.trim()
+      ? parsedKey.trim()
+      : "";
+  if (!raw) return null;
+  if (!IDEMPOTENCY_KEY_PATTERN.test(raw)) return "INVALID";
+  return raw;
+}
+
+function normalizeCustomCakePayload(data: z.infer<typeof customCakeRequestSchema>) {
+  return {
+    name: data.name.trim(),
+    phone: data.phone.trim(),
+    flavour: data.flavour.trim(),
+    weight: data.weight.trim().toLowerCase().replace(/\s+/g, " "),
+    theme: data.theme.trim(),
+    messageOnCake: (data.messageOnCake ?? "").trim(),
+    instructions: (data.instructions ?? "").trim(),
+    referenceImageUrl: (data.referenceImageUrl ?? "").trim(),
+    whatsappConsent: Boolean(data.whatsappConsent),
+  };
+}
+
+function getIdempotencyFingerprintSecret(): string | null {
+  const secret = process.env.JWT_SECRET?.trim();
+  return secret ? secret : null;
+}
+
+function buildCustomCakeRequestFingerprint(data: z.infer<typeof customCakeRequestSchema>): string | null {
+  const secret = getIdempotencyFingerprintSecret();
+  if (!secret) return null;
+  const normalized = normalizeCustomCakePayload(data);
+  const canonical = JSON.stringify(normalized);
+  return crypto.createHmac("sha256", secret).update(canonical).digest("hex");
+}
+
+function buildCustomCakeSuccessResponse(request: {
+  _id: unknown;
+  referenceNumber: string;
+  status: string;
+  createdAt?: Date | unknown;
+}) {
+  return {
+    message: "Custom cake request received",
+    request: {
+      id: String(request._id),
+      referenceNumber: request.referenceNumber,
+      status: request.status,
+      createdAt: request.createdAt,
+    },
+  };
+}
+
+function logCustomCakeAbuseEvent(event: string, meta: Record<string, unknown>) {
+  // PII-minimal structured diagnostics only. Never log raw payload/PII/secrets.
+  console.warn(`[custom-cake-abuse] ${event}`, meta);
+}
+
 /*
 |--------------------------------------------------------------------------
 | CREATE CUSTOM CAKE REQUEST
@@ -119,50 +199,258 @@ export const createCustomCakeRequest = async (
         message: "Please check the form and try again",
         errors: parsed.error.flatten(),
       });
-
       return;
     }
 
-    let request: InstanceType<typeof CustomCakeRequest> | null = null;
+    const { companyWebsite, idempotencyKey: bodyIdempotencyKey, ...requestData } = parsed.data;
 
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        request = await CustomCakeRequest.create({
-          ...parsed.data,
-          referenceNumber: generateReferenceNumber(),
-        });
-        break;
-      } catch (createError) {
-        const isDuplicateReferenceNumber =
-          typeof createError === "object" &&
-          createError !== null &&
-          "code" in createError &&
-          (createError as { code?: number }).code === 11000 &&
-          "keyPattern" in createError &&
-          typeof (createError as { keyPattern?: unknown }).keyPattern === "object" &&
-          (createError as { keyPattern?: Record<string, unknown> }).keyPattern !== null &&
-          "referenceNumber" in ((createError as { keyPattern?: Record<string, unknown> }).keyPattern ?? {});
+    // S07 honeypot: filled value indicates automated abuse. Generic controlled rejection.
+    if (typeof companyWebsite === "string" && companyWebsite.trim().length > 0) {
+      logCustomCakeAbuseEvent("honeypot_triggered", {
+        path: "/api/custom-cake-requests",
+        outcome: "rejected",
+      });
+      res.status(400).json({
+        message: "Please check the form and try again",
+      });
+      return;
+    }
 
-        if (!isDuplicateReferenceNumber || attempt === 4) {
-          throw createError;
+    const idempotencyKey = getIdempotencyKey(req, bodyIdempotencyKey);
+    if (idempotencyKey === "INVALID") {
+      res.status(400).json({
+        message: "Please check the form and try again",
+      });
+      return;
+    }
+
+    const createRequestOnly = async () => {
+      let request: InstanceType<typeof CustomCakeRequest> | null = null;
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          request = await CustomCakeRequest.create({
+            ...requestData,
+            referenceNumber: generateReferenceNumber(),
+          });
+          break;
+        } catch (createError) {
+          const isDuplicateReferenceNumber =
+            typeof createError === "object" &&
+            createError !== null &&
+            "code" in createError &&
+            (createError as { code?: number }).code === 11000 &&
+            "keyPattern" in createError &&
+            typeof (createError as { keyPattern?: unknown }).keyPattern === "object" &&
+            (createError as { keyPattern?: Record<string, unknown> }).keyPattern !== null &&
+            "referenceNumber" in ((createError as { keyPattern?: Record<string, unknown> }).keyPattern ?? {});
+
+          if (!isDuplicateReferenceNumber || attempt === 4) {
+            throw createError;
+          }
         }
+      }
+
+      if (!request) {
+        throw new Error("Failed to generate a unique reference number");
+      }
+
+      return request;
+    };
+
+    const grantConsentBestEffort = async () => {
+      if (requestData.whatsappConsent && requestData.phone) {
+        try {
+          await grantConsent({
+            phone: requestData.phone,
+            source: "CUSTOM_CAKE",
+            consentText:
+              "I agree to receive WhatsApp order notifications from Bluebell Bakehouse.",
+          });
+        } catch {
+          // Non-fatal: consent capture failure must not block request creation.
+        }
+      }
+    };
+
+    // Backward-compatible path: no idempotency key provided.
+    if (!idempotencyKey) {
+      const request = await createRequestOnly();
+      await grantConsentBestEffort();
+      void notifyCustomerCustomCake(request, "CUSTOM_CAKE_REQUEST_RECEIVED", "received");
+      res.status(201).json(buildCustomCakeSuccessResponse(request));
+      return;
+    }
+
+    const requestFingerprint = buildCustomCakeRequestFingerprint(parsed.data);
+    if (!requestFingerprint) {
+      logCustomCakeAbuseEvent("idempotency_unavailable", {
+        path: "/api/custom-cake-requests",
+        reason: "fingerprint_secret_unavailable",
+      });
+      res.status(503).json({
+        message: "Unable to submit your request right now. Please try again shortly.",
+      });
+      return;
+    }
+
+    const now = Date.now();
+    const expiresAt = new Date(now + CUSTOM_CAKE_IDEMPOTENCY_TTL_MS);
+
+    const handleExistingIdempotencyRecord = async (record: any): Promise<boolean> => {
+      if (!record) return false;
+
+      // Expired records may still exist briefly before TTL cleanup; treat as reusable.
+      if (record.expiresAt && new Date(record.expiresAt).getTime() <= now) {
+        await CustomCakeSubmissionIdempotency.deleteOne({ _id: record._id, expiresAt: record.expiresAt }).catch(() => undefined);
+        return false;
+      }
+
+      if (record.requestFingerprint !== requestFingerprint) {
+        res.status(409).json({
+          message: "This submission request conflicts with a previous request. Please try again.",
+        });
+        return true;
+      }
+
+      if (record.status === "COMPLETED" && record.responseBody && record.responseStatus) {
+        res.status(record.responseStatus).json(record.responseBody);
+        return true;
+      }
+
+      if (record.status === "IN_PROGRESS" && record.createdRequestId) {
+        const existingRequest = await CustomCakeRequest.findById(record.createdRequestId).lean();
+        if (existingRequest) {
+          const responseBody = buildCustomCakeSuccessResponse(existingRequest);
+          await CustomCakeSubmissionIdempotency.updateOne(
+            { _id: record._id, status: "IN_PROGRESS" },
+            {
+              $set: {
+                status: "COMPLETED",
+                responseStatus: 201,
+                responseBody,
+              },
+            },
+          ).catch(() => undefined);
+          res.status(201).json(responseBody);
+          return true;
+        }
+      }
+
+      if (record.status === "FAILED" && !record.createdRequestId) {
+        // Allow safe retry of the same key+payload when no request side effect was created.
+        await CustomCakeSubmissionIdempotency.deleteOne({
+          _id: record._id,
+          status: "FAILED",
+          createdRequestId: { $exists: false },
+        }).catch(() => undefined);
+        await CustomCakeSubmissionIdempotency.deleteOne({
+          _id: record._id,
+          status: "FAILED",
+          createdRequestId: null,
+        }).catch(() => undefined);
+        return false;
+      }
+
+      res.status(409).json({
+        message: "This submission is already being processed. Please try again shortly.",
+      });
+      return true;
+    };
+
+    let claim: any = null;
+    try {
+      claim = await CustomCakeSubmissionIdempotency.create({
+        idempotencyKey,
+        requestFingerprint,
+        status: "IN_PROGRESS",
+        expiresAt,
+      });
+    } catch (error) {
+      const code = (error as { code?: unknown } | null)?.code;
+      if (code === 11000) {
+        const existing = await CustomCakeSubmissionIdempotency.findOne({ idempotencyKey }).lean();
+        const handled = await handleExistingIdempotencyRecord(existing);
+        if (handled) return;
+        // If expired/failed-without-side-effect record was cleaned up, retry claim once.
+        try {
+          claim = await CustomCakeSubmissionIdempotency.create({
+            idempotencyKey,
+            requestFingerprint,
+            status: "IN_PROGRESS",
+            expiresAt: new Date(Date.now() + CUSTOM_CAKE_IDEMPOTENCY_TTL_MS),
+          });
+        } catch (retryError) {
+          const retryCode = (retryError as { code?: unknown } | null)?.code;
+          if (retryCode === 11000) {
+            const retryExisting = await CustomCakeSubmissionIdempotency.findOne({ idempotencyKey }).lean();
+            const retryHandled = await handleExistingIdempotencyRecord(retryExisting);
+            if (retryHandled) return;
+          }
+          logCustomCakeAbuseEvent("idempotency_storage_failure", {
+            path: "/api/custom-cake-requests",
+            stage: "claim_retry",
+          });
+          res.status(503).json({
+            message: "Unable to submit your request right now. Please try again shortly.",
+          });
+          return;
+        }
+      } else {
+        logCustomCakeAbuseEvent("idempotency_storage_failure", {
+          path: "/api/custom-cake-requests",
+          stage: "claim",
+        });
+        res.status(503).json({
+          message: "Unable to submit your request right now. Please try again shortly.",
+        });
+        return;
       }
     }
 
-    if (!request) {
-      throw new Error("Failed to generate a unique reference number");
+    let request: InstanceType<typeof CustomCakeRequest>;
+    try {
+      request = await createRequestOnly();
+      // Persist request linkage before consent/completion so retries can recover
+      // without creating a duplicate request if completion fails.
+      await CustomCakeSubmissionIdempotency.updateOne(
+        { _id: claim._id, status: "IN_PROGRESS" },
+        { $set: { createdRequestId: request._id } },
+      );
+    } catch (error) {
+      await CustomCakeSubmissionIdempotency.updateOne(
+        { _id: claim._id, status: "IN_PROGRESS", createdRequestId: { $exists: false } },
+        { $set: { status: "FAILED" } },
+      ).catch(() => undefined);
+      throw error;
     }
 
-    res.status(201).json({
-      message: "Custom cake request received",
+    await grantConsentBestEffort();
 
-      request: {
-        id: request._id,
-        referenceNumber: request.referenceNumber,
-        status: request.status,
-        createdAt: request.createdAt,
-      },
-    });
+    const responseBody = buildCustomCakeSuccessResponse(request);
+    try {
+      await CustomCakeSubmissionIdempotency.updateOne(
+        { _id: claim._id, status: "IN_PROGRESS" },
+        {
+          $set: {
+            createdRequestId: request._id,
+            responseStatus: 201,
+            responseBody,
+            status: "COMPLETED",
+          },
+        },
+      );
+    } catch (error) {
+      // Request already created and linked; leave IN_PROGRESS+createdRequestId for safe recovery.
+      logCustomCakeAbuseEvent("idempotency_completion_failure", {
+        path: "/api/custom-cake-requests",
+        outcome: "recoverable",
+      });
+      throw error;
+    }
+
+    void notifyCustomerCustomCake(request, "CUSTOM_CAKE_REQUEST_RECEIVED", "received");
+    res.status(201).json(responseBody);
   } catch (error) {
     console.error("Create custom cake request failed:", error);
 
@@ -402,6 +690,10 @@ export const updateCustomCakeRequestStatus = async (
       return;
     }
 
+    if (request.status === "CLOSED") {
+      void notifyCustomerCustomCake(request, "CUSTOM_CAKE_REQUEST_CLOSED", "status:CLOSED");
+    }
+
     res.status(200).json({
       message: "Status updated successfully",
       request,
@@ -510,6 +802,8 @@ export const proposeProposal = async (
       });
       return;
     }
+
+    void notifyCustomerCustomCake(updated, "CUSTOM_CAKE_QUOTE_PREPARED", "quote-prepared");
 
     res.status(200).json({
       message: "Proposal submitted successfully",
@@ -621,6 +915,16 @@ export const respondProposal = async (
       return;
     }
 
+    const responseEvent =
+      response === "CONFIRMED"
+        ? "CUSTOM_CAKE_QUOTE_ACCEPTED"
+        : "CUSTOM_CAKE_QUOTE_DECLINED";
+    void notifyCustomerCustomCake(
+      updated,
+      responseEvent,
+      response === "CONFIRMED" ? "quote-accepted" : "quote-declined",
+    );
+
     res.status(200).json({
       message: `Proposal ${response.toLowerCase()} successfully`,
       request: {
@@ -676,6 +980,7 @@ export const convertCustomCakeRequestToOrder = async (
     let responseStatus = 201;
     let resultOrder: any = null;
     let idempotentReplay = false;
+    let convertedRequest: any = null;
 
     await session.withTransaction(async () => {
       // Atomic claim: only an unconverted, eligible request can be claimed.
@@ -723,6 +1028,8 @@ export const convertCustomCakeRequestToOrder = async (
         (err as any).status = 409;
         throw err;
       }
+
+      convertedRequest = claimed;
 
       // Validate required proposal fields from the accepted request.
       if (
@@ -848,6 +1155,14 @@ export const convertCustomCakeRequestToOrder = async (
 
     if (!resultOrder) {
       throw new Error("Conversion completed without an order");
+    }
+
+    if (!idempotentReplay && convertedRequest) {
+      void notifyCustomerCustomCake(
+        convertedRequest,
+        "CUSTOM_CAKE_CONVERTED_TO_ORDER",
+        "converted",
+      );
     }
 
     res.status(responseStatus).json({

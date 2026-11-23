@@ -36,7 +36,7 @@ async function createProduct(overrides: Record<string, unknown> = {}) {
 
 describe("Inventory movement ledger", () => {
   beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServer.getUri());
   });
 

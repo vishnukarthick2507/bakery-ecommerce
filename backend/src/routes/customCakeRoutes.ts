@@ -11,11 +11,12 @@ import {
   convertCustomCakeRequestToOrder,
 } from "../controllers/customCakeController.js";
 import { authenticateAdmin, authenticateCustomer, optionalCustomerAuth } from "../middleware/auth.js";
+import { createCustomCakeRequestLimiter } from "../middleware/rateLimit.js";
 
 const router: Router = Router();
 
 // Create custom cake request (public)
-router.post("/", createCustomCakeRequest);
+router.post("/", createCustomCakeRequestLimiter, createCustomCakeRequest);
 
 // Get all custom cake requests (admin only)
 router.get("/", authenticateAdmin, getAllCustomCakeRequests);

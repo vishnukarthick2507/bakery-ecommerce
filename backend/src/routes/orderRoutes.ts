@@ -20,12 +20,15 @@ import {
   authenticateCustomer,
   optionalCustomerAuth,
 } from "../middleware/auth.js";
-import { guestTrackingLimiter } from "../middleware/rateLimit.js";
+import {
+  createOrderLimiter,
+  guestTrackingLimiter,
+} from "../middleware/rateLimit.js";
 
 const router: Router = Router();
 
 // Create a new order (public)
-router.post("/", optionalCustomerAuth, createOrder);
+router.post("/", createOrderLimiter, optionalCustomerAuth, createOrder);
 
 router.get("/me", authenticateCustomer, getMyOrders);
 router.get("/me/:orderNumber", authenticateCustomer, getMyOrderByNumber);

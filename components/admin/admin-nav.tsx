@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   FileText,
+  MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -32,6 +33,7 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/inventory', label: 'Inventory', icon: Cake },
   { href: '/admin/customers', label: 'Customers', icon: Users },
   { href: '/admin/custom-cakes', label: 'Custom Cakes', icon: Cake },
+  { href: '/admin/whatsapp', label: 'WhatsApp Centre', icon: MessageSquare },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart },
   { href: '/admin/analytics/sales', label: 'Sales Analytics', icon: BarChart },

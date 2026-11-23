@@ -44,7 +44,7 @@ function makeAdminToken(adminId: string): string {
 
 describe("Product pagination", () => {
   beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServer.getUri());
   });
 
@@ -193,7 +193,7 @@ describe("Product pagination", () => {
 
 describe("Custom cake requests pagination", () => {
   beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServer.getUri());
     await seedAdmin();
   });
@@ -225,19 +225,15 @@ describe("Custom cake requests pagination", () => {
   const app = createTestApp();
 
   async function createRequests(count: number) {
-    const promises = [];
-    for (let i = 0; i < count; i++) {
-      promises.push(
-        request(app).post("/api/custom-cake-requests").send({
-          name: `Customer ${i}`,
-          phone: `9${String(i).padStart(9, "0")}`,
-          flavour: "Chocolate",
-          weight: "1 kg",
-          theme: "Birthday",
-        }),
-      );
-    }
-    return Promise.all(promises);
+    const docs = Array.from({ length: count }, (_, i) => ({
+      referenceNumber: `CCR-PAGINATION-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      name: `Customer ${i}`,
+      phone: `9${String(i).padStart(9, "0")}`,
+      flavour: "Chocolate",
+      weight: "1 kg",
+      theme: "Birthday",
+    }));
+    return CustomCakeRequest.insertMany(docs);
   }
 
   it("returns all requests when no pagination params (backward compatible)", async () => {
@@ -281,7 +277,7 @@ describe("Custom cake requests pagination", () => {
 
 describe("Admin order filters", () => {
   beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServer.getUri());
   });
 
@@ -343,7 +339,7 @@ describe("Admin order filters", () => {
 
 describe("Inventory movement pagination", () => {
   beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
     await mongoose.connect(mongoServer.getUri());
   });
 
