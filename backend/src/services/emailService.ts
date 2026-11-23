@@ -2,6 +2,7 @@ import { OTP_EXPIRY_MINUTES } from "./otpService.js";
 import { z } from "zod";
 import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
 import { logUatSuppressed } from "./uatSafetyLog.js";
+import { isExternalEmailDeliveryBlocked } from "../config/emailDeliverySafety.js";
 
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
@@ -62,6 +63,72 @@ export function getBrevoPresenceChecks(): {
   return {
     apiKeyPresent: isPresent(apiKey),
   };
+}
+
+type BrevoSendResult = {
+  ok: boolean;
+  suppressed: boolean;
+  exception?: boolean;
+};
+
+export function emitEmailSuppressionDiagnostic(context: string): void {
+  try {
+    console.info(
+      JSON.stringify({
+        event: "email.external_delivery.suppressed",
+        channel: "email",
+        context,
+        reason: "EMAIL_EXTERNAL_DELIVERY_BLOCKED",
+      }),
+    );
+  } catch {
+    // Diagnostics must never affect email delivery control flow.
+  }
+}
+
+/**
+ * Central Brevo provider boundary. All external email HTTP calls must go through this helper.
+ * When EMAIL_EXTERNAL_DELIVERY_BLOCKED=true, no provider call is made and suppression is returned.
+ */
+async function postBrevoTransactionalEmail(
+  payload: Record<string, unknown>,
+  context: string,
+): Promise<BrevoSendResult> {
+  if (isExternalEmailDeliveryBlocked()) {
+    emitEmailSuppressionDiagnostic(context);
+    return { ok: false, suppressed: true };
+  }
+
+  const { apiKey } = getBrevoConfig();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(BREVO_API_URL, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    return { ok: response.ok, suppressed: false };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("Email delivery failed: Brevo API request timed out");
+    } else {
+      console.error(
+        `Email delivery failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    return { ok: false, suppressed: false, exception: true };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function otpPurposeLabel(
@@ -171,55 +238,31 @@ export async function sendOtpEmail(
     return false;
   }
 
-  const { apiKey, from, fromName } = getBrevoConfig();
+  const { from, fromName } = getBrevoConfig();
 
   const subject = `Your Bluebell Bakehouse OTP Code: ${otp}`;
   const htmlContent = buildOtpHtml(otp, purpose);
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const result = await postBrevoTransactionalEmail(
+    {
+      sender: { email: from, name: fromName },
+      to: [{ email: to }],
+      subject,
+      htmlContent,
+    },
+    "otp",
+  );
 
-  try {
-    const response = await fetch(BREVO_API_URL, {
-      method: "POST",
-      headers: {
-        "api-key": apiKey,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        sender: { email: from, name: fromName },
-        to: [{ email: to }],
-        subject,
-        htmlContent,
-      }),
-      signal: controller.signal,
-    });
-
-    // Brevo returns 201 on successful acceptance. Any other status is a
-    // delivery failure; fail closed without logging the response body.
-    if (!response.ok) {
-      console.error(
-        `OTP email delivery failed: Brevo API returned HTTP ${response.status}`,
-      );
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      console.error("OTP email delivery failed: Brevo API request timed out");
-    } else {
-      console.error(
-        `OTP email delivery failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
+  if (result.suppressed) {
     return false;
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  if (!result.ok) {
+    console.error("OTP email delivery failed: Brevo API did not accept the message.");
+    return false;
+  }
+
+  return true;
 }
 type AdminLoginAlertInput = {
   username: string;
@@ -240,7 +283,22 @@ const ADMIN_LOGIN_ALERT_EVENT_PREFIX = "admin_login_alert";
 const ADMIN_ALERT_DEDUPE_WINDOW_MS = 15 * 60 * 1000;
 const ADMIN_ALERT_DEDUPE_MAX_ENTRIES = 1_000;
 
-const adminLoginAlertClaims = new Map<string, { claimedAt: number; expiresAt: number }>();
+type AdminLoginAlertClaim = { claimedAt: number; expiresAt: number; claimToken: string };
+const adminLoginAlertClaims = new Map<string, AdminLoginAlertClaim>();
+
+function createAdminLoginAlertClaimToken(): string {
+  const randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
+  if (randomUUID) return randomUUID();
+  return `claim_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function releaseAdminLoginAlertClaimIfOwned(eventId: string, claimToken: string): boolean {
+  const current = adminLoginAlertClaims.get(eventId);
+  if (!current) return false;
+  if (current.claimToken !== claimToken) return false;
+  adminLoginAlertClaims.delete(eventId);
+  return true;
+}
 
 function emitAdminLoginAlertDiagnostic(
   outcome: AdminLoginAlertOutcome,
@@ -414,7 +472,7 @@ function getAdminAlertConfigState(): { ok: true; recipient: string } | { ok: fal
 async function sendTransformedAdminLoginAlert(
   input: AdminLoginAlertInput,
   recipient: string,
-): Promise<boolean> {
+): Promise<BrevoSendResult> {
   const { apiKey, from, fromName } = getBrevoConfig();
   const dateTime = input.occurredAt.toISOString();
   const username = maskAdminUsername(input.username);
@@ -452,28 +510,16 @@ async function sendTransformedAdminLoginAlert(
   </td></tr></table>
 </body></html>`;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(BREVO_API_URL, {
-      method: "POST",
-      headers: {
-        "api-key": apiKey,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        sender: { email: from, name: fromName },
-        to: [{ email: recipient }],
-        subject,
-        htmlContent,
-      }),
-      signal: controller.signal,
-    });
-    return response.ok;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  const result = await postBrevoTransactionalEmail(
+    {
+      sender: { email: from, name: fromName },
+      to: [{ email: recipient }],
+      subject,
+      htmlContent,
+    },
+    "admin_login_alert",
+  );
+  return result;
 }
 
 /**
@@ -488,7 +534,8 @@ export async function sendAdminLoginAlert(input: AdminLoginAlertInput): Promise<
     }
     const config = getAdminAlertConfigState();
     if (!config.ok) return false;
-    return await sendTransformedAdminLoginAlert(input, config.recipient);
+    const result = await sendTransformedAdminLoginAlert(input, config.recipient);
+    return result.ok;
   } catch {
     return false;
   }
@@ -522,9 +569,11 @@ export async function sendAdminLoginAlertOnce(
     }
 
     // Synchronous check-and-claim before any asynchronous delivery work.
+    const claimToken = createAdminLoginAlertClaimToken();
     adminLoginAlertClaims.set(normalizedEventId, {
       claimedAt: now,
       expiresAt: now + ADMIN_ALERT_DEDUPE_WINDOW_MS,
+      claimToken,
     });
     purgeAdminLoginAlertClaims(now);
 
@@ -541,12 +590,23 @@ export async function sendAdminLoginAlertOnce(
 
     emitAdminLoginAlertDiagnostic("attempted", "delivery_started");
     try {
-      const sent = await sendTransformedAdminLoginAlert(input, config.recipient);
-      if (sent) {
+      const result = await sendTransformedAdminLoginAlert(input, config.recipient);
+      if (result.suppressed) {
+        // Decision B: EMAIL_EXTERNAL_DELIVERY_BLOCKED suppression is operational, not delivery.
+        // Release only this attempt's claim so the same eventId can be retried after unblock.
+        // Ownership check prevents deleting a newer concurrent claim for the same eventId.
+        releaseAdminLoginAlertClaimIfOwned(normalizedEventId, claimToken);
+        emitAdminLoginAlertDiagnostic("suppressed", "email_external_delivery_blocked");
+        return false;
+      }
+      if (result.ok) {
         emitAdminLoginAlertDiagnostic("sent", "delivery_accepted");
         return true;
       }
-      emitAdminLoginAlertDiagnostic("failed", "delivery_not_accepted");
+      emitAdminLoginAlertDiagnostic(
+        "failed",
+        result.exception ? "delivery_exception" : "delivery_not_accepted",
+      );
       return false;
     } catch {
       emitAdminLoginAlertDiagnostic("failed", "delivery_exception");
@@ -615,31 +675,26 @@ export async function sendCustomerOrderEmailOnce(
   const htmlContent = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f5f1ea;color:#342719;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border:1px solid #e6d9c7;border-radius:12px"><tr><td style="padding:24px;background:#70451f;color:#fff;text-align:center"><h1 style="margin:0;font-size:24px">Bluebell Bakehouse</h1></td></tr><tr><td style="padding:24px"><h2 style="margin-top:0;font-size:20px">${escapeHtml(label.heading)}</h2><p>Hello ${escapeHtml(input.customerName)},</p><p>Here are the latest details for your order.</p><table role="presentation" width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;overflow-wrap:anywhere"><tr><td style="font-weight:bold;border-bottom:1px solid #eee">Order</td><td style="border-bottom:1px solid #eee">${escapeHtml(input.orderNumber)}</td></tr><tr><td style="font-weight:bold;border-bottom:1px solid #eee">Status</td><td style="border-bottom:1px solid #eee">${escapeHtml(input.status)}</td></tr><tr><td style="font-weight:bold">Details</td><td>${escapeHtml(input.details)}</td></tr></table><p style="margin:24px 0 0;color:#786c5e;font-size:12px">Automated order update from Bluebell Bakehouse.</p></td></tr></table></td></tr></table></body></html>`;
 
   try {
-    const { apiKey, from, fromName } = getBrevoConfig();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    let sent = false;
-    try {
-      const response = await fetch(BREVO_API_URL, {
-        method: "POST",
-        headers: { "api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          sender: { email: from, name: fromName },
-          to: [{ email: recipient.data }],
-          subject: `Bluebell Bakehouse — ${label.subject} ${input.orderNumber}`,
-          htmlContent,
-        }),
-        signal: controller.signal,
-      });
-      sent = response.ok;
-    } finally {
-      clearTimeout(timeoutId);
+    const { from, fromName } = getBrevoConfig();
+    const result = await postBrevoTransactionalEmail(
+      {
+        sender: { email: from, name: fromName },
+        to: [{ email: recipient.data }],
+        subject: `Bluebell Bakehouse — ${label.subject} ${input.orderNumber}`,
+        htmlContent,
+      },
+      "customer_order",
+    );
+
+    if (result.suppressed) {
+      return false;
     }
-    if (sent) {
+
+    if (result.ok) {
       customerOrderEmailEvents.add(eventId);
       setTimeout(() => customerOrderEmailEvents.delete(eventId), CUSTOMER_ORDER_EMAIL_DEDUPE_MS).unref?.();
     }
-    return sent;
+    return result.ok;
   } catch {
     return false;
   }
@@ -660,7 +715,7 @@ export async function sendRescheduleExpiryAlert(input: {
   expiresAt: Date;
 }): Promise<boolean> {
   if (isUatExternalSideEffectsBlocked()) {
-    logUatSuppressed("email.reschedule_expiry_alert", { orderNumber: input.orderNumber });
+    logUatSuppressed("email.reschedule_expiry_alert");
     return false;
   }
 
@@ -726,28 +781,14 @@ export async function sendRescheduleExpiryAlert(input: {
 </td></tr></table>
 </body></html>`;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(BREVO_API_URL, {
-      method: "POST",
-      headers: {
-        "api-key": apiKey,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        sender: { email: from, name: fromName },
-        to: [{ email: parsedRecipient.data }],
-        subject,
-        htmlContent,
-      }),
-      signal: controller.signal,
-    });
-    return response.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  const result = await postBrevoTransactionalEmail(
+    {
+      sender: { email: from, name: fromName },
+      to: [{ email: parsedRecipient.data }],
+      subject,
+      htmlContent,
+    },
+    "reschedule_expiry_alert",
+  );
+  return result.ok;
 }

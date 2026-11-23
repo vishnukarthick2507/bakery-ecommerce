@@ -3,6 +3,7 @@ import {
   sendOtpEmail,
   sendAdminLoginAlertOnce,
   sendCustomerOrderEmailOnce,
+  sendRescheduleExpiryAlert,
   isBrevoConfigured,
   getBrevoPresenceChecks,
 } from "../src/services/emailService.js";
@@ -11,7 +12,7 @@ const fetchMock = vi.fn();
 
 vi.stubGlobal("fetch", fetchMock);
 
-const brevoEnvVars = ["BREVO_API_KEY", "BREVO_SMTP_HOST", "BREVO_SMTP_USER", "BREVO_SMTP_KEY", "BREVO_FROM_EMAIL", "BREVO_FROM_NAME", "ADMIN_NOTIFICATION_EMAIL"];
+const brevoEnvVars = ["BREVO_API_KEY", "BREVO_SMTP_HOST", "BREVO_SMTP_USER", "BREVO_SMTP_KEY", "BREVO_FROM_EMAIL", "BREVO_FROM_NAME", "ADMIN_NOTIFICATION_EMAIL", "EMAIL_EXTERNAL_DELIVERY_BLOCKED"];
 
 function setBrevoEnv(values: Record<string, string>) {
   for (const [key, value] of Object.entries(values)) {
@@ -338,5 +339,78 @@ describe("customer order email notifications", () => {
     await expect(sendCustomerOrderEmailOnce(notification("customer-test-retry"))).resolves.toBe(true);
     await expect(sendCustomerOrderEmailOnce({ ...notification("customer-test-invalid"), recipient: "invalid" })).resolves.toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("EMAIL_EXTERNAL_DELIVERY_BLOCKED suppression", () => {
+  beforeEach(() => {
+    clearBrevoEnv();
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 201 });
+    setBrevoEnv({
+      BREVO_API_KEY: "test-api-key",
+      BREVO_FROM_EMAIL: "vishnukarthick2507@gmail.com",
+      BREVO_FROM_NAME: "Bluebell Bakehouse",
+      ADMIN_NOTIFICATION_EMAIL: "admin@example.com",
+      EMAIL_EXTERNAL_DELIVERY_BLOCKED: "true",
+    });
+  });
+
+  afterEach(() => {
+    clearBrevoEnv();
+  });
+
+  it("blocks OTP email without calling provider and without reporting sent", async () => {
+    const result = await sendOtpEmail("customer@example.com", "123456", "LOGIN");
+    expect(result).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks customer order email without calling provider or caching dedupe", async () => {
+    const first = await sendCustomerOrderEmailOnce({
+      recipient: "verified@example.com",
+      customerName: "Customer",
+      orderNumber: "BB-123",
+      event: "ORDER_PLACED",
+      status: "PENDING",
+      details: "details",
+      eventId: "blocked-customer-order",
+    });
+    expect(first).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // When unblocked, delivery should still be possible (not falsely marked sent/cached).
+    process.env.EMAIL_EXTERNAL_DELIVERY_BLOCKED = "false";
+    const second = await sendCustomerOrderEmailOnce({
+      recipient: "verified@example.com",
+      customerName: "Customer",
+      orderNumber: "BB-123",
+      event: "ORDER_PLACED",
+      status: "PENDING",
+      details: "details",
+      eventId: "blocked-customer-order",
+    });
+    expect(second).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks admin login alert without calling provider", async () => {
+    const result = await sendAdminLoginAlertOnce("alert-event-1", {
+      username: "admin",
+      occurredAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    expect(result).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks reschedule expiry alert without calling provider", async () => {
+    const result = await sendRescheduleExpiryAlert({
+      orderNumber: "BB-123",
+      customerName: "Customer",
+      proposedSlot: new Date("2026-01-02T10:00:00Z"),
+      expiresAt: new Date("2026-01-01T10:00:00Z"),
+    });
+    expect(result).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

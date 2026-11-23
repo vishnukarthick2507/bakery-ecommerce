@@ -35,8 +35,10 @@ vi.mock("../src/services/whatsappTemplateRegistry.js", () => ({
   validateTemplateForSend: (...args: unknown[]) => validateTemplateForSendMock(...args),
 }));
 
+const sendCustomerOrderEmailOnceMock = vi.fn();
 vi.mock("../src/services/emailService.js", () => ({
-  sendCustomerOrderEmailOnce: vi.fn(),
+  sendCustomerOrderEmailOnce: (...args: unknown[]) => sendCustomerOrderEmailOnceMock(...args),
+  emitEmailSuppressionDiagnostic: vi.fn(),
 }));
 
 const logUatSuppressedMock = vi.fn();
@@ -46,6 +48,11 @@ vi.mock("../src/services/uatSafetyLog.js", () => ({
 
 vi.mock("../src/config/uatSafeMode.js", () => ({
   isUatExternalSideEffectsBlocked: () => false,
+}));
+
+let emailDeliveryBlocked = false;
+vi.mock("../src/config/emailDeliverySafety.js", () => ({
+  isExternalEmailDeliveryBlocked: () => emailDeliveryBlocked,
 }));
 
 const loggerWarnMock = vi.fn();
@@ -84,6 +91,7 @@ const baseJob = {
 describe("notification outbox reconciliation hold (unit)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    emailDeliveryBlocked = false;
     isWhatsAppConfiguredMock.mockReturnValue(true);
     hasValidTransactionalConsentMock.mockResolvedValue(true);
     validateTemplateForSendMock.mockReturnValue({
@@ -207,4 +215,30 @@ describe("notification outbox reconciliation hold (unit)", () => {
       $unset: { workerId: "", leaseExpiresAt: "" },
     });
   });
+  it("releases EMAIL outbox jobs without sending or consuming attempts when EMAIL_EXTERNAL_DELIVERY_BLOCKED=true", async () => {
+    emailDeliveryBlocked = true;
+    updateOneMock.mockResolvedValueOnce({ modifiedCount: 1 }); // releaseSuppressedJob
+
+    await processJob({
+      ...baseJob,
+      channel: "EMAIL",
+      templateName: undefined,
+      params: ["customer@example.com", "Ravi", "SV-123", "ORDER_PLACED", "PENDING", "details", "event-1"],
+      eventType: "ORDER_PLACED",
+    } as any);
+
+    expect(sendCustomerOrderEmailOnceMock).not.toHaveBeenCalled();
+    expect(updateOneMock).toHaveBeenCalledTimes(1);
+    expect(updateOneMock.mock.calls[0]![0]).toEqual({ _id: "job-1", status: "PROCESSING", workerId: "worker-1" });
+    expect(updateOneMock.mock.calls[0]![1]).toMatchObject({
+      $set: {
+        status: "PENDING",
+        nextRetryAt: expect.any(Date),
+      },
+      $inc: { attemptCount: -1 },
+      $unset: { workerId: "", leaseExpiresAt: "" },
+    });
+    expect(String((updateOneMock.mock.calls[0]![1] as any).$set.lastError)).toContain("EMAIL_EXTERNAL_DELIVERY_BLOCKED=true");
+  });
+
 });

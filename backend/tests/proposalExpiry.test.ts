@@ -23,6 +23,7 @@ vi.mock("../src/services/emailService.js", () => ({
   isBrevoConfigured: vi.fn().mockReturnValue(true),
   sendAdminLoginAlertOnce: vi.fn().mockResolvedValue(true),
   getBrevoPresenceChecks: vi.fn().mockReturnValue({ apiKeyPresent: true }),
+  emitEmailSuppressionDiagnostic: vi.fn(),
 }));
 
 let mongoServer: MongoMemoryServer;

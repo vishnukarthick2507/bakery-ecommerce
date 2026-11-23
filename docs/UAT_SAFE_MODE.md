@@ -79,3 +79,22 @@ All UAT safe-mode tests must avoid external network calls and use mocks/stubs/in
 
 ## Production-mode behavior
 When `UAT_SAFE_MODE` is `false` or absent (and value is valid), existing integration and worker behavior remains unchanged, subject to normal configuration and provider availability.
+## EMAIL_EXTERNAL_DELIVERY_BLOCKED (staging/ops email safety, independent)
+
+`EMAIL_EXTERNAL_DELIVERY_BLOCKED` is a separate, email-only safety control. It does **not** change `UAT_SAFE_MODE` semantics, MongoDB target validation, WhatsApp behavior, template registry/consent gates, or production defaults.
+
+- **Missing/absent:** defaults to `false` (production-compatible).
+- **Accepted values:** `true` or `false` (case-insensitive, trimmed).
+- **Invalid values:** startup fails with a clear validation error (no silent delivery).
+- **No environment inference:** staging is not inferred from `NODE_ENV`.
+
+When `true`:
+- All external email provider calls are blocked at the Brevo boundary (OTP, admin login alerts, customer order emails, reschedule expiry alerts, and any future email path using the same boundary).
+- Suppressed emails are **not** reported as successfully sent.
+- Outbox `EMAIL` jobs are released with the existing non-consuming suppression mechanism: no `SENT`, no `DEAD_LETTER`, no `SKIPPED`, attempt count not consumed, ownership safeguards preserved, job remains retryable for later controlled testing.
+- Proposal-expiry email suppression does not consume retry attempts or exhaust retries.
+- Independent PII-safe `email.external_delivery.suppressed` diagnostics are emitted for email-block suppression paths (including outbox and proposal-expiry branches) regardless of `UAT_SAFE_MODE`, with minimal non-sensitive fields only (event/channel/context/reason); no recipient, phone, OTP, token, API key, message body, address, or raw order number.
+- Admin login alert dedupe: when suppression is specifically due to `EMAIL_EXTERNAL_DELIVERY_BLOCKED`, the claimed event ID is released with ownership-safe claim handling so the same event can be retried after the block is lifted. UAT suppression, missing config, true duplicates, and delivered/failed delivery claims retain their existing claim behavior.
+- WhatsApp processing remains independent and unaffected by this flag.
+
+Operational guidance: for Render staging where `UAT_SAFE_MODE=false` is required for Atlas DB connectivity, set `EMAIL_EXTERNAL_DELIVERY_BLOCKED=true` until an authorized controlled email test plan is in place.

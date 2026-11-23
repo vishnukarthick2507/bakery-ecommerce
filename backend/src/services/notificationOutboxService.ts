@@ -25,10 +25,11 @@ import {
   sendWhatsAppTemplate,
 } from "./whatsappService.js";
 import { validateTemplateForSend } from "./whatsappTemplateRegistry.js";
-import { sendCustomerOrderEmailOnce } from "./emailService.js";
+import { sendCustomerOrderEmailOnce, emitEmailSuppressionDiagnostic } from "./emailService.js";
 import { logger } from "../lib/logger.js";
 import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
 import { logUatSuppressed } from "./uatSafetyLog.js";
+import { isExternalEmailDeliveryBlocked } from "../config/emailDeliverySafety.js";
 
 const DEFAULT_MAX_ATTEMPTS = 5;
 const INITIAL_BACKOFF_MS = 5_000; // 5 seconds
@@ -626,6 +627,26 @@ export async function processJob(job: OutboxJob): Promise<void> {
         await markFailed(job._id, workerId, errorMessage);
       }
     } else if (job.channel === "EMAIL") {
+      if (isExternalEmailDeliveryBlocked()) {
+        emitEmailSuppressionDiagnostic("notification_outbox_email");
+        logUatSuppressed("notification_outbox.email_delivery_blocked", {
+          eventType: job.eventType,
+          jobId: job._id,
+        });
+        const released = await releaseSuppressedJob(
+          job._id,
+          workerId,
+          "Suppressed: external email delivery blocked (EMAIL_EXTERNAL_DELIVERY_BLOCKED=true; not sent, retry not consumed).",
+        );
+        if (!released) {
+          logger.warn("Failed to release email-suppressed outbox job", {
+            jobId: job._id,
+            channel: job.channel,
+          });
+        }
+        return;
+      }
+
       // Email delivery via existing Brevo service.
       // params: [recipient, customerName, orderNumber, event, status, details, eventId]
       const [

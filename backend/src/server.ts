@@ -36,6 +36,10 @@ import {
   getUatSafeModeStartupErrorMessage,
   isUatSafeModeEnabled,
 } from "./config/uatSafeMode.js";
+import {
+  assertEmailDeliverySafetyConfig,
+  isExternalEmailDeliveryBlocked,
+} from "./config/emailDeliverySafety.js";
 
 dotenv.config();
 
@@ -167,6 +171,17 @@ async function connectDatabase(): Promise<void> {
 }
 
 const startServer = async (): Promise<void> => {
+  // Validate EMAIL_EXTERNAL_DELIVERY_BLOCKED regardless of mode. Missing defaults to false;
+  // invalid values must fail startup to avoid silently permitting external email delivery.
+  try {
+    assertEmailDeliverySafetyConfig();
+  } catch (error) {
+    logger.error("EMAIL_EXTERNAL_DELIVERY_BLOCKED startup validation failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    process.exit(1);
+  }
+
   // Validate UAT_SAFE_MODE and (when enabled) the verified local UAT MongoDB
   // target before listening/connecting/starting workers. In UAT_SAFE_MODE this
   // must fail safely and never fall back to another database.
@@ -201,6 +216,7 @@ const startServer = async (): Promise<void> => {
       env: process.env.NODE_ENV,
       database: dbReady ? "connected" : "connecting",
       uatSafeMode: isUatSafeModeEnabled(),
+      emailExternalDeliveryBlocked: isExternalEmailDeliveryBlocked(),
     });
   });
 

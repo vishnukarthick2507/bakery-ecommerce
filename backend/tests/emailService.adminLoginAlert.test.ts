@@ -10,6 +10,7 @@ const brevoEnvVars = [
   "BREVO_FROM_NAME",
   "ADMIN_NOTIFICATION_EMAIL",
   "UAT_SAFE_MODE",
+  "EMAIL_EXTERNAL_DELIVERY_BLOCKED",
 ];
 
 function clearEnv() {
@@ -419,4 +420,99 @@ describe("emailService admin login alert - S05 remediation", () => {
       expect(body.htmlContent).not.toMatch(/password|otp|jwt|cookie|secret|reset token/i);
     });
   });
+  describe("Decision B: deduplication when EMAIL_EXTERNAL_DELIVERY_BLOCKED=true", () => {
+    it("blocked attempt returns false, no Brevo call, and same eventId is retryable after unblock", async () => {
+      process.env.EMAIL_EXTERNAL_DELIVERY_BLOCKED = "true";
+      const eventId = "blb48-blocked-retry";
+      const input = {
+        username: "admin",
+        occurredAt: new Date("2026-11-20T10:00:00.000Z"),
+        ipAddress: "198.51.100.90",
+      };
+
+      const first = await sendAdminLoginAlertOnce(eventId, input);
+      expect(first).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      delete process.env.EMAIL_EXTERNAL_DELIVERY_BLOCKED;
+      fetchMock.mockResolvedValue({ ok: true, status: 201 });
+      const second = await sendAdminLoginAlertOnce(eventId, input);
+
+      expect(second).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("successful retry after unblock is deduped on subsequent attempts", async () => {
+      process.env.EMAIL_EXTERNAL_DELIVERY_BLOCKED = "true";
+      const eventId = "blb48-blocked-then-dedupe";
+      const input = { username: "admin", occurredAt: new Date("2026-11-20T10:00:00.000Z") };
+
+      expect(await sendAdminLoginAlertOnce(eventId, input)).toBe(false);
+      delete process.env.EMAIL_EXTERNAL_DELIVERY_BLOCKED;
+      fetchMock.mockResolvedValue({ ok: true, status: 201 });
+      expect(await sendAdminLoginAlertOnce(eventId, input)).toBe(true);
+      expect(await sendAdminLoginAlertOnce(eventId, input)).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("different event IDs remain independent across block/unblock", async () => {
+      const input = { username: "admin", occurredAt: new Date("2026-11-20T10:00:00.000Z") };
+      process.env.EMAIL_EXTERNAL_DELIVERY_BLOCKED = "true";
+      expect(await sendAdminLoginAlertOnce("evt-a", input)).toBe(false);
+      expect(await sendAdminLoginAlertOnce("evt-b", input)).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      delete process.env.EMAIL_EXTERNAL_DELIVERY_BLOCKED;
+      fetchMock.mockResolvedValue({ ok: true, status: 201 });
+      expect(await sendAdminLoginAlertOnce("evt-a", input)).toBe(true);
+      expect(await sendAdminLoginAlertOnce("evt-b", input)).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("concurrent same-event attempts during block do not cause duplicate sends or claim corruption", async () => {
+      process.env.EMAIL_EXTERNAL_DELIVERY_BLOCKED = "true";
+      const input = { username: "admin", occurredAt: new Date("2026-11-20T10:00:00.000Z") };
+      const eventId = "blb48-concurrent-blocked";
+
+      const results = await Promise.all([
+        sendAdminLoginAlertOnce(eventId, input),
+        sendAdminLoginAlertOnce(eventId, input),
+        sendAdminLoginAlertOnce(eventId, input),
+      ]);
+
+      expect(results.every((r) => r === false)).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      delete process.env.EMAIL_EXTERNAL_DELIVERY_BLOCKED;
+      fetchMock.mockResolvedValue({ ok: true, status: 201 });
+      const afterUnblock = await Promise.all([
+        sendAdminLoginAlertOnce(eventId, input),
+        sendAdminLoginAlertOnce(eventId, input),
+      ]);
+      expect(afterUnblock.filter(Boolean)).toHaveLength(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(await sendAdminLoginAlertOnce(eventId, input)).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("UAT suppression and missing-config suppression retain existing claim behavior", async () => {
+      // UAT suppression: claim retained
+      process.env.UAT_SAFE_MODE = "true";
+      const input = { username: "admin", occurredAt: new Date("2026-11-20T10:00:00.000Z") };
+      expect(await sendAdminLoginAlertOnce("uat-evt", input)).toBe(false);
+      delete process.env.UAT_SAFE_MODE;
+      fetchMock.mockResolvedValue({ ok: true, status: 201 });
+      expect(await sendAdminLoginAlertOnce("uat-evt", input)).toBe(false); // still claimed
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      // Missing config: claim retained
+      delete process.env.ADMIN_NOTIFICATION_EMAIL;
+      expect(await sendAdminLoginAlertOnce("cfg-evt", input)).toBe(false);
+      process.env.ADMIN_NOTIFICATION_EMAIL = "security@example.com";
+      fetchMock.mockResolvedValue({ ok: true, status: 201 });
+      expect(await sendAdminLoginAlertOnce("cfg-evt", input)).toBe(false); // still claimed
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
 });

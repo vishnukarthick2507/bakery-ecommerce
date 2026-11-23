@@ -1,9 +1,10 @@
 import mongoose from "mongoose";
 
 import { Order } from "../models/Order.js";
-import { sendRescheduleExpiryAlert, isBrevoConfigured } from "./emailService.js";
+import { sendRescheduleExpiryAlert, isBrevoConfigured, emitEmailSuppressionDiagnostic } from "./emailService.js";
 import { isUatExternalSideEffectsBlocked } from "../config/uatSafeMode.js";
 import { logUatSuppressed } from "./uatSafetyLog.js";
+import { isExternalEmailDeliveryBlocked } from "../config/emailDeliverySafety.js";
 
 export const PROPOSAL_EXPIRY_SCAN_INTERVAL_MS = 30 * 1000;
 export const MAX_NOTIFICATION_ATTEMPTS = 5;
@@ -80,6 +81,7 @@ export async function processPendingExpiryNotifications(now = new Date()): Promi
     .lean();
 
   const uatExternalBlocked = isUatExternalSideEffectsBlocked();
+  const emailExternalBlocked = isExternalEmailDeliveryBlocked();
 
   for (const orderDoc of orders) {
     const orderId = orderDoc._id;
@@ -123,9 +125,7 @@ export async function processPendingExpiryNotifications(now = new Date()): Promi
       // UAT_SAFE_MODE: block external email notifications without sending, without
       // consuming retry attempts, and without marking as delivered/sent.
       if (uatExternalBlocked) {
-        logUatSuppressed("proposal_expiry.admin_notification", {
-          orderNumber: (orderDoc as { orderNumber?: string }).orderNumber,
-        });
+        logUatSuppressed("proposal_expiry.admin_notification");
         await Order.updateOne(
           { _id: orderId },
           {
@@ -134,6 +134,28 @@ export async function processPendingExpiryNotifications(now = new Date()): Promi
                 proposal.expiryNotificationStatus === "FAILED" ? "FAILED" : "PENDING",
               "rescheduleProposals.$[p].expiryNotificationLastError":
                 "Suppressed in UAT_SAFE_MODE: external email blocked (not sent, retry not consumed).",
+              "rescheduleProposals.$[p].expiryNotificationNextRetryAt": new Date(now.getTime() + 60_000),
+            },
+          },
+          { arrayFilters: [{ "p.proposalId": proposal.proposalId }] },
+        );
+        skippedCount += 1;
+        continue;
+      }
+
+      // EMAIL_EXTERNAL_DELIVERY_BLOCKED: staging/ops safety control. Do not send, do not
+      // consume retry attempts, and do not mark as delivered/sent. Preserve job for later.
+      if (emailExternalBlocked) {
+        emitEmailSuppressionDiagnostic("proposal_expiry_admin_notification");
+        logUatSuppressed("proposal_expiry.admin_notification.email_delivery_blocked");
+        await Order.updateOne(
+          { _id: orderId },
+          {
+            $set: {
+              "rescheduleProposals.$[p].expiryNotificationStatus":
+                proposal.expiryNotificationStatus === "FAILED" ? "FAILED" : "PENDING",
+              "rescheduleProposals.$[p].expiryNotificationLastError":
+                "Suppressed: external email delivery blocked (EMAIL_EXTERNAL_DELIVERY_BLOCKED=true; not sent, retry not consumed).",
               "rescheduleProposals.$[p].expiryNotificationNextRetryAt": new Date(now.getTime() + 60_000),
             },
           },
