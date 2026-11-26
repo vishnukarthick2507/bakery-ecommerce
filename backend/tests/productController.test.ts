@@ -244,8 +244,7 @@ describe("Product image cleanup — cross-product reference safety", () => {
     });
 
     it("allows an authenticated admin to retrieve inactive products and internal fields", async () => {
-      const adminId = await seedAdmin();
-      const token = makeAdminToken(adminId);
+      const token = await adminToken();
       const inactive = await Product.create({
         name: "Archived Cake", slug: "archived-cake-boundary",
         description: "Inactive item", price: 700, category: "Cakes",
