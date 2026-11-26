@@ -141,7 +141,7 @@ describe("Custom Cake Proposal Workflow", () => {
 
     it("allows only the owning authenticated customer to read a request", async () => {
       const customer = await createTestCustomer();
-      const cakeRequest = await createTestCustomCakeRequest(customer._id.toString(), customer.phone);
+      const cakeRequest = await createTestCustomCakeRequest(customer._id.toString(), customer.phone ?? undefined);
       const customerToken = makeCustomerToken(customer._id.toString());
 
       const ownResponse = await supertestRequest(app)
