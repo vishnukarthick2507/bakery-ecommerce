@@ -503,13 +503,20 @@ export const getMyCustomCakeRequests = async (
     }
 
     const phone = normalizePhone(req.customer.phone || "");
-    if (!phone) {
-      res.status(400).json({ message: "Customer phone number is required" });
-      return;
-    }
+
+    // Linked requests belong to the account ID. Phone matching is limited to
+    // legacy guest requests that have no account link.
+    const legacyPhoneMatches = phone
+      ? [{ phone }, { phone: req.customer.phone }]
+      : [];
 
     const requests = await CustomCakeRequest.find({
-      $or: [{ phone }, { phone: req.customer.phone }],
+      $or: [
+        { userId: req.customer.id },
+        ...(legacyPhoneMatches.length
+          ? [{ userId: null, $or: legacyPhoneMatches }]
+          : []),
+      ],
     })
       .sort({ createdAt: -1 })
       .lean();
