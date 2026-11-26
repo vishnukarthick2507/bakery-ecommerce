@@ -125,6 +125,47 @@ describe("Custom Cake Proposal Workflow", () => {
   });
 
 
+  describe("POST /api/custom-cake-requests account linking", () => {
+    it("links an authenticated customer submission to the customer account", async () => {
+      const customer = await createTestCustomer();
+      const response = await supertestRequest(app)
+        .post("/api/custom-cake-requests")
+        .set("Cookie", `customer-token=${makeCustomerToken(customer._id.toString())}`)
+        .set("Origin", "http://localhost:3000")
+        .send({
+          name: customer.name,
+          phone: customer.phone,
+          flavour: "Chocolate Truffle",
+          weight: "1 kg",
+          theme: "Birthday",
+        });
+
+      expect(response.status).toBe(201);
+      const savedRequest = await CustomCakeRequest.findOne({
+        referenceNumber: response.body.request.referenceNumber,
+      }).lean();
+      expect(String(savedRequest?.userId)).toBe(customer._id.toString());
+    });
+
+    it("keeps guest submissions unlinked to a customer account", async () => {
+      const response = await supertestRequest(app)
+        .post("/api/custom-cake-requests")
+        .send({
+          name: "Guest Customer",
+          phone: "9840912345",
+          flavour: "Chocolate Truffle",
+          weight: "1 kg",
+          theme: "Birthday",
+        });
+
+      expect(response.status).toBe(201);
+      const savedRequest = await CustomCakeRequest.findOne({
+        referenceNumber: response.body.request.referenceNumber,
+      }).lean();
+      expect(savedRequest?.userId).toBeFalsy();
+    });
+  });
+
   describe("GET /api/custom-cake-requests/:id access", () => {
     it("allows an authenticated admin cookie to read a request", async () => {
       const admin = await Admin.findOne({ username: "testadmin" });
