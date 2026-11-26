@@ -103,8 +103,20 @@ function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "").slice(-10);
 }
 
-function isRequestOwnedByCustomer(requestPhone: string, customerPhone: string): boolean {
-  return normalizePhone(requestPhone) !== "" && normalizePhone(requestPhone) === normalizePhone(customerPhone);
+function isRequestOwnedByCustomer(
+  request: { userId?: unknown; phone: string },
+  customer: { id: string; phone: string },
+): boolean {
+  // Once a request is linked to an account, ownership is by immutable account ID.
+  // Phone matching is retained only for legacy requests created before account linking.
+  if (request.userId) {
+    return String(request.userId) === customer.id;
+  }
+
+  return (
+    normalizePhone(request.phone) !== "" &&
+    normalizePhone(request.phone) === normalizePhone(customer.phone)
+  );
 }
 
 function generateReferenceNumber(): string {
@@ -538,7 +550,7 @@ export const getCustomCakeRequestById = async (
       return;
     }
 
-    if (req.customer && isRequestOwnedByCustomer(request.phone, req.customer.phone || "")) {
+    if (req.customer && isRequestOwnedByCustomer(request, req.customer)) {
       res.status(200).json({ request });
       return;
     }
