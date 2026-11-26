@@ -67,3 +67,41 @@ GitHub Actions run [#45874032142](https://github.com/vishnukarthick2507/bakery-e
 The latest Playwright configuration is `playwright.safe-ci.config.ts`; it runs the selected mocked frontend regression specs in Desktop Chrome and Pixel 5 mobile Chrome without starting the backend. This is automated UI regression evidence only, not full customer/admin UAT or proof of real database/provider behavior.
 
 **Updated status:** configured CI checks are green on the current PR head. All business, legal, production-operations, provider, UAT and client-acceptance limitations in this document remain open unless separately evidenced. PR #4 remains draft and unmerged; no production deployment or release approval is implied.
+
+
+## Documentation and validation reconciliation — 2026-11-26 (latest PR head)
+
+This addendum supersedes earlier statements in this file that described the prior PR head or listed newly added artifacts as missing. It does not convert draft documents into approved evidence.
+
+### Additional BLB-05A artifacts now present
+
+| Artifact | Purpose | Status / limitation |
+|---|---|---|
+| `09-BROWSER-E2E-EXECUTION-SAFETY-PLAN.md` | Defines safe automated browser-test scope and prohibited environments | Procedure only; not full UAT |
+| `10-CUSTOMER-ADMIN-UAT-EXECUTION-PACK.md` | Customer and administrator test scenarios, evidence capture, defect log and sign-off criteria | NOT EXECUTED / NOT ACCEPTED |
+| `11-PROVIDER-SANDBOX-VERIFICATION-PACK.md` | Sandbox verification plans for Razorpay, email/OTP, Cloudinary, Google OAuth and Meta WhatsApp | NOT EXECUTED; provider access/configuration and authorization remain prerequisites |
+| `12-OWNER-AND-CLIENT-DECISION-REQUEST-PACK.md` | Consolidates business, legal, operational, provider, UAT and acceptance decisions | Decision requests only; no new approvals recorded |
+
+### Current-head CI evidence
+
+- PR head: `73396145d42db24ed5b413ac4e94429decd5bd4f`
+- GitHub Actions run [#45877082767](https://github.com/vishnukarthick2507/bakery-ecommerce/actions/runs/45877082767): **SUCCESS**
+- TypeScript typecheck: PASS
+- Backend unit and integration tests: PASS
+- Frontend production build: PASS
+- Configured Playwright end-to-end tests: PASS
+- Vercel combined status for this exact head: **SUCCESS**
+
+These results apply to the exact commit above. They validate configured CI only; they do not establish real-provider behavior, production configuration, full business UAT, backup/restore readiness or client acceptance.
+
+### Corrected overall posture
+
+The earlier checklist's architecture, API, payment, WhatsApp and support/warranty gaps should be read alongside the new documents and existing source-derived inventory. Some procedural or source-derived documentation exists, but the following remain incomplete or unverified:
+
+1. Architecture and API documentation still require technical review and, where relevant, infrastructure/runtime confirmation.
+2. Payment and WhatsApp packs describe verification requirements; provider sandbox execution and approval are not evidenced.
+3. Support, escalation, warranty and maintenance terms still require client-approved owners, contacts and commercial/service terms.
+4. Customer/admin UAT remains NOT EXECUTED and client acceptance remains NOT GRANTED.
+5. Production configuration, backup/restore, rollback, monitoring and operational ownership remain NOT VERIFIED.
+
+PR #4 remains OPEN, DRAFT and UNMERGED. No production deployment, live provider operation, production database action or client acceptance is claimed.
