@@ -120,3 +120,12 @@ The following source-informed operational drafts were added to this PR:
 These documents do not create execution authority, change application behavior, approve legal wording, enable providers, or create contractual commitments. They intentionally leave unknown owner/client values pending.
 
 The latest PR head has changed after these documentation additions. The green CI evidence recorded above applies only to its exact named SHA; verify Actions and Vercel again for the final documentation commit before treating its checks as current.
+
+
+## Staging and UAT entry preparation — 2026-11-26
+
+Added `16-STAGING-ENVIRONMENT-PROVISIONING-AND-UAT-ENTRY-CHECKLIST.md` to define the minimum isolated staging architecture, environment-isolation checks, safe provisioning sequence, required owner decisions and UAT authorization record.
+
+**Current factual status:** Staging URL and backend URL have not been supplied or verified; isolated database identity is not confirmed; synthetic customer/admin accounts and test operators are not assigned; no staging deployment or UAT execution is claimed. This checklist is preparation only and does not authorize infrastructure changes, deployment, provider configuration, database mutation or external sends.
+
+The next action requires the project owner/technical operator to identify the approved non-production environment and confirm isolation. Until then, customer/admin UAT remains NOT STARTED and the production release posture remains NO-GO.
