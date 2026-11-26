@@ -882,7 +882,7 @@ export const respondProposal = async (
     }
 
     // Only the customer whose phone matches the request can respond
-    if (!isRequestOwnedByCustomer(request.phone, req.customer.phone || "")) {
+    if (!isRequestOwnedByCustomer(request, { id: req.customer.id, phone: req.customer.phone || "" })) {
       res.status(403).json({
         message: "You are not authorized to respond to this request",
       });
