@@ -32,82 +32,6 @@ vi.mock("../src/services/cloudinary.js", async (importOriginal) => {
     ...actual,
     deleteAsset: vi.fn(),
   };
-
-  describe("public product response boundaries", () => {
-    it("requires an admin session for includeInactive=true", async () => {
-      const response = await request(app).get("/api/products?includeInactive=true");
-      expect(response.status).toBe(401);
-    });
-
-    it("omits inventory and cost fields from public list, slug, and id responses", async () => {
-      const product = await Product.create({
-        name: "Public Cake",
-        slug: "public-cake-boundary",
-        description: "A customer-facing description",
-        price: 500,
-        category: "Cakes",
-        images: [],
-        stock: 7,
-        availability: "AVAILABLE",
-        preparationTime: 45,
-        active: true,
-        cost: 180,
-        reorderLevel: 3,
-        leadTimeDays: 2,
-      });
-
-      const list = await request(app).get("/api/products");
-      expect(list.status).toBe(200);
-      const listed = list.body.find((item: { _id: string }) => item._id === product.id);
-      expect(listed).toBeTruthy();
-      expect(listed).not.toHaveProperty("cost");
-      expect(listed).not.toHaveProperty("stock");
-      expect(listed).not.toHaveProperty("reorderLevel");
-      expect(listed).not.toHaveProperty("leadTimeDays");
-
-      const bySlug = await request(app).get("/api/products/slug/public-cake-boundary");
-      expect(bySlug.status).toBe(200);
-      expect(bySlug.body).not.toHaveProperty("cost");
-      expect(bySlug.body).not.toHaveProperty("stock");
-      expect(bySlug.body).not.toHaveProperty("reorderLevel");
-
-      const byId = await request(app).get(`/api/products/${product.id}`);
-      expect(byId.status).toBe(200);
-      expect(byId.body).not.toHaveProperty("cost");
-      expect(byId.body).not.toHaveProperty("stock");
-      expect(byId.body).not.toHaveProperty("reorderLevel");
-    });
-
-    it("allows an authenticated admin to retrieve inactive products and internal fields", async () => {
-      const adminId = await seedAdmin();
-      const token = makeAdminToken(adminId);
-      const inactive = await Product.create({
-        name: "Archived Cake",
-        slug: "archived-cake-boundary",
-        description: "Inactive item",
-        price: 700,
-        category: "Cakes",
-        images: [],
-        stock: 0,
-        availability: "DISABLED",
-        preparationTime: 60,
-        active: false,
-        cost: 250,
-        reorderLevel: 4,
-      });
-
-      const response = await request(app)
-        .get("/api/products?includeInactive=true")
-        .set("Authorization", `Bearer ${token}`);
-
-      expect(response.status).toBe(200);
-      const found = response.body.find((item: { _id: string }) => item._id === inactive.id);
-      expect(found).toBeTruthy();
-      expect(found.cost).toBe(250);
-      expect(found.reorderLevel).toBe(4);
-    });
-  });
-
 });
 
 let mongoServer: MongoMemoryServer;
@@ -285,4 +209,60 @@ describe("Product image cleanup — cross-product reference safety", () => {
       expect(res.body.product.images).toEqual([]);
     });
   });
+
+  describe("public product response boundaries", () => {
+    it("requires an admin session for includeInactive=true", async () => {
+      const response = await request(app).get("/api/products?includeInactive=true");
+      expect(response.status).toBe(401);
+    });
+
+    it("omits inventory and cost fields from public list, slug, and id responses", async () => {
+      const product = await Product.create({
+        name: "Public Cake", slug: "public-cake-boundary",
+        description: "A customer-facing description", price: 500,
+        category: "Cakes", images: [], stock: 7, availability: "AVAILABLE",
+        preparationTime: 45, active: true, cost: 180, reorderLevel: 3, leadTimeDays: 2,
+      });
+
+      const list = await request(app).get("/api/products");
+      expect(list.status).toBe(200);
+      const listed = list.body.find((item: { _id: string }) => item._id === product.id);
+      expect(listed).toBeTruthy();
+      for (const field of ["cost", "stock", "reorderLevel", "leadTimeDays"]) {
+        expect(listed).not.toHaveProperty(field);
+      }
+
+      const bySlug = await request(app).get("/api/products/slug/public-cake-boundary");
+      expect(bySlug.status).toBe(200);
+      expect(bySlug.body).not.toHaveProperty("cost");
+      expect(bySlug.body).not.toHaveProperty("stock");
+
+      const byId = await request(app).get(`/api/products/${product.id}`);
+      expect(byId.status).toBe(200);
+      expect(byId.body).not.toHaveProperty("cost");
+      expect(byId.body).not.toHaveProperty("reorderLevel");
+    });
+
+    it("allows an authenticated admin to retrieve inactive products and internal fields", async () => {
+      const adminId = await seedAdmin();
+      const token = makeAdminToken(adminId);
+      const inactive = await Product.create({
+        name: "Archived Cake", slug: "archived-cake-boundary",
+        description: "Inactive item", price: 700, category: "Cakes",
+        images: [], stock: 0, availability: "DISABLED", preparationTime: 60,
+        active: false, cost: 250, reorderLevel: 4,
+      });
+
+      const response = await request(app)
+        .get("/api/products?includeInactive=true")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      const found = response.body.find((item: { _id: string }) => item._id === inactive.id);
+      expect(found).toBeTruthy();
+      expect(found.cost).toBe(250);
+      expect(found.reorderLevel).toBe(4);
+    });
+  });
+
 });
