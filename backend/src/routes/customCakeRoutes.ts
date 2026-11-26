@@ -1,4 +1,5 @@
 import { Router } from "express";
+import jwt from "jsonwebtoken";
 
 import {
   createCustomCakeRequest,
@@ -29,7 +30,12 @@ router.get("/my", authenticateCustomer, getMyCustomCakeRequests);
 router.get(
   "/:id",
   (req, res, next) => {
-    if (req.cookies?.["admin-token"]) {
+    const bearerToken = req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : undefined;
+    const token = req.cookies?.["admin-token"] ?? bearerToken;
+    const decoded = token ? jwt.decode(token) : null;
+    if (req.cookies?.["admin-token"] || (decoded && typeof decoded === "object" && "adminId" in decoded)) {
       return authenticateAdmin(req as AuthRequest, res, next);
     }
     return optionalCustomerAuth(req as AuthRequest, res, next);
