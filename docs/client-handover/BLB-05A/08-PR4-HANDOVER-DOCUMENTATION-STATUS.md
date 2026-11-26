@@ -105,3 +105,18 @@ The earlier checklist's architecture, API, payment, WhatsApp and support/warrant
 5. Production configuration, backup/restore, rollback, monitoring and operational ownership remain NOT VERIFIED.
 
 PR #4 remains OPEN, DRAFT and UNMERGED. No production deployment, live provider operation, production database action or client acceptance is claimed.
+
+
+## Additional handover control documents — 2026-11-26
+
+The following source-informed operational drafts were added to this PR:
+
+| Artifact | Purpose | Status / limitation |
+|---|---|---|
+| `13-PAYMENT-AND-RECONCILIATION-OPERATIONS.md` | Payment evidence, sandbox verification, reconciliation and exception controls | Draft only; sandbox tests, production configuration, refund policy and finance approval are not evidenced |
+| `14-WHATSAPP-CONSENT-AND-OPERATIONS-CONTROL.md` | Consent evidence, fail-closed rules, approval gates and incident controls | Control draft only; W01 legal approval, Meta approval, implementation and send authorization remain absent |
+| `15-SUPPORT-WARRANTY-AND-MAINTENANCE-WORKSHEET.md` | Captures support scope, service expectations, warranty and maintenance decisions | Client/business worksheet; no SLA, warranty or commercial term is approved or promised |
+
+These documents do not create execution authority, change application behavior, approve legal wording, enable providers, or create contractual commitments. They intentionally leave unknown owner/client values pending.
+
+The latest PR head has changed after these documentation additions. The green CI evidence recorded above applies only to its exact named SHA; verify Actions and Vercel again for the final documentation commit before treating its checks as current.
