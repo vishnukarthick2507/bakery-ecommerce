@@ -123,6 +123,6 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        run: npx playwright test --config=playwright.ci.config.ts
+        run: npx playwright test --config=playwright.safe-ci.config.ts
         env:
           NODE_ENV: test
