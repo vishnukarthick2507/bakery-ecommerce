@@ -110,6 +110,7 @@ Schema indexes include `userId`, `customCakeRequestId` (unique+sparse), `idempot
 |---|---|---|---|
 | `referenceNumber` | String | Required, unique | Request reference. |
 | `name`, `phone` | String | Required | Requester details. |
+| `userId` | ObjectId → User | null, indexed | Optional account link for authenticated customer submissions; null/absent for guest and legacy requests. Linked requests are owned by account ID, not phone-number matching. |
 | `flavour`, `weight`, `theme` | String | Required | Cake requirements. |
 | `messageOnCake`, `instructions`, `referenceImageUrl` | String | Empty string | Optional customer details/reference. |
 | `status` | Enum | `PENDING` | `PENDING`, `CONTACTED`, `CONFIRMED`, `CLOSED`. |
