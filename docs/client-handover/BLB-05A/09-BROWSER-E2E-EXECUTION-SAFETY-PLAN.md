@@ -62,3 +62,16 @@ Identify which existing Playwright tests are suitable for a safe isolated run, w
 | Customer/admin UAT | Requires separate written authorization and client participation |
 
 **Conclusion:** The next safe browser-testing milestone is the fully mocked local suite, after verifying the local backend database and provider isolation. The credentialed Stage 4 workflow and any request paths that create records must remain out of production.
+
+
+## 7. CI execution update — 2026-11-26
+
+A separate frontend-only configuration, `playwright.safe-ci.config.ts`, was added to the PR. It selects the following mocked UI specs:
+- `custom-cake-form-navigation.spec.ts`
+- `cart-consistency.spec.ts`
+- `customer-admin-isolation.spec.ts`
+- `checkout-delivery-address-validation.spec.ts`
+
+The configuration runs Desktop Chrome and Pixel 5 mobile Chrome, starts only the Next.js frontend, and deliberately does not start the backend. GitHub Actions run [#45874032142](https://github.com/vishnukarthick2507/bakery-ecommerce/actions/runs/45874032142) completed successfully, including the Playwright job.
+
+This result supersedes the earlier statement that the selected mocked desktop/mobile suite had not yet run. It does **not** supersede the remaining restrictions: `bluebell.spec.ts` request cases and the credentialed/state-mutating Stage 4 workflow remain excluded; production browser testing and customer/admin UAT remain unauthorized/not evidenced. The CI run must not be described as full browser coverage or business acceptance.
