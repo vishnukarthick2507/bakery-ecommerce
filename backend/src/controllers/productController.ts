@@ -66,6 +66,8 @@ const updateProductSchema = productSchema
 |--------------------------------------------------------------------------
 */
 
+const PUBLIC_PRODUCT_FIELDS = "name slug description price category images availability preparationTime";
+
 const productPaginationSchema = z
   .object({
     page: z.string().optional(),
@@ -125,7 +127,11 @@ export const getProducts = async (
     }
 
     const countQuery = Product.countDocuments(filter);
-    const findQuery = Product.find(filter).sort({ createdAt: -1 }).lean();
+    const findQuery = (includeInactive === "true"
+      ? Product.find(filter)
+      : Product.find(filter).select(PUBLIC_PRODUCT_FIELDS))
+      .sort({ createdAt: -1 })
+      .lean();
 
     if (hasPagination) {
       const safePage = Math.max(1, pageNum);
@@ -189,7 +195,7 @@ export const getProductBySlug = async (
     const product = await Product.findOne({
       slug,
       active: true,
-    }).lean();
+    }).select(PUBLIC_PRODUCT_FIELDS).lean();
 
     if (!product) {
       res.status(404).json({
@@ -236,7 +242,7 @@ export const getProductById = async (
     const product = await Product.findOne({
       _id: productId,
       active: true,
-    }).lean();
+    }).select(PUBLIC_PRODUCT_FIELDS).lean();
 
     if (!product) {
       res.status(404).json({
