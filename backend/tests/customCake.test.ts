@@ -157,6 +157,21 @@ describe("Custom Cake Proposal Workflow", () => {
       expect(otherResponse.status).toBe(403);
     });
 
+    it("does not allow a different account with the same phone number to read an account-linked request", async () => {
+      const owner = await createTestCustomer();
+      const cakeRequest = await createTestCustomCakeRequest(owner._id.toString(), owner.phone ?? undefined);
+
+      const otherCustomer = await createTestCustomer();
+      otherCustomer.phone = owner.phone;
+      await otherCustomer.save();
+
+      const response = await supertestRequest(app)
+        .get(`/api/custom-cake-requests/${cakeRequest._id}`)
+        .set("Cookie", `customer-token=${makeCustomerToken(otherCustomer._id.toString())}`);
+
+      expect(response.status).toBe(403);
+    });
+
     it("rejects unauthenticated detail requests", async () => {
       const cakeRequest = await createTestCustomCakeRequest();
       const response = await supertestRequest(app)
