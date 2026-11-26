@@ -162,7 +162,7 @@ describe("Custom Cake Proposal Workflow", () => {
       const cakeRequest = await createTestCustomCakeRequest(owner._id.toString(), owner.phone ?? undefined);
 
       const otherCustomer = await createTestCustomer();
-      otherCustomer.phone = owner.phone;
+      otherCustomer.phone = owner.phone ?? null;
       await otherCustomer.save();
 
       const response = await supertestRequest(app)
