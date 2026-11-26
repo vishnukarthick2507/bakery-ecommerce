@@ -17,7 +17,7 @@ import { createCustomCakeRequestLimiter } from "../middleware/rateLimit.js";
 const router: Router = Router();
 
 // Create custom cake request (public)
-router.post("/", createCustomCakeRequestLimiter, createCustomCakeRequest);
+router.post("/", createCustomCakeRequestLimiter, optionalCustomerAuth, createCustomCakeRequest);
 
 // Get all custom cake requests (admin only)
 router.get("/", authenticateAdmin, getAllCustomCakeRequests);
