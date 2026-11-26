@@ -133,7 +133,71 @@ This router is mounted twice: at `/api/auth` and `/api/admin`. Therefore paths b
 | GET | `/api/whatsapp/webhook` | Provider verification callback | Same verification handler is also registered here. |
 | POST | `/api/whatsapp/webhook` | Provider webhook | Raw-body signature verification; inbound messages/status callbacks. |
 
-Other route modules exist for settings, analytics, admin customer/order/inventory, WhatsApp admin operations, and non-webhook WhatsApp routes. Their individual handlers should be added from their current source before this inventory is treated as exhaustive.
+### Admin operations and settings
+
+| Method | Full path | Access at route | Notes |
+|---|---|---|---|
+| POST | `/api/admin/orders/:id/propose-slot` | Admin | Propose a new fulfilment slot for an order. |
+| GET | `/api/admin/customers` | Admin | Paginated/searchable customer listing (controller contract not exhaustively documented here). |
+| PATCH | `/api/admin/customers/:id/active` | Admin | Toggle customer active status. |
+| GET | `/api/admin/inventory/movements` | Admin | Paginated inventory movement history. |
+| GET | `/api/settings` | Public | Returns storefront fulfilment/order toggle settings and customer-facing closure details; confirm response projection before exposing changes. |
+| PATCH | `/api/settings` | Admin | Update singleton store settings. |
+
+### Analytics — `backend/src/routes/analyticsRoutes.ts`
+
+All routes below require admin authentication:
+
+| Method | Full path | Purpose |
+|---|---|---|
+| GET | `/api/admin/analytics` | Analytics overview. |
+| GET | `/api/admin/analytics/export` | Export analytics to Excel. |
+| GET | `/api/admin/analytics/sales` | Sales analytics. |
+| GET | `/api/admin/analytics/products` | Product performance analytics. |
+| GET | `/api/admin/analytics/customers` | Customer intelligence analytics. |
+| GET | `/api/admin/analytics/financial` | Financial analytics. |
+| GET | `/api/admin/analytics/inventory` | Inventory analytics. |
+| GET | `/api/admin/analytics/reports/sales` | Sales PDF report. |
+| GET | `/api/admin/analytics/reports/products` | Product PDF report. |
+| GET | `/api/admin/analytics/reports/customers` | Customer PDF report. |
+| GET | `/api/admin/analytics/reports/financial` | Financial PDF report. |
+
+### WhatsApp admin — `backend/src/routes/adminWhatsAppRoutes.ts`
+
+All routes in this module require admin authentication via router-level middleware:
+
+| Method | Full path | Purpose |
+|---|---|---|
+| GET | `/api/admin/whatsapp/stats` | WhatsApp statistics. |
+| GET | `/api/admin/whatsapp/messages` | Message list. |
+| GET | `/api/admin/whatsapp/messages/:id` | Message detail. |
+| POST | `/api/admin/whatsapp/messages/:id/retry` | Retry a message; may cause an external send and must not be used casually in production. |
+| GET | `/api/admin/whatsapp/consents` | Consent records. |
+| GET | `/api/admin/whatsapp/preferences` | Notification preferences. |
+| PATCH | `/api/admin/whatsapp/preferences` | Update notification preferences. |
+
+### Public WhatsApp consent endpoints — `backend/src/routes/whatsappRoutes.ts`
+
+| Method | Full path | Access | Current behavior |
+|---|---|---|---|
+| GET | `/api/whatsapp/consent/status` | Public | Explicitly disabled; returns HTTP 410 with `CONSENT_ENDPOINT_DISABLED`. |
+| POST | `/api/whatsapp/consent/grant` | Public | Explicitly disabled; returns HTTP 410 with `CONSENT_ENDPOINT_DISABLED`. |
+| POST | `/api/whatsapp/consent/withdraw` | Public | Explicitly disabled; returns HTTP 410 with `CONSENT_ENDPOINT_DISABLED`. |
+
+The route module comments state that public phone-number-only consent endpoints were disabled because they did not verify phone ownership. Internal consent workflows and the inbound Meta STOP handling remain separate. A verified, ownership-bound customer flow is required before reintroducing public self-service consent operations.
+
+## Source files inspected
+
+The source list below is expanded to include the remaining admin and settings route modules:
+
+- `backend/src/routes/adminOrderRoutes.ts`
+- `backend/src/routes/adminCustomerRoutes.ts`
+- `backend/src/routes/adminInventoryRoutes.ts`
+- `backend/src/routes/analyticsRoutes.ts`
+- `backend/src/routes/settingsRoutes.ts`
+- `backend/src/routes/adminWhatsAppRoutes.ts`
+- `backend/src/routes/whatsappRoutes.ts`
+- `backend/src/routes/uploadRoutes.ts`
 
 ## Security and operational notes
 
