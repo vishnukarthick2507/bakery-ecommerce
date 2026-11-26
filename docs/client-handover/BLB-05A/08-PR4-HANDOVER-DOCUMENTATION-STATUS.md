@@ -56,3 +56,14 @@ All paths above are under `docs/client-handover/BLB-05A/`.
 6. Obtain written client acceptance only after the agreed acceptance criteria and release gates are evidenced.
 
 **Overall documentation posture:** Improved draft package; **not a complete or approved client handover**.
+
+
+## Latest PR #4 validation addendum — 2026-11-26
+
+The documentation baseline above predates the latest browser CI work. Current PR head is `6d8650925a2e6d310315c83467779910d4e055ce`.
+
+GitHub Actions run [#45874032142](https://github.com/vishnukarthick2507/bakery-ecommerce/actions/runs/45874032142) completed successfully: TypeScript typecheck, backend unit/integration tests, frontend production build and configured Playwright E2E all passed. The Vercel combined status for this head is SUCCESS.
+
+The latest Playwright configuration is `playwright.safe-ci.config.ts`; it runs the selected mocked frontend regression specs in Desktop Chrome and Pixel 5 mobile Chrome without starting the backend. This is automated UI regression evidence only, not full customer/admin UAT or proof of real database/provider behavior.
+
+**Updated status:** configured CI checks are green on the current PR head. All business, legal, production-operations, provider, UAT and client-acceptance limitations in this document remain open unless separately evidenced. PR #4 remains draft and unmerged; no production deployment or release approval is implied.
