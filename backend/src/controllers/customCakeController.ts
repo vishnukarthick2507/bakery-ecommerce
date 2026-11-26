@@ -200,7 +200,7 @@ function logCustomCakeAbuseEvent(event: string, meta: Record<string, unknown>) {
 */
 
 export const createCustomCakeRequest = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
 ): Promise<void> => {
   try {
@@ -243,6 +243,7 @@ export const createCustomCakeRequest = async (
         try {
           request = await CustomCakeRequest.create({
             ...requestData,
+            ...(req.customer?.id ? { userId: req.customer.id } : {}),
             referenceNumber: generateReferenceNumber(),
           });
           break;
