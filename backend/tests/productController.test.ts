@@ -224,23 +224,36 @@ describe("Product image cleanup — cross-product reference safety", () => {
         preparationTime: 45, active: true, cost: 180, reorderLevel: 3, leadTimeDays: 2,
       });
 
+      const internalFields = ["cost", "stock", "reorderLevel", "leadTimeDays"];
+
+      const assertNoInternalFields = (responseBody: Record<string, unknown>) => {
+        for (const field of internalFields) {
+          expect(responseBody).not.toHaveProperty(field);
+        }
+      };
+
       const list = await request(app).get("/api/products");
       expect(list.status).toBe(200);
       const listed = list.body.find((item: { _id: string }) => item._id === product.id);
       expect(listed).toBeTruthy();
-      for (const field of ["cost", "stock", "reorderLevel", "leadTimeDays"]) {
-        expect(listed).not.toHaveProperty(field);
-      }
+      assertNoInternalFields(listed);
+
+      // Exercise the paginated public-list response shape as well.
+      const paginatedList = await request(app).get("/api/products?page=1&limit=10");
+      expect(paginatedList.status).toBe(200);
+      const paginatedProduct = paginatedList.body.products.find(
+        (item: { _id: string }) => item._id === product.id,
+      );
+      expect(paginatedProduct).toBeTruthy();
+      assertNoInternalFields(paginatedProduct);
 
       const bySlug = await request(app).get("/api/products/slug/public-cake-boundary");
       expect(bySlug.status).toBe(200);
-      expect(bySlug.body).not.toHaveProperty("cost");
-      expect(bySlug.body).not.toHaveProperty("stock");
+      assertNoInternalFields(bySlug.body);
 
       const byId = await request(app).get(`/api/products/${product.id}`);
       expect(byId.status).toBe(200);
-      expect(byId.body).not.toHaveProperty("cost");
-      expect(byId.body).not.toHaveProperty("reorderLevel");
+      assertNoInternalFields(byId.body);
     });
 
     it("allows an authenticated admin to retrieve inactive products and internal fields", async () => {
