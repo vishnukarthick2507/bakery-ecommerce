@@ -129,3 +129,27 @@ Added `16-STAGING-ENVIRONMENT-PROVISIONING-AND-UAT-ENTRY-CHECKLIST.md` to define
 **Current factual status:** Staging URL and backend URL have not been supplied or verified; isolated database identity is not confirmed; synthetic customer/admin accounts and test operators are not assigned; no staging deployment or UAT execution is claimed. This checklist is preparation only and does not authorize infrastructure changes, deployment, provider configuration, database mutation or external sends.
 
 The next action requires the project owner/technical operator to identify the approved non-production environment and confirm isolation. Until then, customer/admin UAT remains NOT STARTED and the production release posture remains NO-GO.
+
+
+## Latest validation and public API security recheck — 2026-11-27
+
+This section supersedes older PR-head and CI references above for the current validation snapshot. Historical results remain tied to their respective SHAs and must not be treated as current-head evidence.
+
+- Current PR head at this review: `515a5ab751935df8a0448ee6c20e30f9decf445c`.
+- GitHub Actions run [#45892503668](https://github.com/vishnukarthick2507/bakery-ecommerce/actions/runs/45892503668) completed successfully on that exact SHA. All four configured jobs passed: TypeScript typecheck, backend unit/integration tests, frontend production build, and configured Playwright E2E.
+- The configured Playwright job runs `playwright.safe-ci.config.ts` and selected mocked UI regression coverage; it is not full live customer/admin UAT or provider/database acceptance.
+- PR #4 remains OPEN · DRAFT · UNMERGED. No merge or production deployment is authorized or claimed.
+
+### Public product API remains an active security release gate
+
+The READY Vercel preview for the current PR head was rechecked on 2026-11-27. All three unauthenticated read paths returned HTTP 200 and exposed the internal `stock` field:
+
+- `GET /api/products`
+- `GET /api/products/slug/glazed-donut`
+- `GET /api/products/6adee81a2d9598353eb3a567`
+
+Each response included `x-render-origin-server: Render`. The PR source contains the public-field projection in `backend/src/controllers/productController.ts` for list, slug and ID reads, and the regression test covers omission of `cost`, `stock`, `reorderLevel` and `leadTimeDays`. However, the deployed Render service and backend commit SHA have not been identified, so the source fix is not verified as deployed.
+
+**Required closure evidence:** identify the backend service and deployed revision; verify a separately isolated staging database and staging-only configuration; deploy the approved candidate to that staging service only after authorization; then recheck all three public endpoints and confirm that `stock`, `cost`, `reorderLevel` and `leadTimeDays` are absent. Do not use production or an unknown database for state-changing tests. Until those checks pass, the public API exposure remains OPEN and release posture remains NO-GO.
+
+No Render deployment, production mutation, provider operation, UAT execution or client acceptance is claimed by this addendum.
