@@ -153,3 +153,13 @@ Each response included `x-render-origin-server: Render`. The PR source contains 
 **Required closure evidence:** identify the backend service and deployed revision; verify a separately isolated staging database and staging-only configuration; deploy the approved candidate to that staging service only after authorization; then recheck all three public endpoints and confirm that `stock`, `cost`, `reorderLevel` and `leadTimeDays` are absent. Do not use production or an unknown database for state-changing tests. Until those checks pass, the public API exposure remains OPEN and release posture remains NO-GO.
 
 No Render deployment, production mutation, provider operation, UAT execution or client acceptance is claimed by this addendum.
+
+
+## Follow-up verification on documentation commit — 2026-11-27
+
+- Documentation commit: `a67da9212b32309f9fe6d1b030ed9a330d2ec122`.
+- GitHub Actions run [#45953257018](https://github.com/vishnukarthick2507/bakery-ecommerce/actions/runs/45953257018) completed successfully on that exact commit. TypeScript typecheck, backend unit/integration tests, frontend production build and configured Playwright E2E all passed.
+- Vercel preview deployment `dpl_CSTAFHMSXsTQqv2yJv9Ze81MuKdU` reached READY for the same SHA: https://bakery-ecommerce-jx8scm0rt-vishnukarthick2507-4760.vercel.app
+- Rechecking that new preview on 2026-11-27 reproduced the same exposure on all three unauthenticated product reads: list, slug `glazed-donut`, and ID `6adee81a2d9598353eb3a567` each returned HTTP 200 with `stock` present. All three responses included `x-render-origin-server: Render`.
+
+**Conclusion:** The frontend preview is current and CI-green, but its API rewrite still reaches a Render backend that returns inventory stock. The security issue is therefore not resolved by the Vercel frontend commit. The backend service/revision and its environment/database isolation remain unidentified. Do not treat the source projection or green CI as evidence that the deployed API is fixed. Keep the release gate OPEN / NO-GO until the backend deployment is safely identified and the three read paths are clean in isolated staging.
