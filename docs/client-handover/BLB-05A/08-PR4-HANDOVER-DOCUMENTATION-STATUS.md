@@ -177,3 +177,15 @@ This section supersedes earlier references in this document to older PR heads, C
 - `render.yaml` currently declares the backend service branch as `main`. Do not change or redeploy that production-like service from this feature branch. The connected tools do not expose Render service inspection or deployment, so the backend service identity, deployed SHA, environment target and database isolation remain unverified.
 
 **Release decision: NO-GO.** Keep PR #4 OPEN, DRAFT and UNMERGED. Do not deploy production. Closure requires an identified, separately isolated staging backend/database, authorized staging deployment, and clean public list/slug/ID responses with `stock`, `cost`, `reorderLevel` and `leadTimeDays` absent. CI success and Vercel preview readiness do not close this runtime security gate or constitute client acceptance.
+
+
+## Latest verified snapshot — 2026-11-27 (PR head bab6692)
+
+- Exact PR head: `bab6692fc242ff7f988f2e6cf9098d41a4cdbef1`.
+- GitHub Actions run [#45956180853](https://github.com/vishnukarthick2507/bakery-ecommerce/actions/runs/45956180853) completed successfully. All four configured jobs passed: TypeScript typecheck, backend unit/integration tests, frontend production build and configured Playwright E2E.
+- Vercel preview deployment `dpl_C1dceXmsng25WMw3HTMtmUMZYhMN` is READY for this exact SHA: https://bakery-ecommerce-89bikfhlc-vishnukarthick2507-4760.vercel.app
+- Rechecked on 2026-11-27: public `GET /api/products`, `GET /api/products/slug/glazed-donut`, and `GET /api/products/6adee81a2d9598353eb3a567` all returned HTTP 200 and included the internal `stock` field. Each response included `x-render-origin-server: Render`.
+- The exact response for the glazed-donut record exposed `stock: 9`. This is live preview evidence, not a hypothetical source-code risk.
+- The configured CI and preview are green, but the backend origin still serves the unfiltered fields. The deployed Render service, backend SHA, target URL and database isolation are not verifiable with the currently connected tools. No backend deploy or production mutation was attempted.
+
+**Decision: NO-GO.** PR #4 remains OPEN · DRAFT · UNMERGED. Keep the public API security gate open until a separately isolated staging backend is identified and authorized, then verify all three public reads omit `stock`, `cost`, `reorderLevel` and `leadTimeDays`. Green CI and a READY frontend preview are not client acceptance or production readiness.
