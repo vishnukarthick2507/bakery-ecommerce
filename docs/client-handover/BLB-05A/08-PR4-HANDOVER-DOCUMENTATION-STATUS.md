@@ -163,3 +163,17 @@ No Render deployment, production mutation, provider operation, UAT execution or 
 - Rechecking that new preview on 2026-11-27 reproduced the same exposure on all three unauthenticated product reads: list, slug `glazed-donut`, and ID `6adee81a2d9598353eb3a567` each returned HTTP 200 with `stock` present. All three responses included `x-render-origin-server: Render`.
 
 **Conclusion:** The frontend preview is current and CI-green, but its API rewrite still reaches a Render backend that returns inventory stock. The security issue is therefore not resolved by the Vercel frontend commit. The backend service/revision and its environment/database isolation remain unidentified. Do not treat the source projection or green CI as evidence that the deployed API is fixed. Keep the release gate OPEN / NO-GO until the backend deployment is safely identified and the three read paths are clean in isolated staging.
+
+
+## Authoritative validation snapshot — 2026-11-27 (PR head a9a41e2)
+
+This section supersedes earlier references in this document to older PR heads, CI runs and preview deployments for the latest validation snapshot.
+
+- Exact PR head: `a9a41e2e42482b331ec0fcc1925abab7434c698b`.
+- GitHub Actions run [#45953974973](https://github.com/vishnukarthick2507/bakery-ecommerce/actions/runs/45953974973) completed successfully. All four configured jobs passed: TypeScript typecheck, backend unit/integration tests, frontend production build and configured Playwright E2E.
+- Vercel preview deployment [A3Z5HPQNFHYrsAE1abB51KQXYAd4](https://vercel.com/vishnukarthick2507-4760/bakery-ecommerce/A3Z5HPQNFHYrsAE1abB51KQXYAd4) is READY for the exact PR head.
+- Rechecked the preview on 2026-11-27: `GET /api/products`, `GET /api/products/slug/glazed-donut` and `GET /api/products/6adee81a2d9598353eb3a567` each returned HTTP 200 and included the internal `stock` field. Each response included `x-render-origin-server: Render`.
+- Source review confirms `next.config.mjs` forwards `/api/:path*` directly to the configured backend URL. The feature-branch backend controller uses a public-field projection on list, slug and ID reads, but the live API still returns `stock`; therefore the source fix is not verified as deployed at the backend origin.
+- `render.yaml` currently declares the backend service branch as `main`. Do not change or redeploy that production-like service from this feature branch. The connected tools do not expose Render service inspection or deployment, so the backend service identity, deployed SHA, environment target and database isolation remain unverified.
+
+**Release decision: NO-GO.** Keep PR #4 OPEN, DRAFT and UNMERGED. Do not deploy production. Closure requires an identified, separately isolated staging backend/database, authorized staging deployment, and clean public list/slug/ID responses with `stock`, `cost`, `reorderLevel` and `leadTimeDays` absent. CI success and Vercel preview readiness do not close this runtime security gate or constitute client acceptance.
