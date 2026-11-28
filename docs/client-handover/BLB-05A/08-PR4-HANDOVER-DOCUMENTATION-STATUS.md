@@ -189,3 +189,18 @@ This section supersedes earlier references in this document to older PR heads, C
 - The configured CI and preview are green, but the backend origin still serves the unfiltered fields. The deployed Render service, backend SHA, target URL and database isolation are not verifiable with the currently connected tools. No backend deploy or production mutation was attempted.
 
 **Decision: NO-GO.** PR #4 remains OPEN · DRAFT · UNMERGED. Keep the public API security gate open until a separately isolated staging backend is identified and authorized, then verify all three public reads omit `stock`, `cost`, `reorderLevel` and `leadTimeDays`. Green CI and a READY frontend preview are not client acceptance or production readiness.
+
+
+## Fresh verification — 2026-11-28 (PR head 433195c)
+
+This snapshot records a fresh check performed on 2026-11-28 and supersedes older statements above only for the exact checks and timestamp listed here.
+
+- PR #4 was rechecked: OPEN, DRAFT, NOT MERGED; base `main`; head `433195c0ab8062bed3f74eaa1d9ce91ff1c9edda`.
+- Branch comparison: 53 commits ahead of `main`, 0 behind.
+- GitHub Actions run [#45957660765](https://github.com/vishnukarthick2507/bakery-ecommerce/actions/runs/45957660765) is completed with SUCCESS on the exact head. The workflow run reports all configured jobs successful in the prior run inspection.
+- Vercel preview deployment `dpl_8z81yJ6NWZbBTCeFcUeAGxehkkVE` is READY for the exact head: https://bakery-ecommerce-4ndpvywo8-vishnukarthick2507-4760.vercel.app
+- Fresh unauthenticated requests on 2026-11-28 to `GET /api/products`, `GET /api/products/slug/glazed-donut`, and `GET /api/products/6adee81a2d9598353eb3a567` each returned HTTP 200 and each response still included the internal `stock` field. The slug and ID responses returned `stock: 9`. Each response included `x-render-origin-server: Render`.
+- The same API responses included standard Helmet security headers including HSTS, X-Content-Type-Options, X-Frame-Options and a restrictive Content-Security-Policy. These headers do not mitigate the exposed inventory data.
+- Source inspection on the feature branch confirms the controller applies `PUBLIC_PRODUCT_FIELDS` to public list, slug and ID reads, and the route requires admin authentication for `includeInactive=true`. The live responses therefore still do not demonstrate that the filtered controller revision is deployed at the Render origin.
+
+**Release decision remains NO-GO.** Keep PR #4 OPEN · DRAFT · UNMERGED. Do not merge or deploy production. The public inventory-field exposure is an active security release blocker. Closure still requires identifying the exact Render service and deployed SHA, verifying an isolated staging database and configuration, and then obtaining clean responses from all three public endpoints with `stock`, `cost`, `reorderLevel` and `leadTimeDays` absent. Render deployment/service inspection is not available through the currently connected tools; no deployment or production mutation was attempted. UAT, provider, operational and client-acceptance gates also remain open.
