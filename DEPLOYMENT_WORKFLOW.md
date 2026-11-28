@@ -155,7 +155,7 @@ for the Bluebell Bakehouse / S.V. Sweets & Bakers bakery e-commerce project.
 
 ## Phase 7 — Render Backend Deployment Preparation
 
-**Existing integration:** Backend at `https://bakery-ecommerce-txuz.onrender.com`. No `render.yaml` exists (dashboard-configured).
+**Existing integration reference:** Backend URL documented as `https://bakery-ecommerce-txuz.onrender.com`. `render.yaml` is present in the repository and defines a Render web service named `bakery-ecommerce-backend` on branch `main` in Oregon. The actual Render service linkage, deployed commit, and environment values must still be verified in the Render dashboard; this file alone is not proof of the live service configuration.
 
 **Safe local configuration:**
 - `render.yaml` — Infrastructure-as-Code defining the backend service (no secrets).
@@ -234,3 +234,26 @@ for the Bluebell Bakehouse / S.V. Sweets & Bakers bakery e-commerce project.
 2. Approve which safe local components to configure (CI configs, deployment configs, scripts).
 3. Provide your first development task to begin the autonomous workflow.
 4. When ready, approve production deployment separately.
+
+---
+
+## Bluebell Bakehouse backend deployment verification addendum — 26 November 2026
+
+### Confirmed repository facts
+- The backend service URL documented by this repository is `https://bakery-ecommerce-txuz.onrender.com`.
+- `render.yaml` exists and declares a Render web service named `bakery-ecommerce-backend`, region `oregon`, branch `main`, build command `cd backend && pnpm install --frozen-lockfile`, and start command `cd backend && npx tsx src/server.ts`.
+- The Vercel frontend proxies `/api/*` to the backend URL supplied by `BACKEND_INTERNAL_URL` or `NEXT_PUBLIC_API_URL`.
+- The current security-fix PR branch contains the public product field allowlist and regression tests for list, slug, and ID reads.
+
+### Current unresolved deployment discrepancy
+The latest Vercel preview still returned the internal `stock` field from public product responses, despite the source branch containing the allowlist. This indicates the backend currently reached by the preview has not been demonstrated to run the corrected revision. The Render service's actual connected repository, branch, deployed commit, and preview/staging capability have not been independently verified.
+
+### Required safe completion sequence
+1. In Render, identify the exact service serving the documented backend URL and verify its connected repository and deployed commit. Do not disclose environment variable values.
+2. Provision or identify a separate Render preview/staging service connected to the PR branch and a disposable isolated database. Do not repoint the production Vercel environment or change the production backend service.
+3. Deploy the PR branch to that isolated backend only after verifying the staging database and provider side-effect controls.
+4. Verify unauthenticated public `GET /api/products`, `GET /api/products/slug/:slug`, and `GET /api/products/:id` responses omit `stock`, `cost`, `reorderLevel`, and `leadTimeDays`.
+5. Verify authenticated admin product listing still returns required internal inventory fields and `includeInactive=true` rejects unauthenticated requests.
+6. Record the deployed commit, sanitized response evidence, test results, and rollback target. Keep the production service unchanged until separately approved.
+
+**Status:** Source remediation and regression tests are present in the PR branch. Backend deployment and live endpoint verification remain OPEN. No production deployment or database operation is authorized by this addendum.

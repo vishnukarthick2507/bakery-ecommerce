@@ -103,8 +103,20 @@ function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "").slice(-10);
 }
 
-function isRequestOwnedByCustomer(requestPhone: string, customerPhone: string): boolean {
-  return normalizePhone(requestPhone) !== "" && normalizePhone(requestPhone) === normalizePhone(customerPhone);
+function isRequestOwnedByCustomer(
+  request: { userId?: unknown; phone: string },
+  customer: { id: string; phone: string },
+): boolean {
+  // Once a request is linked to an account, ownership is by immutable account ID.
+  // Phone matching is retained only for legacy requests created before account linking.
+  if (request.userId) {
+    return String(request.userId) === customer.id;
+  }
+
+  return (
+    normalizePhone(request.phone) !== "" &&
+    normalizePhone(request.phone) === normalizePhone(customer.phone)
+  );
 }
 
 function generateReferenceNumber(): string {
@@ -188,7 +200,7 @@ function logCustomCakeAbuseEvent(event: string, meta: Record<string, unknown>) {
 */
 
 export const createCustomCakeRequest = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
 ): Promise<void> => {
   try {
@@ -231,6 +243,7 @@ export const createCustomCakeRequest = async (
         try {
           request = await CustomCakeRequest.create({
             ...requestData,
+            ...(req.customer?.id ? { userId: req.customer.id } : {}),
             referenceNumber: generateReferenceNumber(),
           });
           break;
@@ -491,13 +504,20 @@ export const getMyCustomCakeRequests = async (
     }
 
     const phone = normalizePhone(req.customer.phone || "");
-    if (!phone) {
-      res.status(400).json({ message: "Customer phone number is required" });
-      return;
-    }
+
+    // Linked requests belong to the account ID. Phone matching is limited to
+    // legacy guest requests that have no account link.
+    const legacyPhoneMatches = phone
+      ? [{ phone }, { phone: req.customer.phone }]
+      : [];
 
     const requests = await CustomCakeRequest.find({
-      $or: [{ phone }, { phone: req.customer.phone }],
+      $or: [
+        { userId: req.customer.id },
+        ...(legacyPhoneMatches.length
+          ? [{ userId: null, $or: legacyPhoneMatches }]
+          : []),
+      ],
     })
       .sort({ createdAt: -1 })
       .lean();
@@ -538,7 +558,7 @@ export const getCustomCakeRequestById = async (
       return;
     }
 
-    if (req.customer && isRequestOwnedByCustomer(request.phone, req.customer.phone || "")) {
+    if (req.customer && isRequestOwnedByCustomer(request, req.customer)) {
       res.status(200).json({ request });
       return;
     }
@@ -870,7 +890,7 @@ export const respondProposal = async (
     }
 
     // Only the customer whose phone matches the request can respond
-    if (!isRequestOwnedByCustomer(request.phone, req.customer.phone || "")) {
+    if (!isRequestOwnedByCustomer(request, { id: req.customer.id, phone: req.customer.phone || "" })) {
       res.status(403).json({
         message: "You are not authorized to respond to this request",
       });

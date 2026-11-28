@@ -209,4 +209,72 @@ describe("Product image cleanup — cross-product reference safety", () => {
       expect(res.body.product.images).toEqual([]);
     });
   });
+
+  describe("public product response boundaries", () => {
+    it("requires an admin session for includeInactive=true", async () => {
+      const response = await request(app).get("/api/products?includeInactive=true");
+      expect(response.status).toBe(401);
+    });
+
+    it("omits inventory and cost fields from public list, slug, and id responses", async () => {
+      const product = await Product.create({
+        name: "Public Cake", slug: "public-cake-boundary",
+        description: "A customer-facing description", price: 500,
+        category: "Cakes", images: [], stock: 7, availability: "AVAILABLE",
+        preparationTime: 45, active: true, cost: 180, reorderLevel: 3, leadTimeDays: 2,
+      });
+
+      const internalFields = ["cost", "stock", "reorderLevel", "leadTimeDays"];
+
+      const assertNoInternalFields = (responseBody: Record<string, unknown>) => {
+        for (const field of internalFields) {
+          expect(responseBody).not.toHaveProperty(field);
+        }
+      };
+
+      const list = await request(app).get("/api/products");
+      expect(list.status).toBe(200);
+      const listed = list.body.find((item: { _id: string }) => item._id === product.id);
+      expect(listed).toBeTruthy();
+      assertNoInternalFields(listed);
+
+      // Exercise the paginated public-list response shape as well.
+      const paginatedList = await request(app).get("/api/products?page=1&limit=10");
+      expect(paginatedList.status).toBe(200);
+      const paginatedProduct = paginatedList.body.products.find(
+        (item: { _id: string }) => item._id === product.id,
+      );
+      expect(paginatedProduct).toBeTruthy();
+      assertNoInternalFields(paginatedProduct);
+
+      const bySlug = await request(app).get("/api/products/slug/public-cake-boundary");
+      expect(bySlug.status).toBe(200);
+      assertNoInternalFields(bySlug.body);
+
+      const byId = await request(app).get(`/api/products/${product.id}`);
+      expect(byId.status).toBe(200);
+      assertNoInternalFields(byId.body);
+    });
+
+    it("allows an authenticated admin to retrieve inactive products and internal fields", async () => {
+      const token = await adminToken();
+      const inactive = await Product.create({
+        name: "Archived Cake", slug: "archived-cake-boundary",
+        description: "Inactive item", price: 700, category: "Cakes",
+        images: [], stock: 0, availability: "DISABLED", preparationTime: 60,
+        active: false, cost: 250, reorderLevel: 4,
+      });
+
+      const response = await request(app)
+        .get("/api/products?includeInactive=true")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      const found = response.body.find((item: { _id: string }) => item._id === inactive.id);
+      expect(found).toBeTruthy();
+      expect(found.cost).toBe(250);
+      expect(found.reorderLevel).toBe(4);
+    });
+  });
+
 });

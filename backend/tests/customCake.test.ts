@@ -124,6 +124,103 @@ describe("Custom Cake Proposal Workflow", () => {
     }
   });
 
+
+  describe("POST /api/custom-cake-requests account linking", () => {
+    it("links an authenticated customer submission to the customer account", async () => {
+      const customer = await createTestCustomer();
+      const response = await supertestRequest(app)
+        .post("/api/custom-cake-requests")
+        .set("Cookie", `customer-token=${makeCustomerToken(customer._id.toString())}`)
+        .set("Origin", "http://localhost:3000")
+        .send({
+          name: customer.name,
+          phone: customer.phone,
+          flavour: "Chocolate Truffle",
+          weight: "1 kg",
+          theme: "Birthday",
+        });
+
+      expect(response.status).toBe(201);
+      const savedRequest = await CustomCakeRequest.findOne({
+        referenceNumber: response.body.request.referenceNumber,
+      }).lean();
+      expect(String(savedRequest?.userId)).toBe(customer._id.toString());
+    });
+
+    it("keeps guest submissions unlinked to a customer account", async () => {
+      const response = await supertestRequest(app)
+        .post("/api/custom-cake-requests")
+        .send({
+          name: "Guest Customer",
+          phone: "9840912345",
+          flavour: "Chocolate Truffle",
+          weight: "1 kg",
+          theme: "Birthday",
+        });
+
+      expect(response.status).toBe(201);
+      const savedRequest = await CustomCakeRequest.findOne({
+        referenceNumber: response.body.request.referenceNumber,
+      }).lean();
+      expect(savedRequest?.userId).toBeFalsy();
+    });
+  });
+
+  describe("GET /api/custom-cake-requests/:id access", () => {
+    it("allows an authenticated admin cookie to read a request", async () => {
+      const admin = await Admin.findOne({ username: "testadmin" });
+      const adminToken = makeAdminToken(admin!._id.toString());
+      const cakeRequest = await createTestCustomCakeRequest();
+
+      const response = await supertestRequest(app)
+        .get(`/api/custom-cake-requests/${cakeRequest._id}`)
+        .set("Cookie", `admin-token=${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.request._id).toBe(cakeRequest._id.toString());
+    });
+
+    it("allows only the owning authenticated customer to read a request", async () => {
+      const customer = await createTestCustomer();
+      const cakeRequest = await createTestCustomCakeRequest(customer._id.toString(), customer.phone ?? undefined);
+      const customerToken = makeCustomerToken(customer._id.toString());
+
+      const ownResponse = await supertestRequest(app)
+        .get(`/api/custom-cake-requests/${cakeRequest._id}`)
+        .set("Cookie", `customer-token=${customerToken}`);
+      expect(ownResponse.status).toBe(200);
+
+      const otherCustomer = await createTestCustomer();
+      const otherToken = makeCustomerToken(otherCustomer._id.toString());
+      const otherResponse = await supertestRequest(app)
+        .get(`/api/custom-cake-requests/${cakeRequest._id}`)
+        .set("Cookie", `customer-token=${otherToken}`);
+      expect(otherResponse.status).toBe(403);
+    });
+
+    it("does not allow a different account with the same phone number to read an account-linked request", async () => {
+      const owner = await createTestCustomer();
+      const cakeRequest = await createTestCustomCakeRequest(owner._id.toString(), owner.phone ?? undefined);
+
+      const otherCustomer = await createTestCustomer();
+      otherCustomer.phone = owner.phone ?? null;
+      await otherCustomer.save();
+
+      const response = await supertestRequest(app)
+        .get(`/api/custom-cake-requests/${cakeRequest._id}`)
+        .set("Cookie", `customer-token=${makeCustomerToken(otherCustomer._id.toString())}`);
+
+      expect(response.status).toBe(403);
+    });
+
+    it("rejects unauthenticated detail requests", async () => {
+      const cakeRequest = await createTestCustomCakeRequest();
+      const response = await supertestRequest(app)
+        .get(`/api/custom-cake-requests/${cakeRequest._id}`);
+      expect(response.status).toBe(401);
+    });
+  });
+
   describe("Admin propose proposal", () => {
     let adminToken: string;
 

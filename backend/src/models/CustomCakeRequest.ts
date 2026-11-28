@@ -21,6 +21,14 @@ const customCakeRequestSchema = new Schema(
       trim: true,
     },
 
+    // Account ownership for authenticated customer requests; absent on legacy guest requests.
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
+
     flavour: {
       type: String,
       required: true,
